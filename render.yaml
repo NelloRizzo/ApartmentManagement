@@ -47,7 +47,10 @@ services:
     region: frankfurt # regione del datacenter, più vicina all'Europa
     # `branch` non è dichiarato di proposito: Render usa il ramo predefinito del
     # repository, che potrebbe non essere `main`.
-    buildCommand: npm ci && npm run build --workspace server
+    # `--include=dev` e' obbligatorio: NODE_ENV=production fa saltare a npm i
+    # devDependencies, quindi tsc e @types/node non verrebbero installati e la
+    # build fallirebbe con "Cannot find type definition file for 'node'".
+    buildCommand: npm ci --include=dev && npm run build --workspace server
     startCommand: npm run start --workspace server
     # Nessun `healthCheckPath`: vedi la nota sul piano free in testa al file.
     autoDeploy: true
@@ -123,7 +126,9 @@ services:
   - type: web
     name: stewardmanagementsystem
     runtime: static
-    buildCommand: npm ci && npm run build --workspace client
+    # Vite e i plugin sono devDependencies: senza `--include=dev` il frontend
+    # non ha nemmeno il bundler.
+    buildCommand: npm ci --include=dev && npm run build --workspace client
     staticPublishPath: ./client/dist
     # `branch` non dichiarato: vale il ramo predefinito del repository.
     autoDeploy: true
