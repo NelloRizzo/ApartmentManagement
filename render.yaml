@@ -112,7 +112,7 @@ services:
       - key: BREVO_MITTENTE_EMAIL
         sync: false
       - key: BREVO_MITTENTE_NOME
-        value: Steward
+        value: Steward Management System
 
   # ---------------------------------------------------------------- Frontend
   # I siti statici sono gratuiti e non si addormentano: il frontend è sempre
