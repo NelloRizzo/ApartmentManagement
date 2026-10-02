@@ -137,10 +137,19 @@ async function esegui<T>(path: string, opzioni: RichiestaOpzioni, tentativo = 0)
 
   if (!risposta.ok) {
     const errore = (corpo ?? {}) as Partial<ApiErrorEnvelope>;
+    // Una risposta priva di JSON non viene dalla nostra API: il sito statico e
+    // l'API stanno su origini diverse, quindi il browser blocca la risposta se
+    // il servizio non e' raggiungibile o non invia gli header CORS. La pagina di
+    // errore di Render e' HTML e il risultato sarebbe un "Errore 404" che non
+    // dice nulla: meglio far emergere l'URL che ha fallito.
+    const senzaJson = testo.trim() !== '' && corpo === undefined;
     const err = new ApiError(
       risposta.status,
-      errore?.error?.code ?? 'UNKNOWN',
-      errore?.error?.message ?? `Errore ${risposta.status}`,
+      errore?.error?.code ?? (senzaJson ? 'API_NON_RAGGIUNGIBILE' : 'UNKNOWN'),
+      errore?.error?.message ??
+        (senzaJson
+          ? `Risposta HTTP ${risposta.status} senza JSON da ${BASE_URL}: indirizzo dell'API sbagliato o servizio non ancora online.`
+          : `Errore ${risposta.status}`),
       errore?.error?.details,
     );
 

@@ -97,8 +97,12 @@ services:
         value: https://stewardmanagementsystem.onrender.com
       # Base pubblica di questa API: senza, gli URL degli allegati restano
       # relativi e il frontend li chiederebbe al sito statico ricevendone 404.
+      # L'hostname reale e' `steward-api-ef7e.onrender.com`: Render assegna i
+      # nomi su tutto onrender.com e `steward-api` era gia' occupato, quindi ha
+      # aggiunto un suffisso. Il nome nel blueprint e' il nome del servizio nel
+      # dashboard, non l'hostname, e va lasciato com'e'.
       - key: URL_API
-        value: https://steward-api.onrender.com
+        value: https://steward-api-ef7e.onrender.com
 
       # ---- MongoDB Atlas ----
       # SRV: mongodb+srv://utente:password@cluster.xxxxx.mongodb.net/steward
@@ -138,8 +142,12 @@ services:
         value: "22"
       # Il frontend è una PWA costruita al momento del deploy: VITE_API_URL
       # finisce dentro il pacchetto. Cambiarlo richiede un nuovo deploy.
+      # Deve corrispondere a URL_API del servizio steward-api (vedi sopra):
+      # se il frontend punta a un hostname inesistente riceve la pagina 404 di
+      # Render, che il browser blocca come richiesta cross-origin, e il login
+      # fallisce con "Impossibile contattare il server".
       - key: VITE_API_URL
-        value: https://steward-api.onrender.com/api
+        value: https://steward-api-ef7e.onrender.com/api
 
     # Le rotte sono gestite dal frontend (react-router): senza questa regola
     # un ricaricamento su /c/bilanci o /conferma-email risponderebbe 404.
