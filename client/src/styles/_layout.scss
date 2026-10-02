@@ -1,0 +1,431 @@
+@use 'tokens' as *;
+
+// ===== Struttura dell'app =====
+.guscio {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.intestazione {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: calc(var(--header-h) + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-inline: var(--sp-4);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  background: var(--c-primary);
+  color: #fff;
+  box-shadow: var(--sh-2);
+}
+
+.intestazione-titolo {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intestazione-azione {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+  text-decoration: none;
+  position: relative;
+}
+
+.contenuto {
+  flex: 1;
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--sp-4);
+  padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + var(--sp-4));
+}
+
+// ===== Navigazione inferiore (mobile first) =====
+.nav-inferiore {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  height: calc(var(--nav-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: var(--c-surface);
+  border-top: 1px solid var(--c-border);
+  box-shadow: 0 -2px 12px rgb(16 41 58 / 8%);
+}
+
+.nav-voce {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  font-size: var(--fs-xs);
+  color: var(--c-text-faint);
+  text-decoration: none;
+  position: relative;
+  border: none;
+  background: none;
+
+  &:hover { text-decoration: none; }
+
+  &.attiva {
+    color: var(--c-primary);
+    font-weight: 650;
+  }
+}
+
+.nav-icona {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.nav-badge {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  margin-left: 0.35rem;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.25rem;
+  display: grid;
+  place-items: center;
+  background: var(--c-danger);
+  color: #fff;
+  border-radius: var(--r-full);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+// ===== Selettore condominio =====
+.selettore-condominio {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+  width: 100%;
+  text-align: left;
+}
+
+// ===== Titolo pagina =====
+.titolo-pagina {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.titolo-pagina h1 { font-size: var(--fs-xl); }
+
+// ===== Login =====
+.login {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--sp-4);
+  padding-block: var(--sp-6);
+  background: linear-gradient(160deg, var(--c-primary) 0%, var(--c-primary-dark) 100%);
+}
+
+.login-scheda {
+  background: var(--c-surface);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+  box-shadow: var(--sh-3);
+  width: 100%;
+  max-width: 26rem;
+  margin: 0 auto;
+}
+
+.login-marca {
+  text-align: center;
+  margin-bottom: var(--sp-5);
+
+  .marchio {
+    width: 3.5rem;
+    height: 3.5rem;
+    margin: 0 auto var(--sp-3);
+    border-radius: var(--r-md);
+    background: var(--c-primary);
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 1.75rem;
+  }
+
+  h1 { font-size: var(--fs-2xl); color: var(--c-primary-dark); }
+  p { color: var(--c-text-soft); font-size: var(--fs-sm); margin-top: var(--sp-1); }
+}
+
+.login-demo {
+  margin-top: var(--sp-4);
+  padding: var(--sp-3);
+  background: var(--c-surface-alt);
+  border-radius: var(--r-md);
+  font-size: var(--fs-xs);
+  color: var(--c-text-soft);
+
+  button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: var(--sp-1) 0;
+    color: var(--c-primary);
+    font-size: var(--fs-xs);
+    text-decoration: underline;
+  }
+}
+
+// ===== Schermata di caricamento =====
+.splash {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  gap: var(--sp-3);
+}
+
+// ===== Documento verbale =====
+.verbale-testo {
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  margin: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+
+// ===== Navigazione =====
+// Su schermi stretti vale solo la barra inferiore; da 48rem subentra la
+// sidebar, che è l'unica navigazione visibile. Il pulsante hamburger esiste
+// in entrambi i casi: su desktop apre il pannello con il selettore condominio.
+
+.barra-laterale { display: none; }
+
+.barra-marca {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.barra-marca-simbolo {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--c-primary);
+  color: #fff;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.barra-marca .testo-faint { display: block; font-size: var(--fs-xs); margin-left: 0; }
+
+.barra-condominio { margin-bottom: var(--sp-3); }
+
+.barra-gruppo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--sp-4);
+}
+
+.barra-gruppo-titolo {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-text-faint);
+  padding: 0 var(--sp-3) var(--sp-1);
+}
+
+.barra-voce {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 2.5rem;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  color: var(--c-text-soft);
+  text-decoration: none;
+  font-size: var(--fs-sm);
+  font-weight: 550;
+
+  &:hover { background: var(--c-surface-alt); text-decoration: none; }
+
+  &.attiva {
+    background: var(--c-info-soft);
+    color: var(--c-primary);
+    font-weight: 650;
+  }
+}
+
+.barra-voce-icona {
+  width: 1.25rem;
+  text-align: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.barra-piè {
+  margin-top: auto;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--c-border);
+}
+
+// Il badge sulla barra laterale non è posizionato in modo assoluto.
+.barra-voce .nav-badge {
+  position: static;
+  margin: 0;
+  min-width: 1.15rem;
+  height: 1.15rem;
+}
+
+.barra-mobile { display: inline-flex; }
+
+.condominio-sbarra {
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+}
+
+// ===== Sovrapposizioni =====
+
+// Overlay di un dialog. Centra il contenuto e lo scrolla se supera lo schermo:
+// i form lunghi (bilancio, contratti) altrimenti verrebbero tagliati in alto.
+.velo {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgb(16 41 58 / 55%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+// Il pannello di navigazione è l'unico overlay che non è centrato: entra da
+// sinistra. Senza questo modificatore i dialog finirebbero allineati a sinistra.
+.velo-lato {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 0;
+}
+
+// Su schermi piccoli il dialog è ancorato in basso: ci si arriva con il pollice
+// e si chiude senza scoprire la pagina.
+@media (width < 48rem) {
+  .velo:not(.velo-lato) {
+    align-items: flex-end;
+    padding: 0;
+  }
+}
+
+.pannello {
+  width: min(21rem, 88vw);
+  max-height: 100dvh;
+  overflow-y: auto;
+  background: var(--c-surface);
+  box-shadow: var(--sh-3);
+  animation: scorri 0.18s ease-out;
+}
+
+@keyframes scorri {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.pannello-intestazione {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--c-primary);
+  color: #fff;
+  position: sticky;
+  top: 0;
+}
+
+.pannello-intestazione .testo-faint { color: rgb(255 255 255 / 75%); margin-left: 0; }
+
+.pannello-corpo {
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+// ===== Da >= 48rem: sidebar al posto della barra inferiore =====
+@media (width >= 48rem) {
+  .contenuto {
+    padding: var(--sp-5);
+    padding-bottom: var(--sp-6);
+  }
+
+  .nav-inferiore,
+  .condominio-sbarra { display: none; }
+
+  .barra-mobile { display: none; }
+
+  .statistiche { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  .guscio-con-barra {
+    display: grid;
+    grid-template-columns: 16rem 1fr;
+    min-height: 100dvh;
+  }
+
+.barra-laterale {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-4);
+    background: var(--c-surface);
+    border-right: 1px solid var(--c-border);
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+
+  .pannello { width: 21rem; }
+}

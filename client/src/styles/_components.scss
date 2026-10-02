@@ -1,0 +1,348 @@
+@use 'tokens' as *;
+
+// ===== Superficie =====
+.scheda {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+}
+
+.scheda-corpo {
+  padding: var(--sp-4);
+}
+
+.scheda-intestazione {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--c-surface-alt);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.scheda-piè {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--c-surface-alt);
+  border-top: 1px solid var(--c-border);
+}
+
+.scheda-clicabile {
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+
+  &:hover { box-shadow: var(--sh-2); border-color: var(--c-border-strong); }
+}
+
+// ===== Bottoni =====
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 2.75rem; // target tattile minimo
+  padding: 0 var(--sp-4);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  font-weight: 550;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+
+  &:hover { text-decoration: none; }
+  &:disabled { opacity: 0.55; cursor: not-allowed; }
+}
+
+.btn-primario {
+  background: var(--c-primary);
+  color: #fff;
+  &:hover:not(:disabled) { background: var(--c-primary-light); }
+}
+
+.btn-secondario {
+  background: var(--c-surface);
+  color: var(--c-primary);
+  border-color: var(--c-border-strong);
+  &:hover:not(:disabled) { background: var(--c-surface-alt); }
+}
+
+.btn-accento {
+  background: var(--c-accent);
+  color: #fff;
+  &:hover:not(:disabled) { background: #b35c02; }
+}
+
+.btn-pericolo {
+  background: var(--c-surface);
+  color: var(--c-danger);
+  border-color: var(--c-danger);
+  &:hover:not(:disabled) { background: var(--c-danger-soft); }
+}
+
+.btn-fantasma {
+  background: transparent;
+  color: var(--c-text-soft);
+  &:hover:not(:disabled) { background: var(--c-surface-alt); }
+}
+
+.btn-pieno {
+  width: 100%;
+}
+
+.btn-sm {
+  min-height: 2.25rem;
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-sm);
+}
+
+.btn-grande {
+  min-height: 3.25rem;
+  font-size: var(--fs-lg);
+}
+
+.btn-icona {
+  min-height: 2.5rem;
+  width: 2.5rem;
+  padding: 0;
+  border-radius: var(--r-full);
+}
+
+// ===== Etichette di stato =====
+.etichetta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.etichetta-neutro { background: var(--c-surface-alt); color: var(--c-text-soft); }
+.etichetta-info { background: var(--c-info-soft); color: var(--c-info); }
+.etichetta-successo { background: var(--c-success-soft); color: var(--c-success); }
+.etichetta-avviso { background: var(--c-warning-soft); color: var(--c-warning); }
+.etichetta-pericolo { background: var(--c-danger-soft); color: var(--c-danger); }
+.etichetta-accento { background: var(--c-accent-soft); color: var(--c-accent); }
+
+// ===== Moduli =====
+.area {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.6rem var(--sp-3);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md); // >= 16px evita lo zoom automatico su iOS
+
+  &::placeholder { color: var(--c-text-faint); }
+  &:focus { border-color: var(--c-primary-light); }
+  &:disabled { background: var(--c-surface-alt); }
+
+  &.area-errore { border-color: var(--c-danger); }
+}
+
+.area-testo {
+  min-height: 8rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.campo-etichetta {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--c-text-soft);
+}
+
+.campo-aiuto {
+  font-size: var(--fs-xs);
+  color: var(--c-text-faint);
+}
+
+.campo-errore {
+  font-size: var(--fs-xs);
+  color: var(--c-danger);
+  font-weight: 550;
+}
+
+.casella {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  cursor: pointer;
+
+  input {
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-top: 0.15rem;
+    accent-color: var(--c-primary);
+    flex-shrink: 0;
+  }
+}
+
+// ===== Elenco =====
+.elenco {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.voce {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border);
+  text-align: left;
+  width: 100%;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  color: inherit;
+
+  &:last-child { border-bottom: none; }
+}
+
+.voce-clicabile { cursor: pointer; &:hover { background: var(--c-surface-alt); } }
+
+// ===== Dati sintetici =====
+.statistiche {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+.statistica {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+}
+
+.statistica-valore {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.statistica-etichetta {
+  font-size: var(--fs-xs);
+  color: var(--c-text-soft);
+  margin-top: var(--sp-1);
+}
+
+// ===== Avvisi =====
+.avviso {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  border: 1px solid transparent;
+}
+
+.avviso-info { background: var(--c-info-soft); color: var(--c-info); border-color: rgb(27 73 101 / 15%); }
+.avviso-successo { background: var(--c-success-soft); color: var(--c-success); border-color: rgb(45 106 79 / 15%); }
+.avviso-avviso { background: var(--c-warning-soft); color: var(--c-warning); border-color: rgb(184 134 11 / 20%); }
+.avviso-pericolo { background: var(--c-danger-soft); color: var(--c-danger); border-color: rgb(179 38 30 / 20%); }
+
+// ===== Stati =====
+.stato-caricamento {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-7) var(--sp-4);
+  color: var(--c-text-soft);
+}
+
+.girac {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid var(--c-border);
+  border-top-color: var(--c-primary);
+  border-radius: 50%;
+  animation: gira 0.8s linear infinite;
+}
+
+@keyframes gira { to { transform: rotate(360deg); } }
+
+.stato-vuoto {
+  text-align: center;
+  padding: var(--sp-6) var(--sp-4);
+  color: var(--c-text-soft);
+
+  h3 { color: var(--c-text); margin-bottom: var(--sp-2); }
+}
+
+.scheletro {
+  background: linear-gradient(90deg, var(--c-surface-alt) 25%, var(--c-border) 37%, var(--c-surface-alt) 63%);
+  background-size: 400% 100%;
+  animation: lucilla 1.4s ease infinite;
+  border-radius: var(--r-sm);
+  height: 1rem;
+}
+
+@keyframes lucilla {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+// ===== Paginator =====
+.paginatore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+}
+
+// ===== Tabelle (orizzontali su mobile) =====
+.contenitore-tabella {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabella {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+
+  th, td {
+    padding: var(--sp-2) var(--sp-3);
+    text-align: left;
+    border-bottom: 1px solid var(--c-border);
+    white-space: nowrap;
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--c-text-soft);
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background: var(--c-surface-alt);
+    position: sticky;
+    top: 0;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--c-surface-alt); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+}

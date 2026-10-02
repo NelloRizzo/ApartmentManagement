@@ -1,0 +1,141 @@
+# Blueprint Render per Steward.
+#
+# Avvio: Render → New → Blueprint → selezionare questo repository.
+#
+# I due servizi hanno nomi fissi perché da essi dipendono i valori derivati:
+# l'URL del frontend finisce in URL_FRONTEND (link di conferma email) e
+# CORS_ORIGINS, l'URL del backend finisce in VITE_API_URL e URL_API. Rinominarli
+# da qui richiede aggiornare anche questi campi.
+#
+# Il nome del servizio frontend genera il dominio: `stewardmanagementsystem`
+# diventa https://stewardmanagementsystem.onrender.com.
+#
+# Le variabili marcate `sync: false` non si possono valorizzare dal file: si
+# inseriscono a mano nel pannello di Render (Render → service → Environment).
+#
+# ---- Limiti del piano free, e come questo blueprint li tiene conto ----
+#
+# * L'istanza free si addormenta dopo 15 minuti e ci mette circa un minuto a
+#   risvegliarsi. Il frontend è un sito statico, quindi parte subito: la prima
+#   chiamata all'API può però mettere fino a un minuto. Per questo il server ha
+#   timeout di connessione a MongoDB larghi (60 s): con i 10 s di partenza
+#   l'avvio andava in crash loop finché Atlas non si svegliava.
+#
+# * Nessun health check. Un controllo periodico è una richiesta HTTP in arrivo,
+#   e quindi tiene l'istanza sveglia consumando le 750 ore mensili del workspace:
+#   un mese ha 744 ore, una sola istanza tenuta sempre accesa le usa tutte. Il
+#   controllo non serve, perché Render riavvia comunque da solo un servizio free.
+#   Se in futuro serve un monitor, il ping va dato con intervalli superiori ai
+#   15 minuti.
+#
+# * Nessun disco persistente: non serve, gli allegati stanno in MongoDB.
+#
+# * `region` va confermata nella schermata di creazione: non tutte le regioni
+#   sono offerte sul piano free. Se Francoforte non fosse disponibile, va cambiata
+#   qui prima del primo deploy.
+#
+# * Il piano free non permette il dimensionamento oltre una singola istanza e
+#   non riceve traffico di rete privata: il frontend statico raggiunge l'API
+#   solo via https pubblico, quindi `CORS_ORIGINS` è indispensabile.
+
+services:
+  # ---------------------------------------------------------------- API
+  - type: web
+    name: steward-api
+    runtime: node
+    plan: free # free | starter | standard | pro
+    region: frankfurt # regione del datacenter, più vicina all'Europa
+    # `branch` non è dichiarato di proposito: Render usa il ramo predefinito del
+    # repository, che potrebbe non essere `main`.
+    buildCommand: npm ci && npm run build --workspace server
+    startCommand: npm run start --workspace server
+    # Nessun `healthCheckPath`: vedi la nota sul piano free in testa al file.
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_VERSION
+        # Alias di major, non versione esatta: se Render non avesse quella
+        # patch precisa la build fallirebbe.
+        value: "22"
+
+      - key: NODE_ENV
+        value: production
+
+      # Render imposta PORT da solo: il server lo legge dalla configurazione.
+      # Non va dichiarato qui, altrimenti si sovrappone a quello di Render.
+
+      # ---- Segreti JWT ----
+      # In produzione il server si rifiuta di avviare con i valori di
+      # sviluppo, quindi vanno generati davvero. `generateValue` crea una
+      # stringa casuale a ogni primo deploy.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: JWT_REFRESH_TTL
+        value: 7d
+
+      # ---- Cookie del refresh token ----
+      # `COOKIE_DOMAIN` va lasciato vuoto: il dominio lo gestisce Render e
+      # impostarlo a mano romperebbe il cookie. Il frontend e l'API sono
+      # entrambi su onrender.com, quindi same-site "lax" basta e i cookie
+      # passano anche nelle chiamate XHR cross-origin.
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAME_SITE
+        value: lax
+
+      # ---- Frontend ----
+      - key: CORS_ORIGINS
+        value: https://stewardmanagementsystem.onrender.com
+      - key: URL_FRONTEND
+        value: https://stewardmanagementsystem.onrender.com
+      # Base pubblica di questa API: senza, gli URL degli allegati restano
+      # relativi e il frontend li chiederebbe al sito statico ricevendone 404.
+      - key: URL_API
+        value: https://steward-api.onrender.com
+
+      # ---- MongoDB Atlas ----
+      # SRV: mongodb+srv://utente:password@cluster.xxxxx.mongodb.net/steward
+      # La password va codificata: se contiene @ / : # / eccetera va messa in
+      # forma %40 %2F %3A %23, altrimenti il parser la tronca.
+      - key: MONGODB_URI
+        sync: false
+
+      # ---- Email (Brevo) ----
+      # Senza BREVO_API_KEY l'app funziona ma non spedisce: la conferma degli
+      # indirizzi resta da fare a mano.
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_MITTENTE_EMAIL
+        sync: false
+      - key: BREVO_MITTENTE_NOME
+        value: Steward
+
+  # ---------------------------------------------------------------- Frontend
+  # I siti statici sono gratuiti e non si addormentano: il frontend è sempre
+  # immediato, anche quando l'API è spenta.
+  - type: static
+    name: stewardmanagementsystem
+    runtime: node
+    buildCommand: npm ci && npm run build --workspace client
+    staticPublishPath: ./client/dist
+    # `branch` non dichiarato: vale il ramo predefinito del repository.
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Il frontend è una PWA costruita al momento del deploy: VITE_API_URL
+      # finisce dentro il pacchetto. Cambiarlo richiede un nuovo deploy.
+      - key: VITE_API_URL
+        value: https://steward-api.onrender.com/api
+
+    # Le rotte sono gestite dal frontend (react-router): senza questa regola
+    # un ricaricamento su /c/bilanci o /conferma-email risponderebbe 404.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

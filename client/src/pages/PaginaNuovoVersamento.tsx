@@ -1,0 +1,337 @@
+import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useApi } from '@/hooks/useApi';
+import { api, ApiError } from '@/api/client';
+import { notifica } from '@/hooks/useNotifiche';
+import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { etichette } from '@/components/Elementi';
+import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
+import { euro, data as fmtData, mese, perInputData } from '@/lib/formattazione';
+import type { ApiEnvelope, MetodoPagamento, Unita, Versamento } from '@/types/domain';
+
+const METODI: MetodoPagamento[] = ['bonifico', 'contanti', 'carta', 'addebito_direct', 'altro'];
+
+export default function PaginaNuovoVersamento() {
+  const { condominioId } = useAuth();
+  const oggi = new Date();
+  const [unitaId, setUnitaId] = useState('');
+  const [anno, setAnno] = useState(oggi.getFullYear());
+  const [meseSelezionato, setMeseSelezionato] = useState(oggi.getMonth() + 1);
+  const [importo, setImporto] = useState('');
+  const [dataVersamento, setDataVersamento] = useState(perInputData(new Date()));
+  const [metodo, setMetodo] = useState<MetodoPagamento>('bonifico');
+  const [causale, setCausale] = useState('');
+  const [identificativo, setIdentificativo] = useState('');
+  const [note, setNote] = useState('');
+  const [inCorso, setInCorso] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  const unita = useApi<ApiEnvelope<Unita[]>>(
+    (segnale) =>
+      api.get<Unita[]>(
+        `/condomini/${condominioId}/unita`,
+        { page: 1, limit: 100, sort: 'codice', order: 'asc', attiva: true },
+        { signal: segnale },
+      ),
+    [condominioId],
+    { attivo: Boolean(condominioId) },
+  );
+
+  // Quote del periodo selezionato: servono a proposedre l'importo dovuto.
+  const quote = useApi<ApiEnvelope<{ righe: { unitaId: string; totale: number; versato: number; saldo: number }[] }>>(
+    (segnale) =>
+      api.get(`/condomini/${condominioId}/versamenti/quote`, { anno, mese: meseSelezionato }, { signal: segnale }),
+    [condominioId, anno, meseSelezionato],
+    { attivo: Boolean(condominioId) && Boolean(unitaId) },
+  );
+
+  const ultimi = useApi<ApiEnvelope<{ documenti: Versamento[] }>>(
+    (segnale) =>
+      api.get(`/condomini/${condominioId}/versamenti`, { page: 1, limit: 5, sort: 'dataVersamento', order: 'desc' }, { signal: segnale }),
+    [condominioId],
+    { attivo: Boolean(condominioId) },
+  );
+
+  if (!condominioId) return null;
+
+  const riga = quote.dati?.data.righe.find((r) => r.unitaId === unitaId);
+  const anni = [oggi.getFullYear() - 2, oggi.getFullYear() - 1, oggi.getFullYear(), oggi.getFullYear() + 1];
+  const elencoUnita = (stato: { dati: ApiEnvelope<Unita[]> | null }): Unita | undefined =>
+    stato.dati?.data.find((u) => u._id === unitaId);
+
+  function sceglieQuota() {
+    if (riga) {
+      setImporto(String(riga.saldo > 0 ? riga.saldo : riga.totale));
+      setCausale(`Quota condominiale ${anno}/${meseSelezionato} - ${elencoUnita(unita)?.codice ?? ''}`);
+    }
+  }
+
+  async function salva(evento: FormEvent) {
+    evento.preventDefault();
+    setErrore(null);
+    setInCorso(true);
+    try {
+      await api.post(`/condomini/${condominioId}/versamenti`, {
+        unita: unitaId,
+        periodo: { anno, mese: meseSelezionato },
+        importo: Number(importo),
+        dataVersamento,
+        metodo,
+        causale: causale.trim() || undefined,
+        identificativoTransazione: identificativo.trim() || undefined,
+        note: note.trim() || undefined,
+      });
+      notifica('Versamento registrato');
+      setImporto('');
+      setCausale('');
+      setIdentificativo('');
+      setNote('');
+      quote.ricarica();
+      ultimi.ricarica();
+    } catch (e) {
+      setErrore(
+        e instanceof ApiError ? (e.primoErroreValidazione ?? e.message) : 'Salvataggio non riuscito',
+      );
+    } finally {
+      setInCorso(false);
+    }
+  }
+
+  const valido = unitaId && Number(importo) > 0 && dataVersamento;
+
+  return (
+    <RichiediCondominio>
+      <TitoloPagina
+        titolo="Registra versamento"
+        descrizione="Inserisci un pagamento ricevuto dal condòmino."
+        azioni={
+          <Link className="btn btn-secondario" to="/c/quote">
+            Vedi le quote
+          </Link>
+        }
+      />
+
+      <form onSubmit={salva}>
+        <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
+          <div className="scheda-intestazione">
+            <h2>Unità e periodo</h2>
+          </div>
+          <div className="scheda-corpo pila-3">
+            <div className="campo">
+              <label className="campo-etichetta" htmlFor="v-unita">
+                Unità immobiliare
+              </label>
+              {unita.inCorso && <span className="testo-faint">Caricamento…</span>}
+              {unita.errore && <span className="campo-errore">{unita.errore}</span>}
+              <select
+                id="v-unita"
+                className="area"
+                value={unitaId}
+                onChange={(e) => setUnitaId(e.target.value)}
+                required
+              >
+                <option value="">Seleziona…</option>
+                {unita.dati?.data.map((u) => (
+                  <option key={u._id} value={u._id}>
+                    {u.codice} — {etichette.tipoUnita(u.tipo)} (piano {u.piano})
+                  </option>
+                ))}
+              </select>
+              {unita.dati?.data.length === 0 && (
+                <span className="campo-aiuto">Non ci sono unità attive nel condominio.</span>
+              )}
+            </div>
+
+            <div className="riga">
+              <div className="campo cresci">
+                <label className="campo-etichetta" htmlFor="v-anno">
+                  Anno
+                </label>
+                <select id="v-anno" className="area" value={anno} onChange={(e) => setAnno(Number(e.target.value))}>
+                  {anni.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="campo cresci">
+                <label className="campo-etichetta" htmlFor="v-mese">
+                  Mese
+                </label>
+                <select
+                  id="v-mese"
+                  className="area"
+                  value={meseSelezionato}
+                  onChange={(e) => setMeseSelezionato(Number(e.target.value))}
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>
+                      {mese(m)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {riga && (
+              <div className="avviso avviso-info">
+                <div className="cresci">
+                  <div>
+                    Quota dovuta: <strong>{euro(riga.totale)}</strong>
+                  </div>
+                  <div>
+                    Già versato: <strong>{euro(riga.versato)}</strong>
+                  </div>
+                  <div>
+                    Saldo:{' '}
+                    <strong className={riga.saldo > 0 ? 'testo-danger' : 'testo-successo'}>
+                      {euro(riga.saldo)}
+                    </strong>
+                  </div>
+                </div>
+                <button type="button" className="btn btn-secondario btn-sm" onClick={sceglieQuota}>
+                  Usa il saldo
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
+          <div className="scheda-intestazione">
+            <h2>Pagamento</h2>
+          </div>
+          <div className="scheda-corpo pila-3">
+            <div className="riga">
+              <div className="campo cresci">
+                <label className="campo-etichetta" htmlFor="v-importo">
+                  Importo (€)
+                </label>
+                <input
+                  id="v-importo"
+                  className="area"
+                  type="number"
+                  inputMode="decimal"
+                  min={0.01}
+                  step="0.01"
+                  value={importo}
+                  onChange={(e) => setImporto(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="campo cresci">
+                <label className="campo-etichetta" htmlFor="v-data">
+                  Data
+                </label>
+                <input
+                  id="v-data"
+                  className="area"
+                  type="date"
+                  value={dataVersamento}
+                  onChange={(e) => setDataVersamento(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="campo">
+              <label className="campo-etichetta" htmlFor="v-metodo">
+                Metodo di pagamento
+              </label>
+              <select
+                id="v-metodo"
+                className="area"
+                value={metodo}
+                onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
+              >
+                {METODI.map((m) => (
+                  <option key={m} value={m}>
+                    {etichette.metodo(m)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="campo">
+              <label className="campo-etichetta" htmlFor="v-causale">
+                Causale
+              </label>
+              <input
+                id="v-causale"
+                className="area"
+                value={causale}
+                onChange={(e) => setCausale(e.target.value)}
+                placeholder="Quota condominiale 2026/09 - A1"
+              />
+            </div>
+
+            <div className="campo">
+              <label className="campo-etichetta" htmlFor="v-ident">
+                Identificativo transazione
+              </label>
+              <input
+                id="v-ident"
+                className="area"
+                value={identificativo}
+                onChange={(e) => setIdentificativo(e.target.value)}
+                placeholder="Codice IBAN o identificativo bonifico"
+              />
+              <span className="campo-aiuto">Se indicato, non potranno esserci due versamenti con lo stesso valore.</span>
+            </div>
+
+            <div className="campo">
+              <label className="campo-etichetta" htmlFor="v-note">
+                Note
+              </label>
+              <textarea
+                id="v-note"
+                className="area"
+                style={{ minHeight: '4rem' }}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </div>
+
+            {errore && (
+              <div className="avviso avviso-pericolo" role="alert">
+                {errore}
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-primario btn-pieno btn-grande" disabled={inCorso || !valido}>
+              {inCorso ? 'Registrazione…' : 'Registra versamento'}
+            </button>
+          </div>
+        </section>
+      </form>
+
+      <section className="scheda">
+        <div className="scheda-intestazione">
+          <h2>Ultimi versamenti</h2>
+        </div>
+        {ultimi.inCorso && <Caricamento />}
+        {ultimi.errore && <ErroreCaricamento messaggio={ultimi.errore} onRiprova={ultimi.ricarica} />}
+        {ultimi.dati && ultimi.dati.data.documenti.length === 0 && (
+          <PaginaVuota titolo="Nessun versamento registrato" />
+        )}
+        <div className="elenco">
+          {ultimi.dati?.data.documenti.map((v) => (
+            <div key={v._id} className="voce">
+              <span className="cresci pila-1">
+                <strong>{euro(v.importo)}</strong>
+                <span className="testo-faint">
+                  {fmtData(v.dataVersamento)} · unità {v.unita?.codice} · {etichette.metodo(v.metodo)}
+                </span>
+              </span>
+              <span className="etichetta etichetta-neutro">
+                {v.periodo.mese}/{v.periodo.anno}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </RichiediCondominio>
+  );
+}

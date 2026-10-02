@@ -1,0 +1,145 @@
+@use 'tokens' as *;
+
+// ===== Reset minimo =====
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--c-text);
+  background: var(--c-bg);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+h1, h2, h3, h4 {
+  line-height: 1.25;
+  font-weight: 650;
+  text-wrap: balance;
+}
+
+h1 { font-size: var(--fs-xl); }
+h2 { font-size: var(--fs-lg); }
+h3 { font-size: var(--fs-md); }
+
+a {
+  color: var(--c-primary-light);
+  text-decoration: none;
+}
+
+a:hover { text-decoration: underline; }
+
+// Focus visibile solo per la tastiera.
+:focus-visible {
+  outline: 2px solid var(--c-primary-light);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+// ===== Utilità minime =====
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.testo-muto { color: var(--c-text-soft); }
+
+.testo-faint {
+  color: var(--c-text-faint);
+  font-size: var(--fs-sm);
+}
+
+// Stacco dal testo che precede, limitato ai `span`: è il caso in cui il testo
+// debole sta in fila con altro contenuto ("G1 piano 1" si leggeva come una
+// parola sola). Su `p`, `div` e `li` il testo debole è invece un blocco che
+// occupa la riga: un margine sinistro lo sposterebbe fuori dal bordo del
+// contenitore senza separare nulla.
+span.testo-faint { margin-left: var(--sp-1); }
+
+// Per gli span che sono etichette isolate dentro una riga flex: qui la
+// spaziatura arriva già dal contenitore e il margine aggiungerebbe uno scarto
+// fuorviante.
+.testo-faint-blocco { margin-left: 0; }
+
+.testo-danger { color: var(--c-danger); }
+.testo-success { color: var(--c-success); }
+.testo-warning { color: var(--c-warning); }
+.testo-accent { color: var(--c-accent); }
+.testo-centrato { text-align: center; }
+.testo-destra { text-align: right; }
+.testo-num { font-variant-numeric: tabular-nums; }
+
+.pila { display: flex; flex-direction: column; }
+.pila-1 { gap: var(--sp-1); }
+.pila-2 { gap: var(--sp-2); }
+.pila-3 { gap: var(--sp-3); }
+.pila-4 { gap: var(--sp-4); }
+.pila-5 { gap: var(--sp-5); }
+.pila-6 { gap: var(--sp-6); }
+
+.riga {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.riga-tra { justify-content: space-between; }
+.riga-tra-fine { justify-content: space-between; align-items: flex-end; }
+.riga-centro { justify-content: center; }
+.cresci { flex: 1; min-width: 0; }

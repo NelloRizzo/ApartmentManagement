@@ -1,0 +1,67 @@
+// ===== Design tokens =====
+// Mobile first: le dimensioni sono pensate per il pollice, poi si adattano.
+:root {
+  // Colori
+  --c-primary: #1b4965;
+  --c-primary-dark: #10293a;
+  --c-primary-light: #2d6a8f;
+  --c-accent: #ca6702;
+  --c-accent-soft: #fff3e6;
+
+  --c-success: #2d6a4f;
+  --c-success-soft: #e6f4ec;
+  --c-warning: #b8860b;
+  --c-warning-soft: #fdf5e3;
+  --c-danger: #b3261e;
+  --c-danger-soft: #fdecea;
+  --c-info: #1b4965;
+  --c-info-soft: #e7f0f6;
+
+  // Neutri
+  --c-bg: #f5f7fa;
+  --c-surface: #ffffff;
+  --c-surface-alt: #f0f3f7;
+  --c-border: #dde3ea;
+  --c-border-strong: #c3ccd8;
+  --c-text: #16232e;
+  --c-text-soft: #5a6b7c;
+  --c-text-faint: #8695a5;
+
+  // Spaziature (scala 4px)
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem;
+
+  // Raggi
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-full: 999px;
+
+  // Ombre
+  --sh-1: 0 1px 2px rgb(16 41 58 / 8%);
+  --sh-2: 0 2px 8px rgb(16 41 58 / 10%);
+  --sh-3: 0 8px 24px rgb(16 41 58 / 14%);
+
+  // Tipografia
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.375rem;
+  --fs-2xl: 1.75rem;
+
+  // Layout
+  --nav-h: 4rem;
+  --header-h: 3.5rem;
+  --content-max: 78rem;
+
+  // Safe area (iOS)
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}

@@ -1,0 +1,18 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+npm-debug.log*
+.env
+.env.local
+.env.*.local
+!.env.example
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.tsbuildinfo
+# Gli allegati stanno in MongoDB, non piu' su disco.
+server/uploads/
+client/dev-dist/

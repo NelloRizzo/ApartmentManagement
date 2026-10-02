@@ -1,0 +1,125 @@
+// ===== Stampa e PDF =====
+//
+// La stampa parte da `PulsanteStampa`, che aggiunge `stampa-attiva` al body
+// mentre il browser stampa: in quel momento deve restare solo il documento.
+//
+// Si usa `visibility` e non `display: none` per non far collassare
+// l'impaginazione: nascondere con `display` farebbe saltare il documento in
+// alto a metà stampa e, in alcuni browser, produrrebbe pagine vuote.
+
+@page {
+  margin: 18mm 15mm;
+}
+
+body.stampa-attiva {
+  background: #fff;
+}
+
+body.stampa-attiva * {
+  visibility: hidden;
+}
+
+// Il documento e tutto ciò che contiene tornano visibili.
+body.stampa-attiva [data-stampa],
+body.stampa-attiva [data-stampa] * {
+  visibility: visible;
+}
+
+// Tolto dal flusso normale e riposizionato in alto: senza questo il documento
+// resterebbe schiacciato dove si trova, con l'intestazione dell'app sopra.
+body.stampa-attiva [data-stampa] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: #fff;
+  color: #000;
+}
+
+// Sul documento da stampare gli effetti d'interfaccia vanno rimossi: ombre,
+// bordi arrotondati e colori di sfondo sopravvivono male alla carta.
+body.stampa-attiva [data-stampa] .scheda,
+body.stampa-attiva [data-stampa] .scheda-corpo,
+body.stampa-attiva [data-stampa] .scheda-intestazione {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+body.stampa-attiva [data-stampa] .etichetta {
+  border: 1px solid #999;
+  background: transparent;
+  color: #000;
+}
+
+// I controlli non hanno senso su carta.
+body.stampa-attiva [data-stampa] .btn,
+body.stampa-attiva [data-stampa] button,
+body.stampa-attiva [data-stampa] input,
+body.stampa-attiva [data-stampa] select,
+body.stampa-attiva [data-stampa] textarea {
+  display: none;
+}
+
+// Il verbale è un documento continuo: l'altezza massima e lo scroll tipici
+// dell'anteprima a schermo troncano il testo nel PDF dopo una pagina.
+body.stampa-attiva .verbale-testo {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+// I totali e le intestazioni di tabella non devono restare orfani in fondo a
+// una pagina.
+body.stampa-attiva tr,
+body.stampa-attiva .voce,
+body.stampa-attiva h2,
+body.stampa-attiva h3 {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+// Le intestazioni di sezione restano in pagina con il proprio contenuto.
+body.stampa-attiva h2,
+body.stampa-attiva h3 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+// I colori di sfondo servono a far leggere le intestazioni: senza questa
+// indicazione i browser li rimuovono per ottimizzare l'inchiostro.
+@media print {
+  body.stampa-attiva [data-stampa] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/**
+ * Contenuto che esiste solo in stampa.
+ *
+ * Serve per stampare il testo di un campo di modifica: una `textarea` stampata
+ * dal browser esce come un riquadro grigio delle dimensioni della casella, con
+ * il testo tagliato. Qui il testo è già in un elemento che si stampa bene, e
+ * questo resta nascosto a schermo.
+ */
+.solo-stampa {
+  display: none;
+}
+
+body.stampa-attiva .solo-stampa {
+  display: block;
+}

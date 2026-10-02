@@ -1,0 +1,183 @@
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import mongoose from 'mongoose';
+import { User } from '../models/user.model.js';
+import { Condominio } from '../models/condominio.model.js';
+import { Condomino } from '../models/condomino.model.js';
+import { verifyAccessToken } from './token.js';
+import { condominiDiRuolo } from '../services/ruolo.service.js';
+import { haPermesso, type Permesso } from '../types/domain.js';
+import { forbidden, unauthorized } from '../utils/errors.js';
+import type { UserRole } from '../types/domain.js';
+
+function extractBearer(req: Request): string | null {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) return header.slice(7).trim();
+  return null;
+}
+
+/**
+ * Verifica il token e ricarica l'utente dal database a ogni richiesta.
+ *
+ * I permessi non vengono letti dal token: una delega revocata deve avere effetto
+ * immediato, senza attendere la scadenza dell'access token.
+ */
+export const requireAuth: RequestHandler = async (req, _res, next) => {
+  try {
+    const token = extractBearer(req);
+    if (!token) throw unauthorized();
+
+    const payload = verifyAccessToken(token);
+
+    const user = await User.findById(payload.sub).select('+tokenVersion');
+    if (!user) throw unauthorized('Utente non trovato');
+    if (!user.attivo) throw forbidden('Account disattivato');
+    if (user.tokenVersion !== payload.tokenVersion) throw unauthorized('Sessione non più valida');
+
+    req.user = {
+      sub: String(user._id),
+      email: user.email,
+      role: user.role,
+      name: `${user.nome} ${user.cognome}`.trim(),
+      condominiIds: await condominiDiRuolo(user._id, user.role),
+      permessi: (user.permessi as Permesso[] | null) ?? null,
+      tokenVersion: user.tokenVersion,
+    };
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const requireRole =
+  (...roles: UserRole[]): RequestHandler =>
+  (req, _res, next) => {
+    if (!req.user) return next(unauthorized());
+    if (!roles.includes(req.user.role)) {
+      return next(forbidden(`Ruolo ${req.user.role} non autorizzato per questa operazione`));
+    }
+    next();
+  };
+
+/**
+ * Richiede uno dei permessi indicati.
+ *
+ * - il superadmin passa sempre;
+ * - un amministratore senza elenco di permessi ha accesso pieno;
+ * - un assistente deve avere il permesso, e `scrivere` implica `leggere`.
+ *
+ * Applicarlo solo alle rotte che modificano dati: per le letture il controllo
+ * di condominio basta e il permesso di lettura è comunque implicato.
+ */
+export const requirePermesso =
+  (...permessi: Permesso[]): RequestHandler =>
+  (req, _res, next) => {
+    if (!req.user) return next(unauthorized());
+    if (req.user.role === 'superadmin') return next();
+
+    if (req.user.role !== 'admin') {
+      return next(forbidden(`Ruolo ${req.user.role} non autorizzato per questa operazione`));
+    }
+
+    const assegnati = req.user.permessi;
+    if (assegnati === null) return next();
+
+    if (permessi.some((p) => haPermesso(assegnati, p))) return next();
+
+return next(
+    forbidden('Non sei autorizzato a questa operazione: l’amministratore non ti ha delegato questo ambito'),
+    );
+  };
+
+/**
+ * Richiede il permesso di lettura su un ambito, senza vietare la rotta agli altri
+ * ruoli.
+ *
+ * `requirePermesso` è pensato per le scritture e therefore esclude condòmini e
+ * portieri. Sulle liste, invece, il filtro per utente è già dentro il controller e
+ * ignorare l'ambito significherebbe mostrare a un assistente dati che l'amministratore
+ * non gli ha delegato. Qui quindi si controlla solo il ruolo `admin`: gli altri
+ * ruoli proseguono e restano vincolati dai filtri del controller.
+ */
+export const requirePermessoLettura =
+  (...permessi: Permesso[]): RequestHandler =>
+  (req, _res, next) => {
+    if (!req.user) return next(unauthorized());
+    if (req.user.role !== 'admin') return next();
+
+    const assegnati = req.user.permessi;
+    if (assegnati === null) return next();
+
+    if (permessi.some((p) => haPermesso(assegnati, p))) return next();
+
+    return next(
+      forbidden('Non sei autorizzato a consultare questi dati: l’amministratore non ti ha delegato questo ambito'),
+    );
+  };
+
+/**
+ * Verifica che l'utente abbia accesso al condominio indicato.
+ * Gli amministratori devono essere il titolare o un assistente delegato; i
+ * portieri devono servire il condominio; i condomini devono avere una posizione.
+ */
+export const requireCondominioAccess: RequestHandler = async (req, _res, next) => {
+  try {
+    if (!req.user) throw unauthorized();
+
+    const id = req.params.condominioId ?? (req.body?.condominio as string | undefined);
+    if (!id) throw forbidden('Condominio non specificato');
+    if (!mongoose.isValidObjectId(String(id))) throw forbidden('Condominio non valido');
+
+    const condominioId = String(id);
+    const { sub, role } = req.user;
+
+    if (role === 'superadmin' || role === 'admin') {
+      const ok = await Condominio.exists({
+        _id: condominioId,
+        $or: [{ amministratore: sub }, { assistenti: sub }],
+      });
+      if (!ok) {
+        throw forbidden(
+          role === 'superadmin'
+            ? 'Condominio non trovato'
+            : 'Non sei l’amministratore di questo condominio né un suo assistente',
+        );
+      }
+    } else if (role === 'portiere') {
+      const serves = await Condominio.exists({ _id: condominioId, condominiServito: sub });
+      if (!serves) throw forbidden('Non operi in questo condominio');
+    } else {
+      const linked = await Condomino.exists({ condominio: condominioId, utente: sub, attivo: true });
+      if (!linked) throw forbidden('Non sei un condòmino di questo condominio');
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** Impedisce a un condomino di leggere dati di altri condomini. */
+export async function assertCondominoSelf(
+  condominoId: string,
+  userId: string,
+  role: UserRole,
+): Promise<void> {
+  if (role === 'superadmin' || role === 'admin' || role === 'portiere') return;
+  const found = await Condomino.findOne({ _id: condominoId, utente: userId }).select('_id');
+  if (!found) throw forbidden('Risorsa non assegnata a te');
+}
+
+export function currentUser(req: Request): NonNullable<Request['user']> {
+  if (!req.user) throw unauthorized();
+  return req.user;
+}
+
+/** Verifica se l'utente corrente può eseguire un permesso. */
+export function puoEseguire(utente: NonNullable<Request['user']>, permesso: Permesso): boolean {
+  if (utente.role === 'superadmin') return true;
+  if (utente.role !== 'admin') return false;
+  return haPermesso(utente.permessi, permesso);
+}
+
+export type { NextFunction, Request, Response };
