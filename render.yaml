@@ -117,9 +117,12 @@ services:
   # ---------------------------------------------------------------- Frontend
   # I siti statici sono gratuiti e non si addormentano: il frontend è sempre
   # immediato, anche quando l'API è spenta.
-  - type: static
+  # Attenzione: non esiste `type: static`. Un sito statico e' un servizio web
+  # con `runtime: static`. Con `type: static` Render risponde
+  # "unknown type static" e rifiuta l'intero blueprint.
+  - type: web
     name: stewardmanagementsystem
-    runtime: node
+    runtime: static
     buildCommand: npm ci && npm run build --workspace client
     staticPublishPath: ./client/dist
     # `branch` non dichiarato: vale il ramo predefinito del repository.
