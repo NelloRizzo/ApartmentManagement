@@ -8,7 +8,7 @@ import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedba
 import { EtichettaStato } from '@/components/Elementi';
 import { TitoloPagina } from '@/components/TitoloPagina';
 import { euro, data as fmtData } from '@/lib/formattazione';
-import type { Contratto, Periodicita } from '@/types/domain';
+import type { Collaboratore, Contratto, Periodicita } from '@/types/domain';
 
 const PERIODICITA: { valore: Periodicita; etichetta: string }[] = [
   { valore: 'mensile', etichetta: 'Mensile' },
@@ -121,7 +121,12 @@ function ModuloContratto({ onChiuso, onCreato }: { onChiuso: () => void; onCreat
 
   const candidati = useApi<{ data: { id: string; nome: string; email: string }[] }>(
     async (segnale) => {
-      const risposta = await api.get<{ _id: string; nome: string; cognome: string; email: string; role: string }[]>(
+      // `Collaboratore`, non `_id`: `/staff/amministratori` passa da
+      // `riepilogoCollaboratore`, che espone l'id già come stringa in `id`. Con
+      // `_id` il valore dell'<option> restava `undefined`, il browser usava il
+      // testo come valore e la POST mandava "Super Amministratore (email)" al
+      // posto di un id: risposta 422 "ObjectId non valido".
+      const risposta = await api.get<Collaboratore[]>(
         '/staff/amministratori',
         { page: 1, limit: 100, sort: 'cognome' },
         { signal: segnale },
@@ -129,7 +134,7 @@ function ModuloContratto({ onChiuso, onCreato }: { onChiuso: () => void; onCreat
       return {
         data: risposta.data
           .filter((u) => u.role === 'admin')
-          .map((u) => ({ id: u._id, nome: `${u.nome} ${u.cognome}`, email: u.email })),
+          .map((u) => ({ id: u.id, nome: `${u.nome} ${u.cognome}`, email: u.email })),
       };
     },
     [],

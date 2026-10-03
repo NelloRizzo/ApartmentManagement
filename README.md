@@ -200,6 +200,7 @@ e il tetto delle ore.
 | `npm run seed -- --reset`| svuota e ripopola                            |
 | `npm run start`          | avvia la API compilata                       |
 | `npm run icone`          | rigenera le icone PWA (workspace `client`)   |
+| `npm run reset:produzione`| azzera il database di produzione, vedi `docs/reset-produzione.md` |
 
 ## Configurazione
 
@@ -210,6 +211,7 @@ mancante o incoerente fa fallire l'avvio con un messaggio esplicito.
 | ---------------------- | -------------------------------------- | ------------------------------------------- |
 | `PORT`                 | 4000                                   | porta dell'API                              |
 | `MONGODB_URI`          | `mongodb://127.0.0.1:27017/condomini`  | connessione al database                     |
+| `MONGODB_URI_PRODUZIONE`| vuota                                  | cluster di produzione, solo per `reset:produzione` |
 | `JWT_ACCESS_SECRET`    | segreto di sviluppo                    | **da cambiare in produzione**               |
 | `JWT_REFRESH_SECRET`   | segreto di sviluppo                    | **da cambiare e diverso dal primo**         |
 | `JWT_ACCESS_TTL`       | 15m                                    | durata del token di accesso                |
@@ -222,6 +224,7 @@ mancante o incoerente fa fallire l'avvio con un messaggio esplicito.
 | `VITE_API_URL`         | `/api`                                 | lato client                                 |
 | `SEED_SUPERADMIN_EMAIL`| `superadmin@condomini.local`           | account di piattaforma creato dal seed      |
 | `SEED_ASSISTENTE_EMAIL`| `assistente@example.com`               | assistente con permessi delegati            |
+| `SUPERADMIN_PASSWORD`   | vuota                                  | password per `reset:produzione`, solo `.env` locale |
 
 In produzione il server rifiuta di avviarsi se i segreti JWT sono quelli di
 sviluppo o se coincidono tra loro.
@@ -249,5 +252,9 @@ pwsh scripts/verifica-frontend-condomino.ps1  # il condòmino conserva i propri 
 
 ## Documentazione tecnica
 
-`AGENTS.md` contiene le convenzioni del codice e le regole del dominio.
-Leggilo prima di modificare qualsiasi cosa.
+In `docs/`:
+
+- `AGENTS.md`: convenzioni del codice e regole del dominio. Da leggere prima di
+  modificare qualsiasi cosa;
+- `reset-produzione.md`: come azzerare il database di produzione;
+- `TODO.md`: le idee annotate e non ancora decise.

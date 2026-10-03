@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "seed": "tsx src/scripts/seed.ts"
+    "seed": "tsx src/scripts/seed.ts",
+    "reset:produzione": "tsx src/scripts/reset-produzione.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

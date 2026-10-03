@@ -3,6 +3,17 @@
 Istruzioni per gli agenti AI che modificano questo repository.
 Leggi questo file prima di toccare il codice.
 
+## Documentazione in questa cartella
+
+- `AGENTS.md` (questo file): convenzioni del codice e regole del dominio;
+- `reset-produzione.md`: come azzerare il database di produzione;
+- `TODO.md`: le idee che il proprietario ha annotato e non ha ancora deciso di
+  realizzare.
+
+**Prima di proporre un intervento, leggere `TODO.md`.** Se un'idea annotata riguarda
+ciò che stai per toccare, chiedere conferma e priorità invece di decidere da soli
+l'ambito: il file raccoglie cose che sembrano evidenti ma non lo sono.
+
 ## Cosa fa l'applicazione
 
 Gestione condominiale per amministratori che seguono più condomini. Un
@@ -24,10 +35,21 @@ npm run lint         # eslint su server e client
 npm run build        # compila entrambi
 npm run seed         # popola il DB con dati demo
 npm run seed -- --reset   # svuota le collezioni e ripopola
+npm run reset:produzione  # azzera il DB di produzione, vedi docs/reset-produzione.md
 ```
 
 Prima di dichiarare finito un intervento, `npm run typecheck` e `npm run lint`
 devono passare. Non aggiungere dipendenze senza un motivo concreto.
+
+`npm run reset:produzione` è l'unico modo per ottenere un account `superadmin` su
+un database svuotato: non esiste una rotta che promuova un utente esistente.
+Le sue difese sono volute e non vanno allentate:
+
+- la connessione arriva da `MONGODB_URI_PRODUZIONE`, mai da `MONGODB_URI`, che nel
+  `.env` locale è il Mongo di sviluppo; se manca, lo script non parte e non ha un
+  piano B;
+- `localhost` e `127.0.0.1` vengono rifiutati comunque;
+- `--yes` è obbligatorio, e senza il comando si limita a stampare il piano.
 
 ## Struttura
 

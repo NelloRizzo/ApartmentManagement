@@ -15,6 +15,18 @@ const boolean = (def: boolean) =>
     .optional()
     .transform((v) => (v === undefined ? def : v === 'true' || v === '1'));
 
+/**
+ * Stringa assente o vuota.
+ *
+ * La voce resta così dichiarabile in `.env.example` senza far fallire la
+ * validazione: `z.string().optional()` da solo rifiuterebbe `VARIAVELE=` lasciata
+ * vuota, che è esattamente come si documenta una variabile facoltativa.
+ */
+const vuotaOAssente = z
+  .string()
+  .optional()
+  .transform((v) => (v ? v : undefined));
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -48,6 +60,27 @@ const schema = z.object({
   SEED_ADMIN_PASSWORD: z.string().min(8).default('Admin123!'),
   SEED_SUPERADMIN_EMAIL: z.string().email().default('superadmin@condomini.local'),
   SEED_SUPERADMIN_PASSWORD: z.string().min(10).default('SuperAdmin123!'),
+  /**
+   * Password dell'amministratore di piattaforma per `npm run reset:produzione`.
+   *
+   * Va nel `.env` locale, che non finisce nel repository: `SEED_SUPERADMIN_*` è
+   * la password di sviluppo, quella con cui l'amministratore di piattaforma
+   * entra davvero su un'installazione vera è un'altra.
+   */
+  SUPERADMIN_PASSWORD: vuotaOAssente.refine((v) => v === undefined || v.length >= 10, {
+    message: 'deve avere almeno 10 caratteri',
+  }),
+  /**
+   * Stringa di connessione del cluster di produzione, per `reset:produzione`.
+   *
+   * È separata da `MONGODB_URI` di proposito: quella nel `.env` locale è il
+   * Mongo di sviluppo, e un comando che azzera un database non deve poter
+   * puntare a quello per inerzia o per disattenzione. Se manca, lo script non
+   * parte e non ha un piano B: la destinazione va detta esplicitamente.
+   */
+  MONGODB_URI_PRODUZIONE: vuotaOAssente.refine((v) => v === undefined || v.startsWith('mongodb'), {
+    message: 'deve essere una stringa di connessione MongoDB',
+  }),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -76,6 +109,11 @@ export const config = {
   port: env.PORT,
   rootDir,
   mongodbUri: env.MONGODB_URI,
+  /**
+   * Cluster di produzione per `reset:produzione`. `undefined` se non dichiarato:
+   * lo script si rifiuta di partire, invece di ripiegare sul Mongo locale.
+   */
+  mongodbUriProduzione: env.MONGODB_URI_PRODUZIONE,
   jwt: {
     accessSecret: env.JWT_ACCESS_SECRET,
     refreshSecret: env.JWT_REFRESH_SECRET,
@@ -112,6 +150,11 @@ export const config = {
     superadminEmail: env.SEED_SUPERADMIN_EMAIL,
     superadminPassword: env.SEED_SUPERADMIN_PASSWORD,
   },
+  /**
+   * Password per `reset:produzione`, se dichiarata. Ha la precedenza su quella
+   * del seed, che è il default di sviluppo.
+   */
+  superadminPassword: env.SUPERADMIN_PASSWORD,
 } as const;
 
 export type AppConfig = typeof config;

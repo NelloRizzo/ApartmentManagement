@@ -4,6 +4,9 @@ build/
 coverage/
 *.log
 npm-debug.log*
+# Log di sviluppo redirectionati per mano: non finiscono nel repository.
+logs/
+*.err
 .env
 .env.local
 .env.*.local
