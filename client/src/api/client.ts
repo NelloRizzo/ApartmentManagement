@@ -97,7 +97,11 @@ function costruisciUrl(path: string, query?: RichiestaOpzioni['query']): string 
       url.searchParams.set(chiave, String(valore));
     }
   }
-  return url.pathname + url.search;
+  // Va restituito l'URL per intero, non solo il percorso: in deploy l'API sta
+  // su un'altra origine e una richiesta relativa finirebbe sul sito statico, che
+  // con la regola di ritorno per la SPA risponderebbe 200 con index.html.
+  // In sviluppo BASE_URL e' relativo e l'URL assoluto passa dal proxy di Vite.
+  return url.toString();
 }
 
 async function esegui<T>(path: string, opzioni: RichiestaOpzioni, tentativo = 0): Promise<ApiEnvelope<T>> {
@@ -160,6 +164,17 @@ async function esegui<T>(path: string, opzioni: RichiestaOpzioni, tentativo = 0)
     }
 
     throw err;
+  }
+
+  // Una risposta 200 senza JSON non viene dalla nostra API: senza questo
+  // controllo il chiamante riceverebbe un envelope vuoto e fallirebbe piu'
+  // avanti con un TypeError dal nome del campo, che non dice nulla.
+  if (testo.trim() !== '' && corpo === undefined) {
+    throw new ApiError(
+      risposta.status,
+      'RISPOSTA_NON_JSON',
+      `Risposta HTTP ${risposta.status} senza JSON da ${BASE_URL}: l'indirizzo dell'API non punta al nostro server.`,
+    );
   }
 
   return corpo as ApiEnvelope<T>;
