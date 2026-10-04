@@ -7,12 +7,17 @@ Leggi questo file prima di toccare il codice.
 
 - `AGENTS.md` (questo file): convenzioni del codice e regole del dominio;
 - `reset-produzione.md`: come azzerare il database di produzione;
-- `TODO.md`: le idee che il proprietario ha annotato e non ha ancora deciso di
-  realizzare.
+- `TODO.md`: le cose da realizzare, ordinate per urgenza;
+- `CHANGELOG.md`: cosa è cambiato e perché.
 
-**Prima di proporre un intervento, leggere `TODO.md`.** Se un'idea annotata riguarda
-ciò che stai per toccare, chiedere conferma e priorità invece di decidere da soli
-l'ambito: il file raccoglie cose che sembrano evidenti ma non lo sono.
+**Prima di proporre un intervento, leggere `TODO.md`.** Se un punto aperto
+riguarda ciò che stai per toccare, chiedere quale affrontare e con quale
+urgenza, invece di decidere da soli l'ordine: il file raccoglie cose che sembrano
+evidenti ma non lo sono.
+
+Quando un punto del `TODO.md` viene realizzato, si sposta in `CHANGELOG.md` con
+la ragione della scelta, che è la parte che serve a chi leggerà il codice fra sei
+mesi.
 
 ## Cosa fa l'applicazione
 

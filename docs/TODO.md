@@ -1,96 +1,106 @@
 # Idee da fare
 
-Qui finisce tutto quello che viene in mente ma non è ancora stato deciso. Il
-proprietario del repository annota le idee, gli agenti le leggono prima di
-proporre un intervento.
+Solo cose **da realizzare**, ordinate per urgenza. Quello che è già stato fatto,
+con le ragioni delle scelte, sta in `CHANGELOG.md`.
 
 ## Come si usa
 
-- **Il proprietario** aggiunge un'idea in fondo, una riga o due, quando gli
-  viene in mente. Non serve che sia chiara né giusta: serve che sia là.
-- **L'agente**, all'inizio di un intervento, legge questo file e controlla se
-  qualcosa riguarda ciò che sta per toccare. Se sì, chiede quale delle idee
-  fare e con quale priorità, invece di indovinare.
-- **Quando un'idea è stata realizzata**, si sposta in "Realizzate" con
-  l'impegno che la riguarda, così non viene riproposta.
+- **Il proprietario** aggiunge un'idea in fondo, con l'urgenza che ritiene
+  giusta. Non serve che sia chiara né giusta: serve che sia là.
+- **L'agente**, prima di proporre un intervento, legge questo file e controlla se
+  riguarda ciò che sta per toccare. Se sì, chiede quale dei punti aperti
+  affrontare, invece di indovinare l'ordine.
+- **Quando un punto è realizzato** va in `CHANGELOG.md`, non qui: qui dentro
+  rimane solo ciò che manca.
 
-Le idee non sono ordinate per priorità: la priorità la dà il proprietario al
-momento. L'ordine delle sezioni è quello in cui sono state annotate.
+Urgenza: **Alta** = blocca il lavoro o è un buco di sicurezza; **Media** =
+funzionalità che si nota mancante; **Bassa** = rifinitura.
 
-## Idee
+---
+
+## Alta
+
+### Le scritture delle comunicazioni non chiedono il permesso
+
+`POST /`, `PATCH /:id`, `POST /:id/invia`, `POST /:id/risposte` e `DELETE /:id` in
+`comunicazione.routes.ts` passano solo per `controllaServizio`: manca
+`requirePermesso('comunicazioni:scrivere')`, che le letture hanno già nella
+forma di `requirePermessoLettura`. Un assistente delegato che può solo registrare
+versamenti può quindi scrivere e cancellare comunicazioni ai condòmini.
+
+### Delega per condominio: compiti distribuiti
+
+Oggi un assistente ha un elenco di permessi unico per tutti i condomìni
+(`User.permessi`) e l'elenco dei condomìni in `Condominio.assistenti`: non si può
+dire "su questo stabile tutto, su quello solo i versamenti".
+
+Serve una delega per condominio, con tre casi: tutti i condomìni dell'amministratore
+(anche quelli futuri), un elenco preciso, o nessuno. Da decidere se una persona
+può avere più elenchi diversi: con il modello attuale `permessi: null` vuol dire
+accesso pieno, quindi "pieno qui e limitato lì" non è esprimibile. Il punto di
+riferimento sono `requirePermesso` e `requirePermessoLettura` in
+`middleware/auth.ts`, che già ricevono `req.params.condominioId` e possono
+quindi risolvere il giusto elenco.
+
+### Associazioni modificabili
+
+Le unità già a database devono poter essere riassociate a un condominio diverso,
+così un immobile esistente non resta inutilizzabile. Da decidere cosa ostacola
+lo spostamento: i millesimi assegnati (spostarli cambierebbe la somma di due
+tabelle), gli iscritti collegati, i versamenti registrati. Serve anche decidere se
+lo spostamento vale solo per le unità o anche per iscritti, assemblee e bilanci.
+
+## Media
 
 ### Privacy policy per ruolo
 
-Serve un'informativa privacy distinta per chi usa l'applicazione, perché il
-titolare del trattamento cambia a seconda del ruolo:
+Serve un'informativa distinta per chi usa l'applicazione, perché il titolare del
+trattamento cambia:
 
-- **condòmini**: il titolare è l'amministratore di condominio, che tratta i
-  dati delle unità e delle quote per conto del condominio; Gestione Condomini
-  agisce da responsabile del trattamento. Informativa su dati raccolti
-  (nome, contatti, quote, presenze, verbali), finalità, base giuridica,
+- **condòmini**: il titolare è l'amministratore di condominio, che tratta i dati
+  delle unità e delle quote per conto del condominio; Gestione Condomini agisce
+  da responsabile del trattamento. Dati raccolti, finalità, base giuridica,
   conservazione, diritti dell'interessato e come esercitarli.
 - **amministratori di condominio**: il titolare è l'amministratore di
   piattaforma, che tratta i dati del team e degli amministratori. Da valutare
-  anche l'informativa per l'amministratore di piattaforma stesso.
-- Le due informative vanno pubblicate in app (pagina o PDF) e accettate al primo
-  accesso, con data di versione. Da decidere: firma del consenso o semplice
-  presa visione, e se serve un registro dei consensi.
-
-Da decidere anche dove pubblicarla: dentro l'applicazione, sul sito, o entrambi.
+  anche l'informativa per l'amministratore di piattaforma.
+- Da decidere: firma del consenso o presa visione, se serve un registro dei
+  consensi, e dove pubblicarla (in app, sul sito, entrambi).
 
 ### Operazioni CRUD mancanti nella UI
 
-L'API espone il CRUD completo di ogni dominio, ma la UI copre solo una parte.
-Da completare, in ordine di impatto:
+L'API espone il CRUD completo di ogni dominio, la UI solo una parte:
 
-- **condomini**: mancano modifica e cancellazione (esistono `PATCH /condomini/:id`
-  e `DELETE /condomini/:id`).
-- **assemblee**: mancano modifica, cancellazione e cambio stato
-  (`PATCH /:id`, `DELETE /:id`, `POST /:id/stato`). Manca anche
-  `POST /:id/millesimi/ricalcola`.
-- **verbali**: mancano approvazione (`POST /:id/approva`) e cancellazione.
-- **bilanci**: manca la creazione del bilancio (`POST /bilanci`), la modifica
-  (`PATCH /bilanci/:id`), la cancellazione e l'approvazione. Esiste solo la
-  gestione delle voci e il consuntivo.
-- **versamenti**: mancano modifica e cancellazione.
+- **condomini**: mancano modifica e cancellazione (`PATCH` e `DELETE` esistono);
+- **assemblee**: mancano modifica, cancellazione, cambio stato e ricalcolo
+  millesimi;
+- **verbali**: mancano approvazione e cancellazione;
+- **bilanci**: mancano creazione, modifica, cancellazione e approvazione (esiste
+  solo la gestione delle voci e il consuntivo);
+- **versamenti**: mancano modifica e cancellazione;
 - **comunicazioni**: mancano modifica e cancellazione.
-- **tabella millesimali**: non viene mostrato lo storico delle revisioni
-  (`GET /tabella-millesimi/revisioni`), che l'API espone.
 
-### Permessi
+### Un contratto può essere stipulato con costo zero
 
-- Le rotte di scrittura delle comunicazioni non chiedono
-  `comunicazioni:scrivere`: `POST`, `PATCH`, `POST /:id/invia`, `POST /:id/risposte`
-  e `DELETE` passano solo per `controllaServizio`. Un assistente delegato che
-  può solo registrare versamenti può quindi scrivere e cancellare comunicazioni.
-  Le letture usano già `requirePermessoLettura`.
-- Verificare che ogni altra rotta di scrittura chieda il permesso di ambito
-  corrispondente: è già così per unita, iscritti, tabella, assemblee, verbali,
-  bilanci, versamenti e amministrazione.
+`creaContrattoSchema` accetta `costo: 0` e il form ha `min={0}`: svuotando il
+campo, `Number('')` manda 0 e la richiesta passa. In produzione i due contratti
+esistenti hanno `costo: 0` e una rata da 0. Serve una decisione: rifiutare lo
+zero, o distinguerlo da un campo vuoto.
 
-### Altro
+## Bassa
 
-- Le email contengono ancora il nome "Steward" (oggetto e firma), mentre la UI
-  dice "Gestione Condomini": decidere se allineare anche i modelli email.
-- Il mittente delle email è cambiato in `render.yaml`, ma su Render va impostato
-  a mano: ogni modifica futura va annotata da qualche parte, altrimenti si
-  perde il sincronismo tra blueprint e pannello.
+### Storico delle revisioni della tabella millesimali
 
-## Realizzate
+`GET /tabella-millesimi/revisioni` esiste e non è mostrato da nessuna parte.
 
-- 2026-10-03: pulizia del database di produzione con ricreazione del
-  superadmin, `npm run reset:produzione` (`docs/reset-produzione.md`).
-- 2026-10-03: pagina "I miei condomini" con creazione del condominio, che
-  prima non aveva una schermata: senza, un amministratore nuovo non poteva
-  creare lo stabile e quindi neppure le unità immobiliari.
-- 2026-10-03: cambio password nella pagina profilo (l'API esisteva già da
-  tempo, non era raggiungibile dalla UI).
-- 2026-10-03: titolo dell'applicazione cambiato da "Steward" a
-  "Gestione Condomini".
-- 2026-10-03: la capacità contrattuale è contata in condomìni (`condominiMassimi`)
-  invece che in unità immobiliari, e si consuma sulla creazione del condominio.
-  I contratti esistenti si spostano con `npm run migra:contratti`.
-- 2026-10-03: il superadmin può modificare costo, periodicità, mesi di proroga,
-  rinnovo automatico, capacità e note di un contratto (`PATCH /contratti/:id`).
-  Ogni modifica finisce nello storico con il valore precedente, e le voci
-  mostrano anche chi ha operato.
+### Allineare il nome nelle email
+
+Oggetto e firma dei modelli email dicono ancora "Steward", mentre la UI dice
+"Gestione Condomini".
+
+### Tenere allineati blueprint e pannello Render
+
+`BREVO_API_KEY`, `BREVO_MITTENTE_EMAIL` e `MONGODB_URI` sono `sync: false`: il
+blueprint non le valorizza e il pannello le tiene. Ogni modifica futura va
+annunciata da qualche parte, altrimenti si perde il sincronismo e ci si
+ritrova con un mittente sbagliato in produzione.

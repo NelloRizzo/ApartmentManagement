@@ -1,8 +1,10 @@
 /**
  * Sposta la capacità contrattuale dalle unità immobiliari ai condomìni.
  *
- *   npm run migra:contratti            # mostra cosa farebbe, non modifica nulla
- *   npm run migra:contratti -- --yes   # esegue
+ *   npm run migra:contratti                      mostra il piano sul DB locale
+ *   npm run migra:contratti -- --yes             esegue sul DB locale
+ *   npm run migra:contratti -- --produzione      mostra il piano su Atlas
+ *   npm run migra:contratti -- --produzione --yes   esegue su Atlas
  *
  * I contratti sono stati creati con `unitaMassime`, un numero di unità
  * immobiliari. La capacità è ora contata in condomìni e il campo si chiama
@@ -18,9 +20,9 @@
  * piattaforma con la proroga (`POST /contratti/:id/proroga`).
  *
  * Va eseguito una volta sola, dopo il deploy che introduce il campo nuovo e
- * prima di usarlo. Sul database di produzione si lancia in locale, con
- * `MONGODB_URI` che punta al cluster: vedi `docs/reset-produzione.md` per la
- * stessa impostazione.
+ * prima di usarlo. Su Atlas si lancia in locale con `--produzione`, che
+ * prende `MONGODB_URI_PRODUZIONE`: senza quel flag la destinazione sarebbe il
+ * Mongo del `.env` locale e la migrazione non toccherebbe il database giusto.
  */
 import mongoose from 'mongoose';
 import { config } from '../config/index.js';
@@ -41,6 +43,31 @@ function mascheraUri(uri: string): string {
   return (resto ?? uri).split('@').pop() ?? uri;
 }
 
+/**
+ * Cluster di produzione, o l'errore che spiega come dichiararlo.
+ *
+ * Stessa regola di `reset-produzione`: la URI va detta esplicitamente e non può
+ * essere quella locale, altrimenti il comando opererebbe sul database sbagliato
+ * mentre sembrerebbe quello giusto.
+ */
+function uriProduzione(): string {
+  const uri = config.mongodbUriProduzione;
+  if (!uri) {
+    throw new Error(
+      'MONGODB_URI_PRODUZIONE non dichiarata: senza, la migrazione andrebbe sul database ' +
+        'locale e non su quello di produzione. Copiare la stringa di connessione del cluster ' +
+        'da Render → steward-api → Environment → MONGODB_URI nel .env locale.',
+    );
+  }
+  if (/localhost|127\.0\.0\.1|::1/.test(uri)) {
+    throw new Error(
+      `MONGODB_URI_PRODUZIONE punta a un database locale (${mascheraUri(uri)}). ` +
+        'La migrazione su --produzione deve colpire il cluster vero.',
+    );
+  }
+  return uri;
+}
+
 async function raccogli(): Promise<DaMigrare[]> {
   // `contratti` è il nome della collezione: si legge con il driver, non con il
   // modello, perché il modello ora dichiara `condominiMassimi` come obbligatorio
@@ -55,12 +82,15 @@ async function raccogli(): Promise<DaMigrare[]> {
 }
 
 async function main(): Promise<void> {
-  const confermato = process.argv.includes('--yes') || process.argv.includes('-y');
+  const argomenti = process.argv.slice(2);
+  const confermato = argomenti.includes('--yes') || argomenti.includes('-y');
+  const inProduzione = argomenti.includes('--produzione');
+  const uri = inProduzione ? uriProduzione() : config.mongodbUri;
 
-  await connectDatabase();
+  await connectDatabase(uri);
   const daMigrare = await raccogli();
 
-  logger.info(`Database: ${mascheraUri(config.mongodbUri)}`);
+  logger.info(`Database: ${mascheraUri(uri)}${inProduzione ? ' (produzione)' : ' (locale)'}`);
   logger.info(`Contratti con il vecchio campo unitaMassime: ${daMigrare.length}`);
 
   if (daMigrare.length === 0) {

@@ -258,4 +258,5 @@ In `docs/`:
 - `AGENTS.md`: convenzioni del codice e regole del dominio. Da leggere prima di
   modificare qualsiasi cosa;
 - `reset-produzione.md`: come azzerare il database di produzione;
-- `TODO.md`: le idee annotate e non ancora decise.
+- `TODO.md`: le cose da realizzare, ordinate per urgenza;
+- `CHANGELOG.md`: cosa è cambiato e perché.

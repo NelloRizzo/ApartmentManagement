@@ -4,7 +4,18 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created, noContent, paginated } from '../utils/http.js';
 import { notFound, forbidden } from '../utils/errors.js';
 import { paginazioneDa, regexDaTesto } from '../utils/pagination.js';
-import { Assemblea, Condominio, Condomino, Unita } from '../models/index.js';
+import {
+  Allegato,
+  Assemblea,
+  Bilancio,
+  Comunicazione,
+  Condominio,
+  Condomino,
+  QuotaMillesimale,
+  Unita,
+  Verbale,
+  Versamento,
+} from '../models/index.js';
 import { currentUser, puoEseguire } from '../middleware/auth.js';
 import { auditLog } from '../services/audit.service.js';
 import { buildTabella } from '../services/tabellaMillesimale.service.js';
@@ -151,16 +162,54 @@ export const update = asyncHandler(async (req, res) => {
   ok(res, condominio);
 });
 
+/**
+ * Cosa impedisce di cancellare un condominio.
+ *
+ * Ogni collezione che porta `condominio` va controllata: senza, cancellando lo
+ * stabile resterebbero documenti che nessuna rotta può più raggiungere, perché
+ * ogni rotta passa da `requireCondominioAccess` e chiede il condominio. Sono
+ * dati persi in silenzio, il caso peggiore.
+ *
+ * `AuditLog` è escluso di proposito: è una traccia storica e non un documento
+ * vivo, cancellare il condominio non deve cancellare la storia di quello che ci
+ * è successo.
+ */
+/** Solo il conteggio serve: ogni modello ha il proprio tipo di documento. */
+type Dipendenza = {
+  etichetta: string;
+  conta: (filtro: { condominio: Types.ObjectId }) => Promise<number>;
+};
+
+const DIPENDENZE: Dipendenza[] = [
+  { etichetta: 'unità immobiliari', conta: (f) => Unita.countDocuments(f) },
+  { etichetta: 'iscritti', conta: (f) => Condomino.countDocuments(f) },
+  { etichetta: 'quote millesimali', conta: (f) => QuotaMillesimale.countDocuments(f) },
+  { etichetta: 'assemblee', conta: (f) => Assemblea.countDocuments(f) },
+  { etichetta: 'verbali', conta: (f) => Verbale.countDocuments(f) },
+  { etichetta: 'bilanci', conta: (f) => Bilancio.countDocuments(f) },
+  { etichetta: 'versamenti', conta: (f) => Versamento.countDocuments(f) },
+  { etichetta: 'comunicazioni', conta: (f) => Comunicazione.countDocuments(f) },
+  { etichetta: 'allegati', conta: (f) => Allegato.countDocuments(f) },
+];
+
 export const remove = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
-  const [nUnita, nAssemblee] = await Promise.all([
-    Unita.countDocuments({ condominio: id(req.params.condominioId!) }),
-    Assemblea.countDocuments({ condominio: id(req.params.condominioId!) }),
-  ]);
-  if (nUnita > 0 || nAssemblee > 0) {
-    throw forbidden('Impossibile eliminare un condominio che ha unità o assemblee: procedi con la disattivazione');
+  const condominioId = id(req.params.condominioId!);
+
+  const conteggi = await Promise.all(
+    DIPENDENZE.map(async (d) => ({ etichetta: d.etichetta, numero: await d.conta({ condominio: condominioId }) })),
+  );
+  const bloccanti = conteggi.filter((c) => c.numero > 0);
+
+  if (bloccanti.length > 0) {
+    throw forbidden(
+      `Impossibile eliminare un condominio che ha ${bloccanti
+        .map((c) => `${c.numero} ${c.etichetta}`)
+        .join(', ')}: procedi con la disattivazione`,
+    );
   }
-  const risultato = await Condominio.deleteOne({ _id: req.params.condominioId, amministratore: utente.sub });
+
+  const risultato = await Condominio.deleteOne({ _id: condominioId, amministratore: utente.sub });
   if (risultato.deletedCount === 0) throw notFound('Condominio non trovato');
   noContent(res);
 });
