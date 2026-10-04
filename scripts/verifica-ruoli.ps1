@@ -23,7 +23,7 @@ Write-Output '=== Contratti per ruolo ==='
 foreach ($x in @(@('superadmin',$sa), @('admin',$ad))) {
   $t = (Invoke-RestMethod -Uri "$base/contratti" -Headers (Auth $x[1].Token)).data
   Write-Output ("  {0,-11} contratti visibili: {1}" -f $x[0], $t.Count)
-  foreach ($c in $t) { Write-Output ("               {0} {1} {2}/{3} unita" -f $c.codice, $c.stato, $c.unitaInUso, $c.unitaMassime) }
+  foreach ($c in $t) { Write-Output ("               {0} {1} {2}/{3} condomini" -f $c.codice, $c.stato, $c.condominiInUso, $c.condominiMassimi) }
 }
 
 Write-Output ''
@@ -31,7 +31,7 @@ Write-Output '=== Stato servizio ==='
 foreach ($x in @(@('superadmin',$sa), @('admin',$ad), @('assistente',$as), @('condomino',$co))) {
   $s = (Invoke-RestMethod -Uri "$base/contratti/mio-stato" -Headers (Auth $x[1].Token)).data
   if ($s.ruolo -eq 'admin') {
-    Write-Output ("  {0,-11} stato={1} unita {2}/{3} disponibili={4}" -f $x[0], $s.stato, $s.contratto.unitaInUso, $s.contratto.unitaMassime, $s.contratto.unitaDisponibili)
+    Write-Output ("  {0,-11} stato={1} condomini {2}/{3} disponibili={4}" -f $x[0], $s.stato, $s.contratto.condominiInUso, $s.contratto.condominiMassimi, $s.contratto.condominiDisponibili)
   } elseif ($s.ruolo -eq 'superadmin') {
     Write-Output ("  {0,-11} contratti attivi={1} in scadenza 30gg={2}" -f $x[0], $s.contrattiAttivi, $s.inScadenzaEntro30Giorni)
   } else {

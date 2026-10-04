@@ -21,7 +21,7 @@ Write-Output '=== Piattaforma riservata al superadmin ==='
 Esito 'admin  GET /contratti/amministratori'  { (Invoke-RestMethod -Uri "$base/staff/amministratori" -Headers (Auth $ad)).data.Count }
 Esito 'assistente GET /contratti/amministratori' { (Invoke-RestMethod -Uri "$base/staff/amministratori" -Headers (Auth $as)).data.Count }
 Esito 'superadmin GET /contratti/amministratori' { (Invoke-RestMethod -Uri "$base/staff/amministratori" -Headers (Auth $sa)).data.Count }
-Esito 'admin  POST /contratti (nuovo contratto)' { (Invoke-RestMethod -Method Post -Uri "$base/contratti" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{amministratoreId='x';unitaMassime=1;costo=1;periodicita='annuale';durataMesi=12;dataInizio='2026-01-01';dataScadenza='2027-01-01'}|ConvertTo-Json)).data.stato }
+Esito 'admin  POST /contratti (nuovo contratto)' { (Invoke-RestMethod -Method Post -Uri "$base/contratti" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{amministratoreId='x';condominiMassimi=1;costo=1;periodicita='annuale';durataMesi=12;dataInizio='2026-01-01';dataScadenza='2027-01-01'}|ConvertTo-Json)).data.stato }
 Esito 'condomino GET /staff/assistenti' { (Invoke-RestMethod -Uri "$base/staff/assistenti" -Headers (Auth $co)).data.Count }
 
 $prof = (Invoke-RestMethod -Uri "$base/auth/me" -Headers (Auth $as)).data
@@ -48,5 +48,5 @@ Esito 'condomino  POST /unita (escluso)' { (Invoke-RestMethod -Method Post -Uri 
 
 Write-Output ''
 Write-Output '=== Validazione input ==='
-Esito 'contratto con periodicita inesistente' { (Invoke-RestMethod -Method Post -Uri "$base/contratti" -Headers (Auth $sa) -ContentType 'application/json' -Body (@{amministratoreId='x';unitaMassime=1;costo=1;periodicita='giornaliera';durataMesi=12;dataInizio='2026-01-01';dataScadenza='2027-01-01'}|ConvertTo-Json)).error.codice }
+Esito 'contratto con periodicita inesistente' { (Invoke-RestMethod -Method Post -Uri "$base/contratti" -Headers (Auth $sa) -ContentType 'application/json' -Body (@{amministratoreId='x';condominiMassimi=1;costo=1;periodicita='giornaliera';durataMesi=12;dataInizio='2026-01-01';dataScadenza='2027-01-01'}|ConvertTo-Json)).error.codice }
 Esito 'contratto senza permesso (admin su /p)' { (Invoke-RestMethod -Uri "$base/contratti/$($st.id)/rate" -Headers (Auth $co)).data.Count }

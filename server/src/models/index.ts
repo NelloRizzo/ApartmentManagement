@@ -46,6 +46,7 @@ export type {
   ContrattoModel,
   Periodicita,
   StatoContratto,
+  VoceModifica,
   VoceStorico,
 } from './contratto.model.js';
 

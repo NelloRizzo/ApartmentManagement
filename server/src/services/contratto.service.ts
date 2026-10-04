@@ -3,12 +3,12 @@ import {
   Condominio,
   Contratto,
   PagamentoContratto,
-  Unita,
   User,
   MESI_PER_PERIODICITA,
   type ContrattoDoc,
   type ContrattoDocumento,
   type StatoContratto,
+  type VoceModifica,
 } from '../models/index.js';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
 import { auditLog } from './audit.service.js';
@@ -42,23 +42,24 @@ export function prossimoCodiceContratto(): Promise<string> {
     .then((n) => `CTR-${anno}-${String(n + 1).padStart(3, '0')}`);
 }
 
-/** Numero di unità che l'amministratore amministra davvero, su tutti i condomini. */
-export async function unitaInCarico(amministratoreId: string): Promise<number> {
-  const condomini = await Condominio.find({ amministratore: amministratoreId }).select('_id').lean();
-  if (condomini.length === 0) return 0;
-  return Unita.countDocuments({
-    condominio: { $in: condomini.map((c) => c._id) },
-    attiva: true,
-  });
+/**
+ * Numero di condomìni che l'amministratore amministra davvero.
+ *
+ * Solo quelli di cui è titolare: un assistente non ha un proprio patrimonio di
+ * stabili, e i condomìni che segue per delega sono già nel contratto di chi lo
+ * ha delegato.
+ */
+export async function condominiInCarico(amministratoreId: string): Promise<number> {
+  return Condominio.countDocuments({ amministratore: amministratoreId });
 }
 
 export interface StatoServizio {
   contratto: ContrattoDoc | null;
   stato: StatoContratto | 'nessuno';
-  unitaMassime: number;
-  unitaInUso: number;
-  /** Restano unità aggiungibili: zero se il contratto non è utilizzabile. */
-  unitaDisponibili: number;
+  condominiMassimi: number;
+  condominiInUso: number;
+  /** Restano condomìni creabili: zero se il contratto non è utilizzabile. */
+  condominiDisponibili: number;
   /** Il contratto è in stato "attivo" e non ancora scaduto. */
   utilizzabile: boolean;
   /** Solo temporale: la data di scadenza è passata. */
@@ -97,19 +98,19 @@ export async function statoServizio(amministratoreId: string): Promise<StatoServ
       stato: { $in: ['attivo', 'sospeso', 'scaduto'] },
     }).sort({ dataScadenza: -1 }),
     // La capacità è unica per contratto: se la richiesta arriva da un
-    // assistente, le unità contate sono quelle amministrate dal delegante, non
-    // un eventuale pool separato. Altrimenti l'assistente vedrebbe un
-    // contratto con tutte le unità disponibili e potrebbe superarlo.
-    unitaInCarico(titolare),
+    // assistente, i condomìni contati sono quelli amministrati dal delegante,
+    // non un eventuale pool separato. Altrimenti l'assistente vedrebbe un
+    // contratto con tutta la capacità disponibile e potrebbe superarlo.
+    condominiInCarico(titolare),
   ]);
 
   if (!contratto) {
     return {
       contratto: null,
       stato: 'nessuno',
-      unitaMassime: 0,
-      unitaInUso: inUso,
-      unitaDisponibili: 0,
+      condominiMassimi: 0,
+      condominiInUso: inUso,
+      condominiDisponibili: 0,
       utilizzabile: false,
       scaduto: true,
       giorniAllaScadenza: null,
@@ -123,9 +124,9 @@ export async function statoServizio(amministratoreId: string): Promise<StatoServ
   return {
     contratto,
     stato: contratto.stato,
-    unitaMassime: contratto.unitaMassime,
-    unitaInUso: inUso,
-    unitaDisponibili: utilizzabile ? Math.max(0, contratto.unitaMassime - inUso) : 0,
+    condominiMassimi: contratto.condominiMassimi,
+    condominiInUso: inUso,
+    condominiDisponibili: utilizzabile ? Math.max(0, contratto.condominiMassimi - inUso) : 0,
     utilizzabile,
     scaduto,
     giorniAllaScadenza: giorni,
@@ -133,14 +134,14 @@ export async function statoServizio(amministratoreId: string): Promise<StatoServ
 }
 
 /**
- * Verifica che l'amministratore possa aggiungere nuove unità immobiliari.
+ * Verifica che l'amministratore possa creare nuovi condomìni.
  *
  * Un contratto sospeso o scaduto congela l'espansione: l'amministratore
  * continua a gestire ciò che ha già, ma non può accrescere il carico.
  */
 export async function verificaCapacita(
   amministratoreId: string,
-  nuoveUnita: number,
+  nuoviCondomini: number,
 ): Promise<StatoServizio> {
   const stato = await statoServizio(amministratoreId);
 
@@ -164,18 +165,18 @@ export async function verificaCapacita(
 
   if (stato.scaduto) {
     throw conflict(
-      `Il contratto è scaduto il ${new Date(stato.contratto.dataScadenza).toLocaleDateString('it-IT')}: non è possibile aggiungere nuove unità finché non viene rinnovato`,
+      `Il contratto è scaduto il ${new Date(stato.contratto.dataScadenza).toLocaleDateString('it-IT')}: non è possibile creare nuovi condomìni finché non viene rinnovato`,
     );
   }
 
-  if (stato.unitaInUso + nuoveUnita > stato.unitaMassime) {
+  if (stato.condominiInUso + nuoviCondomini > stato.condominiMassimi) {
     throw conflict(
-      `Capacità contrattuale superata: il contratto prevede ${stato.unitaMassime} unità immobiliari e ne sono già in carico ${stato.unitaInUso}`,
+      `Capacità contrattuale superata: il contratto prevede ${stato.condominiMassimi} condomìni e ne sono già in carico ${stato.condominiInUso}`,
       {
-        unitaMassime: stato.unitaMassime,
-        unitaInUso: stato.unitaInUso,
-        richieste: nuoveUnita,
-        disponibili: Math.max(0, stato.unitaMassime - stato.unitaInUso),
+        condominiMassimi: stato.condominiMassimi,
+        condominiInUso: stato.condominiInUso,
+        richiesti: nuoviCondomini,
+        disponibili: Math.max(0, stato.condominiMassimi - stato.condominiInUso),
       },
     );
   }
@@ -185,7 +186,7 @@ export async function verificaCapacita(
 
 export interface DatiContratto {
   amministratore: string;
-  unitaMassime: number;
+  condominiMassimi: number;
   costo: number;
   periodicita: 'mensile' | 'trimestrale' | 'semestrale' | 'annuale';
   durataMesi: number;
@@ -252,7 +253,7 @@ export async function creaContratto(dati: DatiContratto, operatoreId: string): P
     codice,
     amministratore: dati.amministratore,
     stato: dati.stato ?? 'attivo',
-    unitaMassime: dati.unitaMassime,
+    condominiMassimi: dati.condominiMassimi,
     costo: dati.costo,
     periodicita: dati.periodicita,
     durataMesi: dati.durataMesi,
@@ -267,7 +268,7 @@ export async function creaContratto(dati: DatiContratto, operatoreId: string): P
         data: new Date(),
         azione: 'stipula',
         a: dati.stato ?? 'attivo',
-        nota: `${dati.unitaMassime} unità immobiliari a ${dati.costo} € per ${dati.durataMesi} mesi`,
+        nota: `${dati.condominiMassimi} condomìni a ${dati.costo} € per ${dati.durataMesi} mesi`,
         operatore: new Types.ObjectId(String(operatoreId)),
       },
     ],
@@ -283,7 +284,7 @@ export async function creaContratto(dati: DatiContratto, operatoreId: string): P
     dettagli: {
       codice,
       amministratore: dati.amministratore,
-      unitaMassime: dati.unitaMassime,
+      condominiMassimi: dati.condominiMassimi,
       costo: dati.costo,
     },
   });
@@ -334,12 +335,26 @@ export async function proroga(
   if (contratto.stato === 'cessato') throw conflict('Un contratto cessato non può essere prorogato');
   if (mesi < 1) throw badRequest('La proroga deve essere di almeno un mese');
 
-  const nuovaScadenza = aggiungiMesi(contratto.dataScadenza, mesi);
+  const modifiche: VoceModifica[] = [];
+
+  // La scadenza precedente va letta prima dell'assegnazione: dopo, "da" e "a"
+  // sarebbero la stessa data e la traccia non direbbe nulla.
+  const scadenzaPrecedente = contratto.dataScadenza;
+  const nuovaScadenza = aggiungiMesi(scadenzaPrecedente, mesi);
   const rateDa = await ratePrecedenti(contratto);
 
   if (opzioni.nuovaCapacita !== undefined) {
-    if (opzioni.nuovaCapacita < 1) throw badRequest('La capacità deve essere almeno 1 unità immobiliare');
-    contratto.unitaMassime = opzioni.nuovaCapacita;
+    if (opzioni.nuovaCapacita < 1) throw badRequest('La capacità deve essere di almeno 1 condominio');
+    // La variazione di capacità finisce nello storico come modifica: senza,
+    // il cambiamento più importante di una proroga resterebbe invisibile.
+    if (opzioni.nuovaCapacita !== contratto.condominiMassimi) {
+      modifiche.push({
+        campo: 'capacità (condomini)',
+        da: String(contratto.condominiMassimi),
+        a: String(opzioni.nuovaCapacita),
+      });
+    }
+    contratto.condominiMassimi = opzioni.nuovaCapacita;
   }
 
   const precedente = contratto.stato;
@@ -348,6 +363,11 @@ export async function proroga(
   contratto.stato = 'attivo';
   contratto.sospesoIl = undefined;
   contratto.sospesoMotivo = undefined;
+  modifiche.push({
+    campo: 'scadenza',
+    da: scadenzaPrecedente.toISOString().slice(0, 10),
+    a: nuovaScadenza.toISOString().slice(0, 10),
+  });
   contratto.storico.push({
     data: new Date(),
     azione: 'proroga',
@@ -356,6 +376,7 @@ export async function proroga(
     nota:
       opzioni.nota ??
       `Proroga di ${mesi} mesi fino al ${nuovaScadenza.toLocaleDateString('it-IT')}`,
+    modifiche,
     operatore: new Types.ObjectId(String(operatoreId)),
   });
 

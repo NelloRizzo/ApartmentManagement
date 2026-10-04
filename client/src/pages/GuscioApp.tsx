@@ -11,6 +11,7 @@ const TITOLI_SEZIONE: Record<string, string> = {
   'p/contratti': 'Contratti',
   'p/amministratori': 'Amministratori',
   'p/messaggi': 'Messaggi agli amministratori',
+  'c/condomini': 'I miei condomini',
   profilo: 'Profilo e posizioni',
   contratto: 'Il mio contratto',
 };
@@ -53,8 +54,8 @@ export default function GuscioApp() {
    */
   const titoloIntestazione =
     utente.role === 'superadmin' && !amministra
-      ? (TITOLI_SEZIONE[segnaleDiSezione(posizione.pathname)] ?? 'Steward')
-      : (selezionata?.nome ?? 'Steward');
+      ? (TITOLI_SEZIONE[segnaleDiSezione(posizione.pathname)] ?? 'Gestione Condomini')
+      : (selezionata?.nome ?? 'Gestione Condomini');
 
   // Le sezioni non delegate non vengono mostrate: il backend le rifiuterebbe.
   const gruppi = gruppiNavigazione(utente.role, puo, amministra);
@@ -74,7 +75,7 @@ export default function GuscioApp() {
             ⌂
           </span>
           <span>
-            <strong>Steward</strong>
+            <strong>Gestione Condomini</strong>
             <span className="testo-faint">{etichette.ruolo(utente.role)}</span>
           </span>
         </div>

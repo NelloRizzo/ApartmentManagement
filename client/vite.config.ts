@@ -10,8 +10,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'robots.txt'],
       manifest: {
-        name: 'Steward Management System',
-        short_name: 'Steward',
+        name: 'Gestione Condomini',
+        // Sotto l'icona sulla home i sistemi mobili troncano il nome: meglio
+        // una versione corta che venga letta per intero.
+        short_name: 'Condomini',
         description: 'Gestione condominiale: quote millesimali, assemblee, verbali, versamenti e contratti',
         lang: 'it',
         theme_color: '#1b4965',

@@ -478,7 +478,7 @@ async function seed(): Promise<void> {
       codice: 'CTR-DEMO-001',
       amministratore: admin._id,
       stato: 'attivo',
-      unitaMassime: 20,
+      condominiMassimi: 2,
       costo: 1200,
       periodicita: 'annuale',
       durataMesi,

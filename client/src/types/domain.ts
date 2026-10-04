@@ -25,8 +25,8 @@ export interface CaricoContratto {
   amministratore: string;
   email: string;
   stato: StatoContratto;
-  unitaMassime: number;
-  unitaInUso: number;
+  condominiMassimi: number;
+  condominiInUso: number;
   percentualeUtilizzo: number;
   scadenza: string;
 }
@@ -97,8 +97,8 @@ export interface Contratto {
   amministratoreId?: string;
   amministratoreEmail?: string;
   stato: StatoContratto;
-  unitaMassime: number;
-  unitaInUso: number;
+  condominiMassimi: number;
+  condominiInUso: number;
   costo: number;
   periodicita: Periodicita;
   durataMesi: number;
@@ -126,7 +126,10 @@ export interface Contratto {
     da?: string;
     a?: string;
     nota?: string;
+    /** Valori cambiati, quando l'azione è una modifica o una proroga. */
+    modifiche?: { campo: string; da: string; a: string }[];
     operatore?: string | null;
+    operatoreNome?: string | null;
   }[];
   messaggi?: MessaggioPiattaforma[];
 }
@@ -149,9 +152,9 @@ export interface MioStatoContratto {
   contratto?: {
     id: string;
     codice: string;
-    unitaMassime: number;
-    unitaInUso: number;
-    unitaDisponibili: number;
+    condominiMassimi: number;
+    condominiInUso: number;
+    condominiDisponibili: number;
     costo: number;
     periodicita: Periodicita;
     dataScadenza: string;

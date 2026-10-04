@@ -64,7 +64,7 @@ export default function PaginaMioContratto() {
       {s && s.ruolo === 'admin' && !s.contratto && (
         <PaginaVuota
           titolo="Nessun contratto attivo"
-          descrizione="Non puoi ancora operare: l’amministratore di piattaforma deve stipulare un contratto che abiliti la gestione delle unità immobiliari."
+          descrizione="Non puoi ancora operare: l’amministratore di piattaforma deve stipulare un contratto che abiliti la gestione dei tuoi condomìni."
         />
       )}
 
@@ -81,7 +81,7 @@ export default function PaginaMioContratto() {
             <div className="avviso avviso-pericolo" style={{ marginBottom: 'var(--sp-4)' }} role="alert">
               <div>
                 <strong>Contratto scaduto il {fmtData(s.contratto.dataScadenza)}.</strong> Continui a gestire i
-                condomini già attivi, ma non puoi aggiungere nuove unità immobiliari.
+                condomìni già attivi, ma non puoi crearne di nuovi.
               </div>
             </div>
           ) : (
@@ -97,17 +97,17 @@ export default function PaginaMioContratto() {
           <div className="statistiche" style={{ marginBottom: 'var(--sp-4)' }}>
             <div className="statistica">
               <div className="statistica-valore">
-                {s.contratto.unitaInUso}/{s.contratto.unitaMassime}
+                {s.contratto.condominiInUso}/{s.contratto.condominiMassimi}
               </div>
-              <div className="statistica-etichetta">Unità immobiliari in carico</div>
+              <div className="statistica-etichetta">Condomini in carico</div>
             </div>
             <div className="statistica">
               <div className="statistica-valore">{euro(s.contratto.costo)}</div>
               <div className="statistica-etichetta">Costo per {s.contratto.periodicita}</div>
             </div>
             <div className="statistica">
-              <div className="statistica-valore">{s.contratto.unitaDisponibili}</div>
-              <div className="statistica-etichetta">Unità ancora disponibili</div>
+              <div className="statistica-valore">{s.contratto.condominiDisponibili}</div>
+              <div className="statistica-etichetta">Condomini ancora disponibili</div>
             </div>
             <div className="statistica">
               <div className="statistica-valore">

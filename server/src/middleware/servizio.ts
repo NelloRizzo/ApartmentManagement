@@ -1,6 +1,5 @@
 import type { RequestHandler } from 'express';
 import { Types } from 'mongoose';
-import { Condominio } from '../models/index.js';
 import { currentUser } from './auth.js';
 import { statoServizio, verificaCapacita, type StatoServizio } from '../services/contratto.service.js';
 import { badRequest, forbidden } from '../utils/errors.js';
@@ -11,7 +10,7 @@ declare global {
     interface Request {
       /**
        * Stato del servizio calcolato da `controllaServizio`, riusato da
-       * `verificaCapacitaPerUnita` per non ripetere le query.
+       * `verificaCapacitaPerCondominio` per non ripetere le query.
        */
       servizio?: StatoServizio;
     }
@@ -49,12 +48,13 @@ export const controllaServizio: RequestHandler = async (req, _res, next) => {
 };
 
 /**
- * Verifica la capacità contrattuale prima di aggiungere unità immobiliari.
+ * Verifica la capacità contrattuale prima di creare un condominio.
  *
- * Da usare solo sulle rotte che creano unità o condomini: un contratto scaduto
- * continua a permettere la gestione di ciò che esiste già, ma non l'espansione.
+ * Da usare sulle rotte che creano condomini: la capacità contrattuale è
+ * contata in condomìni. Un contratto scaduto continua a permettere la gestione
+ * di ciò che esiste già, ma non l'espansione.
  */
-export const verificaCapacitaPerUnita = (quante: number): RequestHandler =>
+export const verificaCapacitaPerCondominio = (quanti: number): RequestHandler =>
   async (req, _res, next) => {
     try {
       const utente = currentUser(req);
@@ -71,32 +71,25 @@ export const verificaCapacitaPerUnita = (quante: number): RequestHandler =>
         if (s.scaduto) {
           return next(
             badRequest(
-              `Il contratto è scaduto: non è possibile aggiungere unità immobiliari finché non viene rinnovato`,
+              `Il contratto è scaduto: non è possibile creare nuovi condomìni finché non viene rinnovato`,
             ),
           );
         }
-        if (s.unitaInUso + quante > s.unitaMassime) {
+        if (s.condominiInUso + quanti > s.condominiMassimi) {
           return next(
             badRequest(
-              `Capacità contrattuale superata: il contratto prevede ${s.unitaMassime} unità e ne sono in carico ${s.unitaInUso}`,
+              `Capacità contrattuale superata: il contratto prevede ${s.condominiMassimi} condomìni e ne sono in carico ${s.condominiInUso}`,
             ),
           );
         }
         return next();
       }
 
-      await verificaCapacita(utente.sub, quante);
+      await verificaCapacita(utente.sub, quanti);
       next();
     } catch (err) {
       next(err);
     }
   };
-
-/** Numero di unità che il condominio aggiungerebbe, per il controllo capacità. */
-export async function contaUnitaNuove(condominioId: string): Promise<number> {
-  return Condominio.findById(condominioId)
-    .then((c) => c ? 1 : 0)
-    .catch(() => 0);
-}
 
 export const oid = (v: string): Types.ObjectId => new Types.ObjectId(String(v));

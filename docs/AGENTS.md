@@ -273,13 +273,16 @@ sfogliare lo stabile.
 - Ogni scrittura di dominio passa per `controllaServizio`: se il contratto è
   sospeso o cessato, l'amministratore **e i suoi assistenti** non possono
   scrivere. Le letture restano sempre consentite.
-- `verificaCapacitaPerUnita(n)` va bene solo sulle rotte che creano unità o
-  condomini. Un contratto scaduto continua a permettere la gestione di ciò che
-  esiste, ma non l'espansione.
-- La capacità è **unica per contratto**: `statoServizio` conta le unità
-  amministrate dal *titolare* del contratto, non quelle dell'assistente che ha
-  fatto la richiesta. Se si contano sull'assistente, ogni assistente vede un
-  contratto con tutte le unità disponibili e il limite non viene mai applicato.
+- La capacità è contata in **condomìni**, non in unità immobiliari, e si
+  consuma solo sulla creazione di un condominio: `verificaCapacitaPerCondominio(1)`
+  sta su `POST /condomini` e su nessun'altra rotta. Aggiungere unità immobiliari
+  non consuma capacità. Un contratto scaduto continua a permettere la gestione di
+  ciò che esiste, ma non l'espansione.
+- La capacità è **unica per contratto**: `statoServizio` conta i condomìni
+  amministrati dal *titolare* del contratto, non quelli su cui lavora l'assistente
+  che ha fatto la richiesta. Se si contassero sull'assistente, ogni assistente
+  vedrebbe un contratto con tutta la capacità disponibile e il limite non
+  verrebbe mai applicato.
 - Lo stato `scaduto` non viene scritto mai: è derivato dalla data, così non
   serve un job schedulato.
 
@@ -401,3 +404,12 @@ Controlli minimi dopo una modifica al dominio:
   processo, quindi `--reset` lascia sul disco i dati delle esecuzioni precedenti.
 - **`?` in `if (body.unita && body.unita.length > 0)`** nei controller è un
   controllo di runtime sui dati, non opzionale TypeScript: va mantenuto.
+- **Ogni scrittura su un contratto lascia una voce in `storico`**, con
+  `modifiche: [{ campo, da, a }]` per i valori cambiati. Le voci si scrivono
+  leggendo il valore **prima** di assegnare il nuovo: dopo, "da" e "a" sono la
+  stessa cosa. I nomi dei campi nello storico sono in italiano
+  (`capacità (condomini)`), non quelli del modello.
+- **`PATCH /contratti/:id` è `strict`**: `dataScadenza`, `stato` e
+  `amministratore` non sono dichiarati e quindi la richiesta fallisce con 400.
+  Non allentare in `partial()` senza allentare anche la ragione: una data
+  ignorata in silenzio sembrerebbe cambiata.

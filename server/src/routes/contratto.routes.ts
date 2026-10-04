@@ -3,6 +3,7 @@ import { validate } from '../middleware/validate.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import * as c from '../controllers/contratto.controller.js';
 import {
+  aggiornaContrattoSchema,
   cessazioneSchema,
   creaContrattoSchema,
   listaContrattiQuery,
@@ -50,6 +51,13 @@ router.get(
   c.getOne,
 );
 router.post('/', requireRole('superadmin'), validate(creaContrattoSchema), c.create);
+router.patch(
+  '/:id',
+  requireRole('superadmin'),
+  validate(contrattoParam, 'params'),
+  validate(aggiornaContrattoSchema),
+  c.aggiorna,
+);
 router.post(
   '/:id/proroga',
   requireRole('superadmin'),

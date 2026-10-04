@@ -10,6 +10,7 @@ function ReindirizzaIniziale() {
 import PaginaAccesso from '@/pages/PaginaAccesso';
 import GuscioApp from '@/pages/GuscioApp';
 import PaginaPanorama from '@/pages/PaginaPanorama';
+import PaginaCondomini from '@/pages/PaginaCondomini';
 import PaginaTabellaMillesimi from '@/pages/PaginaTabellaMillesimi';
 import PaginaAssemblee from '@/pages/PaginaAssemblee';
 import PaginaAssembleaDettaglio from '@/pages/PaginaAssembleaDettaglio';
@@ -59,6 +60,14 @@ export default function App() {
             element={
               <RichiediAmministratore>
                 <PaginaPanorama />
+              </RichiediAmministratore>
+            }
+          />
+          <Route
+            path="c/condomini"
+            element={
+              <RichiediAmministratore>
+                <PaginaCondomini />
               </RichiediAmministratore>
             }
           />

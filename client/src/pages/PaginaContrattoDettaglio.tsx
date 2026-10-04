@@ -7,12 +7,30 @@ import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento } from '@/components/Feedback';
 import { EtichettaStato } from '@/components/Elementi';
 import { euro, data as fmtData, dataOra, MESI_BREVI } from '@/lib/formattazione';
-import type { Contratto, RataContratto } from '@/types/domain';
+import type { Contratto, Periodicita, RataContratto } from '@/types/domain';
+
+const PERIODICITA: { valore: Periodicita; etichetta: string }[] = [
+  { valore: 'mensile', etichetta: 'Mensile' },
+  { valore: 'trimestrale', etichetta: 'Trimestrale' },
+  { valore: 'semestrale', etichetta: 'Semestrale' },
+  { valore: 'annuale', etichetta: 'Annuale' },
+];
+
+/** Le azioni dello storico hanno nomi propri: "sospensione" non è un'etichetta. */
+const ETICHETTE_AZIONI: Record<string, string> = {
+  stipula: 'Stipula',
+  proroga: 'Proroga',
+  modifica: 'Modifica',
+  sospensione: 'Sospensione',
+  riattivazione: 'Riattivazione',
+  cessazione: 'Cessazione',
+};
 
 export default function PaginaContrattoDettaglio() {
   const { id } = useParams<{ id: string }>();
   const { isSuperadmin } = useAuth();
   const [azione, setAzione] = useState<'proroga' | 'sospendi' | 'riattiva' | null>(null);
+  const [inModifica, setInModifica] = useState(false);
   const [rataPagata, setRataPagata] = useState<RataContratto | null>(null);
 
   const dettaglio = useApi<Contratto>(
@@ -25,7 +43,7 @@ export default function PaginaContrattoDettaglio() {
   if (!id) return null;
 
   const c = dettaglio.dati;
-  const utilizzo = c && c.unitaMassime > 0 ? Math.round((c.unitaInUso / c.unitaMassime) * 100) : 0;
+  const utilizzo = c && c.condominiMassimi > 0 ? Math.round((c.condominiInUso / c.condominiMassimi) * 100) : 0;
 
   return (
     <>
@@ -67,9 +85,9 @@ export default function PaginaContrattoDettaglio() {
           <div className="statistiche" style={{ marginBottom: 'var(--sp-4)' }}>
             <div className="statistica">
               <div className="statistica-valore">
-                {c.unitaInUso}/{c.unitaMassime}
+                {c.condominiInUso}/{c.condominiMassimi}
               </div>
-              <div className="statistica-etichetta">Unità immobiliari in carico</div>
+              <div className="statistica-etichetta">Condomini in carico</div>
             </div>
             <div className="statistica">
               <div className="statistica-valore">{euro(c.costo)}</div>
@@ -112,6 +130,9 @@ export default function PaginaContrattoDettaglio() {
 
           {isSuperadmin && (
             <div className="riga" style={{ marginBottom: 'var(--sp-4)' }}>
+              <button type="button" className="btn btn-secondario" onClick={() => setInModifica(true)}>
+                Modifica
+              </button>
               {c.stato !== 'cessato' && (
                 <button type="button" className="btn btn-secondario" onClick={() => setAzione('proroga')}>
                   Proroga
@@ -179,10 +200,23 @@ export default function PaginaContrattoDettaglio() {
                 {[...c.storico].reverse().map((s, i) => (
                   <div key={i} className="voce">
                     <span className="cresci pila-1">
-                      <strong style={{ textTransform: 'capitalize' }}>{s.azione}</strong>
+                      <strong style={{ textTransform: 'capitalize' }}>{ETICHETTE_AZIONI[s.azione] ?? s.azione}</strong>
+                      {s.da && s.a && s.da !== s.a && (
+                        <span className="testo-faint">
+                          {s.da} → {s.a}
+                        </span>
+                      )}
+                      {s.modifiche?.map((m) => (
+                        <span key={m.campo} className="testo-faint">
+                          {m.campo}: {m.da} → {m.a}
+                        </span>
+                      ))}
                       {s.nota && <span className="testo-faint">{s.nota}</span>}
                     </span>
-                    <span className="testo-faint">{dataOra(s.data)}</span>
+                    <span className="testo-faint">
+                      {s.operatoreNome ? `${s.operatoreNome} · ` : ''}
+                      {dataOra(s.data)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -221,6 +255,17 @@ export default function PaginaContrattoDettaglio() {
             />
           )}
 
+          {inModifica && (
+            <ModuloModifica
+              contratto={c}
+              onChiuso={() => setInModifica(false)}
+              onSalvato={() => {
+                setInModifica(false);
+                dettaglio.ricarica();
+              }}
+            />
+          )}
+
           {rataPagata && (
             <ModuloPagamento
               contrattoId={c.id}
@@ -247,6 +292,188 @@ function Riga({ etichetta, valore }: { etichetta: string; valore: string }) {
   );
 }
 
+/**
+ * Modifica delle condizioni economiche e della capacità.
+ *
+ * Restano fuori data di inizio, scadenza e stato: le date si estendono con la
+ * proroga, che genera le rate conseguenti, e lo stato ha transizioni proprie.
+ * Inviare un campo non previsto fa fallire la richiesta con 400, quindi qui non
+ * si mandano valori che il backend non accetterebbe.
+ */
+function ModuloModifica({
+  contratto,
+  onChiuso,
+  onSalvato,
+}: {
+  contratto: Contratto;
+  onChiuso: () => void;
+  onSalvato: () => void;
+}) {
+  const [costo, setCosto] = useState(contratto.costo);
+  const [periodicita, setPeriodicita] = useState<Periodicita>(contratto.periodicita);
+  const [mesiProroga, setMesiProroga] = useState(contratto.mesiProroga);
+  const [rinnovoAutomatico, setRinnovoAutomatico] = useState(contratto.rinnovoAutomatico);
+  const [condominiMassimi, setCondominiMassimi] = useState(contratto.condominiMassimi);
+  const [note, setNote] = useState(contratto.note ?? '');
+  const [inCorso, setInCorso] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  async function salva() {
+    setErrore(null);
+    setInCorso(true);
+    try {
+      await api.patch(`/contratti/${contratto.id}`, {
+        costo,
+        periodicita,
+        mesiProroga,
+        rinnovoAutomatico,
+        condominiMassimi,
+        note: note.trim() || null,
+      });
+      notifica('Contratto aggiornato');
+      onSalvato();
+    } catch (e) {
+      setErrore(e instanceof ApiError ? (e.primoErroreValidazione ?? e.message) : 'Salvataggio non riuscito');
+    } finally {
+      setInCorso(false);
+    }
+  }
+
+  return (
+    <div className="velo" role="presentation" onClick={onChiuso}>
+      <div
+        className="scheda"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Modifica contratto"
+        style={{ width: 'min(32rem, 94vw)', maxHeight: '92dvh', overflowY: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="scheda-intestazione">
+          <h2>Modifica {contratto.codice}</h2>
+          <button type="button" className="btn btn-fantasma btn-sm" onClick={onChiuso} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+
+        <div className="scheda-corpo pila-4">
+          <div className="avviso avviso-info">
+            Le rate già emesse non cambiano: il nuovo costo vale per le proroghe successive. Le
+            modifiche finiscono nell&apos;andamento del contratto.
+          </div>
+
+          <div className="riga">
+            <div className="campo cresci">
+              <label className="campo-etichetta" htmlFor="md-costo">
+                Costo per periodo (€)
+              </label>
+              <input
+                id="md-costo"
+                className="area"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                value={costo}
+                onChange={(e) => setCosto(Number(e.target.value))}
+              />
+            </div>
+            <div className="campo cresci">
+              <label className="campo-etichetta" htmlFor="md-periodicita">
+                Periodicità
+              </label>
+              <select
+                id="md-periodicita"
+                className="area"
+                value={periodicita}
+                onChange={(e) => setPeriodicita(e.target.value as Periodicita)}
+              >
+                {PERIODICITA.map((p) => (
+                  <option key={p.valore} value={p.valore}>
+                    {p.etichetta}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="riga">
+            <div className="campo cresci">
+              <label className="campo-etichetta" htmlFor="md-condomini">
+                Capacità (condomini)
+              </label>
+              <input
+                id="md-condomini"
+                className="area"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                value={condominiMassimi}
+                onChange={(e) => setCondominiMassimi(Number(e.target.value))}
+              />
+              <span className="campo-aiuto">
+                Ne amministra {contratto.condominiInUso}: una capacità inferiore non le bloccherà, ma non
+                potrà crearne di nuovi.
+              </span>
+            </div>
+            <div className="campo cresci">
+              <label className="campo-etichetta" htmlFor="md-mesi">
+                Mesi per proroga
+              </label>
+              <input
+                id="md-mesi"
+                className="area"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                value={mesiProroga}
+                onChange={(e) => setMesiProroga(Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          <label className="casella">
+            <input
+              type="checkbox"
+              checked={rinnovoAutomatico}
+              onChange={(e) => setRinnovoAutomatico(e.target.checked)}
+            />
+            <span>Rinnovo automatico</span>
+          </label>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="md-note">
+              Note
+            </label>
+            <textarea
+              id="md-note"
+              className="area"
+              style={{ minHeight: '4rem' }}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+
+          {errore && (
+            <div className="avviso avviso-pericolo" role="alert">
+              {errore}
+            </div>
+          )}
+
+          <div className="riga">
+            <button type="button" className="btn btn-primario cresci" onClick={salva} disabled={inCorso}>
+              {inCorso ? 'Salvataggio…' : 'Salva'}
+            </button>
+            <button type="button" className="btn btn-fantasma" onClick={onChiuso}>
+              Annulla
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModuloAzione({
   azione,
   contratto,
@@ -259,7 +486,7 @@ function ModuloAzione({
   onFatto: () => void;
 }) {
   const [mesi, setMesi] = useState(contratto.mesiProroga);
-  const [nuovaCapacita, setNuovaCapacita] = useState(contratto.unitaMassime);
+  const [nuovaCapacita, setNuovaCapacita] = useState(contratto.condominiMassimi);
   const [motivo, setMotivo] = useState('');
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -277,7 +504,7 @@ function ModuloAzione({
       if (azione === 'proroga') {
         await api.post(`/contratti/${contratto.id}/proroga`, {
           mesi,
-          nuovaCapacita: nuovaCapacita !== contratto.unitaMassime ? nuovaCapacita : undefined,
+          nuovaCapacita: nuovaCapacita !== contratto.condominiMassimi ? nuovaCapacita : undefined,
           nota: motivo.trim() || undefined,
         });
         notifica('Contratto prorogato');
@@ -336,7 +563,7 @@ function ModuloAzione({
               </div>
               <div className="campo">
                 <label className="campo-etichetta" htmlFor="p-cap">
-                  Nuova capacità in unità immobiliari
+                  Nuova capacità in condomìni
                 </label>
                 <input
                   id="p-cap"
@@ -348,8 +575,8 @@ function ModuloAzione({
                   onChange={(e) => setNuovaCapacita(Number(e.target.value))}
                 />
                 <span className="campo-aiuto">
-                  Attualmente in carico {contratto.unitaInUso} unità: una capacità inferiore non le bloccherà,
-                  ma non potrà aggiungerne di nuove.
+                  Attualmente in carico {contratto.condominiInUso} condomìni: una capacità inferiore non
+                  li bloccherà, ma non potrà crearne di nuovi.
                 </span>
               </div>
             </>

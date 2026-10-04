@@ -15,6 +15,20 @@ export const MESI_PER_PERIODICITA: Record<Periodicita, number> = {
   annuale: 12,
 };
 
+/**
+ * Modifica di un valore del contratto.
+ *
+ * I valori sono stringhe per decisione: servono a mostrare "prima → dopo" e una
+ * volta serializzati non hanno più significato numerico. Con `costo` e
+ * `periodicita` non si fa alcun calcolo sullo storico.
+ */
+export interface VoceModifica {
+  /** Nome del campo come nel modello: `costo`, `condominiMassimi`, … */
+  campo: string;
+  da: string;
+  a: string;
+}
+
 const storicoSchema = new Schema(
   {
     data: { type: Date, default: Date.now },
@@ -22,6 +36,16 @@ const storicoSchema = new Schema(
     da: { type: String },
     a: { type: String },
     nota: { type: String, trim: true },
+    /** Valori cambiati, quando l'azione è una modifica. */
+    modifiche: {
+      type: [
+        new Schema(
+          { campo: { type: String, required: true }, da: { type: String }, a: { type: String } },
+          { _id: false },
+        ),
+      ],
+      default: undefined,
+    },
     operatore: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { _id: false },
@@ -31,8 +55,10 @@ const storicoSchema = new Schema(
  * Contratto di fornitura del servizio tra l'amministratore di piattaforma e
  * un amministratore di condominio.
  *
- * `unitaMassime` è la capacità contrattuale: l'amministratore non può
- * amministrare più unità immobiliari di quelle pattuite, in nessun condominio.
+ * `condominiMassimi` è la capacità contrattuale: l'amministratore non può
+ * amministrare più condomìni di quelli pattuiti. Un tempo la capacità era
+ * contata in unità immobiliari; `migra-contratti` sposta il vecchio
+ * `unitaMassime` su questo campo.
  */
 const contrattoSchema = baseSchema(
   {
@@ -40,8 +66,8 @@ const contrattoSchema = baseSchema(
     amministratore: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     stato: { type: String, enum: STATI_CONTRATTO, default: 'bozza', index: true },
 
-    /** Capacità contrattuale in unità immobiliari. */
-    unitaMassime: { type: Number, required: true, min: 1 },
+    /** Capacità contrattuale in condomìni. */
+    condominiMassimi: { type: Number, required: true, min: 1 },
     /** Costo per ogni periodo di fatturazione. */
     costo: { type: Number, required: true, min: 0 },
     periodicita: { type: String, enum: PERIODICITA, default: 'annuale' },
@@ -77,6 +103,7 @@ export interface VoceStorico {
   da?: string;
   a?: string;
   nota?: string;
+  modifiche?: VoceModifica[];
   operatore?: ObjectId;
 }
 
@@ -85,7 +112,7 @@ export interface ContrattoDoc {
   codice: string;
   amministratore: ObjectId;
   stato: StatoContratto;
-  unitaMassime: number;
+  condominiMassimi: number;
   costo: number;
   periodicita: Periodicita;
   durataMesi: number;

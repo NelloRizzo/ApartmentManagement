@@ -201,6 +201,7 @@ e il tetto delle ore.
 | `npm run start`          | avvia la API compilata                       |
 | `npm run icone`          | rigenera le icone PWA (workspace `client`)   |
 | `npm run reset:produzione`| azzera il database di produzione, vedi `docs/reset-produzione.md` |
+| `npm run migra:contratti` | sposta la capacità contrattuale dalle unità ai condomìni |
 
 ## Configurazione
 

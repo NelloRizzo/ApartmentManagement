@@ -8,13 +8,13 @@ import {
   Contratto,
   MessaggioPiattaforma,
   PagamentoContratto,
-  Unita,
   User,
   type ContrattoDoc,
   type ContrattoDocumento,
   type MessaggioPiattaformaDoc,
   type ObjectId,
   type PagamentoContrattoDoc,
+  type VoceModifica,
 } from '../models/index.js';
 import { currentUser } from '../middleware/auth.js';
 import { auditLog } from '../services/audit.service.js';
@@ -25,7 +25,7 @@ import {
   proroga,
   round2,
   statoServizio,
-  unitaInCarico,
+  condominiInCarico,
 } from '../services/contratto.service.js';
 
 const oid = (v: string): Types.ObjectId => new Types.ObjectId(String(v));
@@ -44,7 +44,7 @@ export interface DatiRiepilogoContratto {
   codice: string;
   amministratore: string;
   stato: string;
-  unitaMassime: number;
+  condominiMassimi: number;
   costo: number;
   periodicita: string;
   durataMesi: number;
@@ -75,7 +75,7 @@ async function riepilogo(
     codice: contratto.codice,
     amministratore: amministratore ? `${amministratore.nome} ${amministratore.cognome}` : String(contratto.amministratore),
     stato: contratto.stato,
-    unitaMassime: contratto.unitaMassime,
+    condominiMassimi: contratto.condominiMassimi,
     costo: round2(contratto.costo),
     periodicita: contratto.periodicita,
     durataMesi: contratto.durataMesi,
@@ -146,7 +146,7 @@ export const list = asyncHandler(async (req, res) => {
         ...(await riepilogo(c, admin)),
         amministratoreId: String(c.amministratore._id ?? c.amministratore),
         amministratoreEmail: admin?.email,
-        unitaInUso: await unitaInCarico(String(c.amministratore._id ?? c.amministratore)),
+        condominiInUso: await condominiInCarico(String(c.amministratore._id ?? c.amministratore)),
       };
     }),
   );
@@ -166,17 +166,29 @@ export const getOne = asyncHandler(async (req, res) => {
     User.findById(contratto.amministratore).select('nome cognome email telefono').lean(),
     PagamentoContratto.find({ contratto: contratto._id }).sort({ progressivo: 1 }).lean(),
     MessaggioPiattaforma.find({ contratto: contratto._id }).sort({ createdAt: 1 }).lean(),
-    unitaInCarico(String(contratto.amministratore)),
+    condominiInCarico(String(contratto.amministratore)),
     Condominio.find({ amministratore: contratto.amministratore }).select('nome codice').lean(),
   ]);
 
   const incassato = round2(rate.filter((r) => r.stato === 'pagato').reduce((s, r) => s + r.importo, 0));
   const dovuto = round2(rate.filter((r) => r.stato !== 'annullato').reduce((s, r) => s + r.importo, 0));
 
+  // Gli operatori citati nello storico: senza i nomi la traccia dice solo che
+  // qualcuno ha operato. Sono al massimo uno per voce, quindi una sola query.
+  const idOperatori = [...new Set(contratto.storico.map((s) => (s.operatore ? String(s.operatore) : null)))].filter(
+    (id): id is string => Boolean(id),
+  );
+  const operatori = new Map(
+    (await User.find({ _id: { $in: idOperatori } }).select('nome cognome').lean()).map((u) => [
+      String(u._id),
+      `${u.nome} ${u.cognome}`.trim(),
+    ]),
+  );
+
   ok(res, {
     ...(await riepilogo(contratto, admin ?? undefined)),
     amministratoreId: String(contratto.amministratore),
-    unitaInUso: inUso,
+    condominiInUso: inUso,
     condomini: condomini.map((c) => ({ id: String(c._id), nome: c.nome, codice: c.codice })),
     rate: rate.map((r) => ({
       id: String(r._id),
@@ -194,14 +206,22 @@ export const getOne = asyncHandler(async (req, res) => {
     incassato,
     dovuto,
     saldo: round2(dovuto - incassato),
-    storico: contratto.storico.map((s) => ({
-      data: new Date(s.data).toISOString(),
-      azione: s.azione,
-      da: s.da,
-      a: s.a,
-      nota: s.nota,
-      operatore: s.operatore ? String(s.operatore) : null,
-    })),
+    storico: contratto.storico.map((s) => {
+      const id = s.operatore ? String(s.operatore) : null;
+      return {
+        data: new Date(s.data).toISOString(),
+        azione: s.azione,
+        da: s.da,
+        a: s.a,
+        nota: s.nota,
+        modifiche: s.modifiche ?? [],
+        operatore: id,
+        // Un id nelJournal non dice chi ha operato: il nome è ciò che rende la
+        // traccia leggibile. Va risolto qui perché `storico` è un array
+        // annidato e `populate` non arriva a questo livello.
+        operatoreNome: id ? (operatori.get(id) ?? null) : null,
+      };
+    }),
     messaggi: messaggi.map((m) => ({
       id: String(m._id),
       mittente: String(m.mittente),
@@ -218,7 +238,7 @@ export const create = asyncHandler(async (req, res) => {
   const operatore = soloSuperadmin(req);
   const body = req.body as {
     amministratore: string;
-    unitaMassime: number;
+    condominiMassimi: number;
     costo: number;
     periodicita: 'mensile' | 'trimestrale' | 'semestrale' | 'annuale';
     durataMesi: number;
@@ -230,6 +250,92 @@ export const create = asyncHandler(async (req, res) => {
 
   const contratto = await creaContratto(body, operatore.sub);
   created(res, await riepilogo(contratto));
+});
+
+/**
+ * Modifica delle condizioni economiche e della capacità.
+ *
+ * Ogni campo inviato diventa il nuovo valore e la modifica finisce nello
+ * storico del contratto con il valore precedente: è la stessa traccia che usa la
+ * proroga, e serve a sapere com'è arrivato il contratto dov'è. Il costo già
+ * applicato alle rate generate non viene toccato: le rate sono lo scaduto
+ * emesso, si rifanno solo per le proroghe successive.
+ */
+
+/** Come i campi si chiamano nello storico, in italiano. */
+const ETICHETTE_MODIFICHE: Record<string, string> = {
+  costo: 'costo',
+  periodicita: 'periodicità',
+  mesiProroga: 'mesi di proroga',
+  rinnovoAutomatico: 'rinnovo automatico',
+  condominiMassimi: 'capacità (condomini)',
+  note: 'note',
+};
+
+/** I booleani in italiano: `true` in uno storico non dice nulla. */
+function testoValore(valore: unknown): string {
+  if (valore === undefined || valore === null) return '—';
+  if (typeof valore === 'boolean') return valore ? 'sì' : 'no';
+  return String(valore);
+}
+
+export const aggiorna = asyncHandler(async (req, res) => {
+  const operatore = soloSuperadmin(req);
+  const contratto = await caricaContratto(getObjectId(req.params.id ?? '', 'id'));
+  const body = req.body as Partial<{
+    costo: number;
+    periodicita: 'mensile' | 'trimestrale' | 'semestrale' | 'annuale';
+    mesiProroga: number;
+    rinnovoAutomatico: boolean;
+    condominiMassimi: number;
+    note: string | null;
+  }>;
+
+  const modifiche: VoceModifica[] = [];
+  for (const campo of ['costo', 'periodicita', 'mesiProroga', 'rinnovoAutomatico', 'condominiMassimi'] as const) {
+    const nuovo = body[campo];
+    if (nuovo === undefined || nuovo === contratto[campo]) continue;
+    modifiche.push({
+      campo: ETICHETTE_MODIFICHE[campo] ?? campo,
+      da: testoValore(contratto[campo]),
+      a: testoValore(nuovo),
+    });
+    // Il tipo è assegnato campo per campo: `Object.assign` su un documento
+    // hydratato richiederebbe un cast che qui non aggiungerebbe sicurezza.
+    (contratto[campo] as unknown) = nuovo;
+  }
+  if (body.note !== undefined && (body.note ?? undefined) !== contratto.note) {
+    modifiche.push({
+      campo: ETICHETTE_MODIFICHE.note ?? 'note',
+      da: testoValore(contratto.note),
+      a: testoValore(body.note),
+    });
+    contratto.note = body.note ?? undefined;
+  }
+
+  if (modifiche.length === 0) {
+    ok(res, await riepilogo(contratto));
+    return;
+  }
+
+  contratto.storico.push({
+    data: new Date(),
+    azione: 'modifica',
+    modifiche,
+    operatore: oid(operatore.sub),
+  });
+  await contratto.save();
+
+  await auditLog({
+    attore: operatore.sub,
+    azione: 'modifica_contratto',
+    entita: 'Contratto',
+    entitaId: String(contratto._id),
+    dettagli: { modifiche },
+    req,
+  });
+
+  ok(res, await riepilogo(contratto));
 });
 
 export const prorogaContratto = asyncHandler(async (req, res) => {
@@ -465,9 +571,9 @@ export const mioStato = asyncHandler(async (req, res) => {
       ? {
           id: String(servizio.contratto._id),
           codice: servizio.contratto.codice,
-          unitaMassime: servizio.unitaMassime,
-          unitaInUso: servizio.unitaInUso,
-          unitaDisponibili: servizio.unitaDisponibili,
+          condominiMassimi: servizio.condominiMassimi,
+          condominiInUso: servizio.condominiInUso,
+          condominiDisponibili: servizio.condominiDisponibili,
           costo: round2(servizio.contratto.costo),
           periodicita: servizio.contratto.periodicita,
           dataScadenza: new Date(servizio.contratto.dataScadenza).toISOString(),
@@ -483,7 +589,7 @@ export const mioStato = asyncHandler(async (req, res) => {
   });
 });
 
-/** Riepilogo operativo per il superadmin: unità per contratto. */
+/** Riepilogo operativo per il superadmin: condomìni in carico per contratto. */
 export const caricoPerContratto = asyncHandler(async (req, res) => {
   soloSuperadmin(req);
   const contratti = await Contratto.find({ stato: { $in: ['attivo', 'sospeso', 'scaduto'] } })
@@ -492,21 +598,18 @@ export const caricoPerContratto = asyncHandler(async (req, res) => {
 
   const righe = await Promise.all(
     contratti.map(async (c) => {
-      const condomini = await Condominio.find({ amministratore: c.amministratore }).select('_id').lean();
-      const unita = condomini.length
-        ? await Unita.countDocuments({ condominio: { $in: condomini.map((x) => x._id) }, attiva: true })
-        : 0;
       const admin = c.amministratore as unknown as { nome: string; cognome: string; email: string };
+      const inUso = await condominiInCarico(String(c.amministratore._id ?? c.amministratore));
       return {
         contratto: String(c._id),
         codice: c.codice,
         amministratore: `${admin.nome} ${admin.cognome}`,
         email: admin.email,
         stato: c.stato,
-        unitaMassime: c.unitaMassime,
-        unitaInUso: unita,
+        condominiMassimi: c.condominiMassimi,
+        condominiInUso: inUso,
         percentualeUtilizzo:
-          c.unitaMassime > 0 ? Math.round((unita / c.unitaMassime) * 100) : 0,
+          c.condominiMassimi > 0 ? Math.round((inUso / c.condominiMassimi) * 100) : 0,
         scadenza: new Date(c.dataScadenza).toISOString(),
       };
     }),

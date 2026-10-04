@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireCondominioAccess, requirePermesso } from '../middleware/auth.js';
-import { controllaServizio } from '../middleware/servizio.js';
+import { controllaServizio, verificaCapacitaPerCondominio } from '../middleware/servizio.js';
 import * as c from '../controllers/condominio.controller.js';
 import {
   condominioCreateSchema,
@@ -16,7 +16,15 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', c.list);
-router.post('/', controllaServizio, requirePermesso('amministrazione:scrivere'), validate(condominioCreateSchema), c.create);
+// La capacità contrattuale è contata in condomìni: è qui che si consuma.
+router.post(
+  '/',
+  controllaServizio,
+  requirePermesso('amministrazione:scrivere'),
+  verificaCapacitaPerCondominio(1),
+  validate(condominioCreateSchema),
+  c.create,
+);
 
 router.get('/:condominioId', validate(condominioParams, 'params'), requireCondominioAccess, c.getOne);
 router.get(

@@ -512,7 +512,7 @@ export const listaContrattiQuery = paginationQuery.extend({
 
 export const creaContrattoSchema = z.object({
   amministratore: objectId,
-  unitaMassime: z.number().int().min(1, 'La capacità deve essere di almeno 1 unità').max(100_000),
+  condominiMassimi: z.number().int().min(1, 'La capacità deve essere di almeno 1 condominio').max(1_000),
   costo: z.number().min(0),
   periodicita: z.enum(PERIODICITA).default('annuale'),
   durataMesi: z.number().int().min(1).max(240),
@@ -521,6 +521,26 @@ export const creaContrattoSchema = z.object({
   rinnovoAutomatico: z.boolean().default(false),
   note: z.string().trim().max(4000).optional(),
 });
+
+/**
+ * Modifica di un contratto da parte dell'amministratore di piattaforma.
+ *
+ * Solo le condizioni economiche e la capacità: lo stato ha transizioni proprie
+ * (sospendi, riattiva, cessa) e le date hanno la proroga, che le estende
+ * generando le rate. `strict` perché un campo non dichiarato qui — per esempio
+ * `dataScadenza` — deve essere un errore esplicito e non una modifica ignorata
+ * in silenzio.
+ */
+export const aggiornaContrattoSchema = z
+  .object({
+    costo: z.number().min(0).optional(),
+    periodicita: z.enum(PERIODICITA).optional(),
+    mesiProroga: z.number().int().min(1).max(240).optional(),
+    rinnovoAutomatico: z.boolean().optional(),
+    condominiMassimi: z.number().int().min(1).max(1_000).optional(),
+    note: z.string().trim().max(4000).nullable().optional(),
+  })
+  .strict();
 
 export const prorogaSchema = z.object({
   mesi: z.number().int().min(1).max(240).optional(),

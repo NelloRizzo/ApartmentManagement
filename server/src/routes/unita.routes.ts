@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireCondominioAccess, requirePermesso } from '../middleware/auth.js';
-import { controllaServizio, verificaCapacitaPerUnita } from '../middleware/servizio.js';
+import { controllaServizio } from '../middleware/servizio.js';
 import * as c from '../controllers/unita.controller.js';
 import { condominioParams, unitaCreateSchema, unitaListQuery, unitaParams, unitaUpdateSchema } from '../validators/schemas.js';
 
@@ -11,15 +11,9 @@ const router = Router({ mergeParams: true });
 router.use(requireAuth, validate(condominioParams, 'params'), requireCondominioAccess);
 
 // Ogni scrittura passa dal controllo del contratto: se è sospeso, l'amministratore
-// non può più operare; aggiungere unità verifica anche la capacità contrattuale.
-router.post(
-  '/',
-  controllaServizio,
-  requirePermesso('unita:scrivere'),
-  verificaCapacitaPerUnita(1),
-  validate(unitaCreateSchema),
-  c.create,
-);
+// non può più operare. La capacità contrattuale è contata in condomìni e si
+// verifica sulla creazione del condominio, non su questa rotta.
+router.post('/', controllaServizio, requirePermesso('unita:scrivere'), validate(unitaCreateSchema), c.create);
 router.patch('/:id', controllaServizio, requirePermesso('unita:scrivere'), validate(unitaParams, 'params'), validate(unitaUpdateSchema), c.update);
 router.delete('/:id', controllaServizio, requirePermesso('unita:scrivere'), validate(unitaParams, 'params'), c.remove);
 

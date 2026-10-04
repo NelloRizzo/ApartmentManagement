@@ -39,8 +39,8 @@ export default function PaginaAccesso() {
           <div className="marchio" aria-hidden="true">
             ⌂
           </div>
-          <h1>Steward</h1>
-          <p>Steward Management System</p>
+          <h1>Gestione Condomini</h1>
+          <p>Amministrazione di condomini</p>
         </div>
 
         <form onSubmit={invia} className="pila-4" noValidate>

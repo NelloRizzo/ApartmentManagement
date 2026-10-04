@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useApi } from '@/hooks/useApi';
 import { api } from '@/api/client';
-import { Caricamento, ErroreCaricamento } from '@/components/Feedback';
+import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
 import { Statistica } from '@/components/Elementi';
 import { TitoloPagina } from '@/components/TitoloPagina';
 import { euro, data as fmtData, mese } from '@/lib/formattazione';
@@ -23,7 +23,7 @@ const SCORCIATOIE: { a: string; etichetta: string; permesso: Permesso }[] = [
 ];
 
 export default function PaginaPanorama() {
-  const { condominioId, puo } = useAuth();
+  const { condominioId, utente, puo } = useAuth();
   const accessi = SCORCIATOIE.filter((s) => puo(s.permesso));
 
   const riepilogo = useApi<RiepilogoCondominio>(
@@ -51,7 +51,21 @@ export default function PaginaPanorama() {
     return (
       <>
         <TitoloPagina titolo="Panorama" />
-        <p className="testo-muto">Seleziona un condominio per visualizzare i dati.</p>
+        {utente?.role === 'condomino' ? (
+          <p className="testo-muto">Seleziona un condominio per visualizzare i dati.</p>
+        ) : (
+          // Senza condominio non c'è nulla da mostrare: rimandare al Panorama
+          // stesso sarebbe un vicolo cieco, quindi si offre la creazione.
+          <PaginaVuota
+            titolo="Nessun condominio"
+            descrizione="Crea il tuo primo condominio: è il contenitore di unità immobiliari, quote, assemblee e bilanci."
+            azione={
+              <Link className="btn btn-primario" to="/c/condomini">
+                Crea il condominio
+              </Link>
+            }
+          />
+        )}
       </>
     );
   }

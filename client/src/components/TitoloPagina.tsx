@@ -43,8 +43,8 @@ export function RichiediCondominio({ children }: { children: ReactNode }) {
       }
       azione={
         utente?.role !== 'condomino' ? (
-          <Link className="btn btn-primario" to="/c/panorama">
-            Vai al panorama
+          <Link className="btn btn-primario" to="/c/condomini">
+            Vai ai miei condomini
           </Link>
         ) : undefined
       }

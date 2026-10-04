@@ -157,7 +157,7 @@ function ModuloIscritto({
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
 
-  const unitaDisponibili = useApi<ApiEnvelope<{ _id: string; codice: string; piano: number }[]>>(
+  const condominiDisponibili = useApi<ApiEnvelope<{ _id: string; codice: string; piano: number }[]>>(
     (segnale) =>
       api.get(`/condomini/${condominioId}/unita`, { page: 1, limit: 100, sort: 'codice', order: 'asc' }, { signal: segnale }),
     [condominioId],
@@ -337,9 +337,9 @@ function ModuloIscritto({
 
           <div className="campo">
             <span className="campo-etichetta">Unità immobiliari</span>
-            {unitaDisponibili.inCorso && <span className="testo-faint">Caricamento…</span>}
+            {condominiDisponibili.inCorso && <span className="testo-faint">Caricamento…</span>}
             <div style={{ maxHeight: '12rem', overflowY: 'auto' }}>
-              {unitaDisponibili.dati?.data.map((u) => (
+              {condominiDisponibili.dati?.data.map((u) => (
                 <label key={u._id} className="casella">
                   <input
                     type="checkbox"
@@ -352,7 +352,7 @@ function ModuloIscritto({
                 </label>
               ))}
             </div>
-            {unita.length === 0 && !unitaDisponibili.inCorso && (
+            {unita.length === 0 && !condominiDisponibili.inCorso && (
               <span className="campo-errore">Seleziona almeno un’unità immobiliare</span>
             )}
           </div>

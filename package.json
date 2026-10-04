@@ -20,6 +20,7 @@
     "test": "npm run test --workspace server",
     "seed": "npm run seed --workspace server --",
     "reset:produzione": "npm run reset:produzione --workspace server --",
+    "migra:contratti": "npm run migra:contratti --workspace server --",
     "start": "npm run start --workspace server"
   },
   "devDependencies": {

@@ -80,7 +80,7 @@ export default function PaginaContratti() {
               <div className="testo-faint">{c.amministratore}</div>
               <div className="riga">
                 <span className="etichetta etichetta-info">
-                  {c.unitaInUso}/{c.unitaMassime} unità
+                  {c.condominiInUso}/{c.condominiMassimi} condomìni
                 </span>
                 <span className="etichetta etichetta-neutro">
                   {euro(c.costo)} / {c.periodicita}
@@ -110,7 +110,7 @@ export default function PaginaContratti() {
 
 function ModuloContratto({ onChiuso, onCreato }: { onChiuso: () => void; onCreato: () => void }) {
   const [amministratore, setAmministratore] = useState('');
-  const [unitaMassime, setUnitaMassime] = useState(20);
+  const [condominiMassimi, setCondominiMassimi] = useState(2);
   const [costo, setCosto] = useState(1200);
   const [periodicita, setPeriodicita] = useState<Periodicita>('annuale');
   const [durataMesi, setDurataMesi] = useState(12);
@@ -146,7 +146,7 @@ function ModuloContratto({ onChiuso, onCreato }: { onChiuso: () => void; onCreat
     try {
       await api.post('/contratti', {
         amministratore,
-        unitaMassime,
+        condominiMassimi,
         costo,
         periodicita,
         durataMesi,
@@ -204,20 +204,21 @@ function ModuloContratto({ onChiuso, onCreato }: { onChiuso: () => void; onCreat
           </div>
 
           <div className="campo">
-            <label className="campo-etichetta" htmlFor="c-unita">
-              Unità immobiliari comprese (n)
+            <label className="campo-etichetta" htmlFor="c-condomini">
+              Condomini gestibili (n)
             </label>
             <input
-              id="c-unita"
+              id="c-condomini"
               className="area"
               type="number"
               inputMode="numeric"
               min={1}
-              value={unitaMassime}
-              onChange={(e) => setUnitaMassime(Number(e.target.value))}
+              value={condominiMassimi}
+              onChange={(e) => setCondominiMassimi(Number(e.target.value))}
             />
             <span className="campo-aiuto">
-              Capacità complessiva su tutti i condominii dell’amministratore.
+              Quanti condomìni l’amministratore può tenere contemporaneamente. Superata la capacità,
+              non potrà creare nuovi condomìni.
             </span>
           </div>
 

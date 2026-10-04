@@ -119,7 +119,10 @@ services:
       - key: BREVO_MITTENTE_EMAIL
         sync: false
       - key: BREVO_MITTENTE_NOME
-        value: Steward Management System
+        # Il nome che i gestori di posta mostrano come mittente. Brevo non lo
+        # autentica, ma deve essere riconoscibile: è la prima cosa che vede chi
+        # riceve l'email di conferma.
+        value: Gestione Condomini - Steward Management System
 
   # ---------------------------------------------------------------- Frontend
   # I siti statici sono gratuiti e non si addormentano: il frontend è sempre

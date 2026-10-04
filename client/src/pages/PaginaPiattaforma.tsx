@@ -111,7 +111,7 @@ export default function PaginaPiattaforma() {
           <div className="scheda-corpo">
             <PaginaVuota
               titolo="Nessun contratto"
-              descrizione="Senza contratto un amministratore non può aggiungere unità immobiliari, pur potendo gestire quelle esistenti."
+              descrizione="Senza contratto un amministratore non può creare condomìni, pur potendo gestire quelli esistenti."
               azione={
                 <Link className="btn btn-primario" to="/p/contratti">
                   Stipula un contratto
@@ -129,7 +129,7 @@ export default function PaginaPiattaforma() {
                   <th scope="col">Contratto</th>
                   <th scope="col">Amministratore</th>
                   <th scope="col">Stato</th>
-                  <th scope="col">Unità</th>
+                  <th scope="col">Condomini</th>
                   <th scope="col">Scadenza</th>
                 </tr>
               </thead>
@@ -144,7 +144,7 @@ export default function PaginaPiattaforma() {
                       <EtichettaStato stato={c.stato} />
                     </td>
                     <td className="testo-num">
-                      {c.unitaInUso}/{c.unitaMassime}
+                      {c.condominiInUso}/{c.condominiMassimi}
                       <span className="testo-faint"> · {c.percentualeUtilizzo}%</span>
                     </td>
                     <td className="testo-num">{fmtData(c.scadenza)}</td>

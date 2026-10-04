@@ -32,6 +32,9 @@ const amministratore: GruppoNavigazione[] = [
     titolo: 'Condominio',
     voci: [
       { a: '/c/panorama', etichetta: 'Panorama', icona: '◱', primaria: true },
+      // Prima delle unità: senza un condominio non c'è nulla da amministrare, e
+      // questa è la pagina da cui se lo crea.
+      { a: '/c/condomini', etichetta: 'I miei condomini', icona: '⌂' },
       { a: '/c/unita', etichetta: 'Unità immobiliari', icona: '⌸', permesso: 'unita:leggere' },
       { a: '/c/iscritti', etichetta: 'Condòmini iscritti', icona: '⚇', permesso: 'iscritti:leggere' },
       { a: '/c/tabella', etichetta: 'Quote millesimali', icona: '⚖', permesso: 'tabella:leggere' },
