@@ -1,5 +1,5 @@
 import { Assemblea, type AssembleaDoc } from '../models/index.js';
-import type { STATI_ASSEMBLEA } from '../types/domain.js';
+import { STATI_ASSEMBLEA } from '../types/domain.js';
 import { badRequest, notFound } from '../utils/errors.js';
 
 /** Testo standard della convocazione, usato per email e PDF. */
@@ -66,6 +66,19 @@ export function puoTransizionare(
   a: (typeof STATI_ASSEMBLEA)[number],
 ): boolean {
   return ordineStati[a] >= ordineStati[da] && !(da === 'conclusa') && !(da === 'annullata');
+}
+
+/**
+ * Stati raggiungibili da quello corrente, escluso quello corrente.
+ *
+ * Va sulla risposta del server perché la UI deve offrire esattamente le
+ * transizioni valide: duplicare `ordineStati` nel client farebbe divergere i
+ * due elenchi al primo cambiamento.
+ */
+export function transizioniConsentite(
+  da: (typeof STATI_ASSEMBLEA)[number],
+): (typeof STATI_ASSEMBLEA)[number][] {
+  return STATI_ASSEMBLEA.filter((a) => a !== da && puoTransizionare(da, a));
 }
 
 export async function validaChiusura(assemblea: AssembleaDoc): Promise<void> {

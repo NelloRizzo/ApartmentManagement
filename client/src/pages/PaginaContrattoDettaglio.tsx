@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { EtichettaStato } from '@/components/Elementi';
 import { euro, data as fmtData, dataOra, MESI_BREVI } from '@/lib/formattazione';
 import type { Contratto, Periodicita, RataContratto } from '@/types/domain';
@@ -317,9 +318,23 @@ function ModuloModifica({
   const [note, setNote] = useState(contratto.note ?? '');
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  const { chiedi, elemento: conferma } = useConferma();
 
   async function salva() {
     setErrore(null);
+    // Come in stipula: lo zero è ammesso, ma non deve passare per
+    // dimenticanza. Le rate già emesse non cambiano, quindi l'avviso parla
+    // delle successive.
+    if (costo === 0 && contratto.costo !== 0) {
+      const confermato = await chiedi({
+        titolo: 'Passare a costo zero',
+        messaggio:
+          'Il costo per periodo diventa zero: le rate delle proroghe successive varranno 0. Confermi?',
+        conferma: 'Sì, passa a zero',
+      });
+      if (!confermato) return;
+    }
+
     setInCorso(true);
     try {
       await api.patch(`/contratti/${contratto.id}`, {
@@ -377,6 +392,7 @@ function ModuloModifica({
                 value={costo}
                 onChange={(e) => setCosto(Number(e.target.value))}
               />
+              {costo === 0 && <span className="campo-aiuto">Uno stipendio a zero è ammesso.</span>}
             </div>
             <div className="campo cresci">
               <label className="campo-etichetta" htmlFor="md-periodicita">
@@ -470,6 +486,7 @@ function ModuloModifica({
           </div>
         </div>
       </div>
+      {conferma}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { EtichettaStato, etichette } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { data as fmtData, millesimi } from '@/lib/formattazione';
@@ -156,6 +157,7 @@ function ModuloIscritto({
   const [telefono, setTelefono] = useState('');
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  const { chiedi, elemento: conferma } = useConferma();
 
   const condominiDisponibili = useApi<ApiEnvelope<{ _id: string; codice: string; piano: number }[]>>(
     (segnale) =>
@@ -206,6 +208,13 @@ function ModuloIscritto({
 
   async function rimuovi() {
     if (!iscritto) return;
+    const confermato = await chiedi({
+      titolo: 'Rimuovere il condòmino',
+      messaggio: `${iscritto.utente.nome} ${iscritto.utente.cognome} non sarà più tra gli iscritti di questo condominio. Le deleghe e i dati già registrati restano.`,
+      conferma: 'Rimuovi',
+      pericolo: true,
+    });
+    if (!confermato) return;
     setInCorso(true);
     setErrore(null);
     try {
@@ -390,6 +399,7 @@ function ModuloIscritto({
           </div>
         </div>
       </div>
+      {conferma}
     </div>
   );
 }

@@ -115,7 +115,11 @@ export const summary = asyncHandler(async (req, res) => {
           tabella: {
             revisione: tabella.revisione,
             valida: tabella.valida,
-            totaleDiritto: tabella.totale.diritto,
+            ripartizioniAttive: tabella.ripartizioniAttive,
+            // `totale` contiene solo le ripartizioni presenti: su una tabella
+            // vuota la chiave `diritto` manca e va letta come zero.
+            totaleDiritto: tabella.totale.diritto ?? 0,
+            problemi: tabella.problemi,
             delibera: tabella.delibera,
           },
         }

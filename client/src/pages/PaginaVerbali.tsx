@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { EtichettaStato, etichette } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { AreaStampa, PulsanteStampa } from '@/components/Stampa';
@@ -88,17 +89,34 @@ export default function PaginaVerbali() {
         })}
       </div>
 
-      {aperto && <DettaglioVerbale verbale={aperto} onChiudi={() => setAperto(null)} />}
+      {aperto && (
+        <DettaglioVerbale
+          verbale={aperto}
+          onChiudi={() => setAperto(null)}
+          onCambiato={elenco.ricarica}
+        />
+      )}
     </RichiediCondominio>
   );
 }
 
-function DettaglioVerbale({ verbale, onChiudi }: { verbale: Verbale; onChiudi: () => void }) {
-  const { condominioId } = useAuth();
+function DettaglioVerbale({
+  verbale,
+  onChiudi,
+  onCambiato,
+}: {
+  verbale: Verbale;
+  onChiudi: () => void;
+  onCambiato: () => void;
+}) {
+  const { condominioId, puo } = useAuth();
   const [testo, setTesto] = useState(verbale.testo);
   const [modificato, setModificato] = useState(verbale.modificatoManualmente);
+  const [approvato, setApprovato] = useState(verbale.approvato);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  const puoScrivere = puo('verbali:scrivere');
+  const { chiedi, elemento: conferma } = useConferma();
 
   async function salva() {
     setErrore(null);
@@ -110,6 +128,52 @@ function DettaglioVerbale({ verbale, onChiudi }: { verbale: Verbale; onChiudi: (
     } catch (e) {
       setErrore(e instanceof ApiError ? e.message : 'Salvataggio non riuscito');
     } finally {
+      setInCorso(false);
+    }
+  }
+
+  /**
+   * Approva o revoca l'approvazione.
+   *
+   * Il verbale approvato è il documento che i condòmini consultano: da quel
+   * momento il testo non viene più rigenerato dall'anagrafica, quindi l'atto è
+   * definitivo e va registrato nel log di audit dal server.
+   */
+  async function cambiaApprovazione() {
+    setErrore(null);
+    setInCorso(true);
+    try {
+      await api.post(`/condomini/${condominioId}/verbali/${verbale._id}/approva`, { approvato: !approvato });
+      setApprovato(!approvato);
+      notifica(approvato ? 'Approvazione revocata' : 'Verbale approvato');
+      onCambiato();
+    } catch (e) {
+      setErrore(e instanceof ApiError ? e.message : 'Operazione non riuscita');
+    } finally {
+      setInCorso(false);
+    }
+  }
+
+  async function elimina() {
+    setErrore(null);
+    const confermato = await chiedi({
+      titolo: approvato ? 'Eliminare un verbale approvato' : 'Eliminare la bozza del verbale',
+      messaggio: approvato
+        ? `Il verbale n. ${verbale.numero} è il documento valido dell'assemblea: perderlo significa ricostruirlo da zero. L'operazione non è reversibile.`
+        : `La bozza del verbale n. ${verbale.numero} verrà eliminata. Potrà essere rigenerata dall'anagrafica.`,
+      conferma: 'Elimina',
+      pericolo: true,
+    });
+    if (!confermato) return;
+
+    setInCorso(true);
+    try {
+      await api.delete(`/condomini/${condominioId}/verbali/${verbale._id}`);
+      notifica('Verbale eliminato');
+      onCambiato();
+      onChiudi();
+    } catch (e) {
+      setErrore(e instanceof ApiError ? e.message : 'Eliminazione non riuscita');
       setInCorso(false);
     }
   }
@@ -135,6 +199,12 @@ function DettaglioVerbale({ verbale, onChiudi }: { verbale: Verbale; onChiudi: (
             </div>
           )}
 
+          {approvato && (
+            <div className="avviso avviso-successo">
+              Verbale approvato: è il documento valido dell&apos;assemblea e non verrà più rigenerato.
+            </div>
+          )}
+
           {modificato && (
             <div className="avviso avviso-avviso">
               Il testo è stato modificato a mano e non verrà sovrascritto dalla rigenerazione automatica.
@@ -145,25 +215,56 @@ function DettaglioVerbale({ verbale, onChiudi }: { verbale: Verbale; onChiudi: (
             className="area area-testo verbale-testo"
             style={{ minHeight: '20rem', fontFamily: 'inherit' }}
             value={testo}
+            // Il verbale approvato è il documento valido: il server rifiuta ogni
+            // modifica (`conflict`), quindi l'editor si blocca invece di lasciare
+            // salvare e ricevere un errore.
+            readOnly={approvato}
             onChange={(e) => {
               setTesto(e.target.value);
               setModificato(true);
             }}
             aria-label="Testo del verbale"
+            aria-readonly={approvato}
           />
 
           <AreaStampa>
             <pre className="verbale-testo solo-stampa">{testo}</pre>
           </AreaStampa>
 
+          {!approvato && (
+            <div className="riga">
+              <button type="button" className="btn btn-primario cresci" onClick={salva} disabled={inCorso}>
+                {inCorso ? 'Salvataggio…' : 'Salva modifiche'}
+              </button>
+            </div>
+          )}
           <div className="riga">
-            <button type="button" className="btn btn-primario cresci" onClick={salva} disabled={inCorso}>
-              {inCorso ? 'Salvataggio…' : 'Salva modifiche'}
-            </button>
             <PulsanteStampa etichetta="Stampa / PDF" />
           </div>
+
+          {puoScrivere && (
+            <div className="riga riga-tra">
+              <button
+                type="button"
+                className={approvato ? 'btn btn-secondario' : 'btn btn-accento'}
+                onClick={cambiaApprovazione}
+                disabled={inCorso}
+              >
+                {approvato ? 'Revoca approvazione' : 'Approva verbale'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-pericolo"
+                onClick={elimina}
+                disabled={inCorso}
+              >
+                Elimina verbale
+              </button>
+            </div>
+          )}
         </div>
       </div>
+      {conferma}
     </div>
   );
 }

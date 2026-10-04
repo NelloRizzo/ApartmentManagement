@@ -38,13 +38,17 @@ npm run dev          # avvia API (4000) e frontend (5173) in parallelo
 npm run typecheck    # tsc --noEmit su server e client
 npm run lint         # eslint su server e client
 npm run build        # compila entrambi
+npm test             # test automatici dei permessi, senza database
+npm run verifica     # verifiche di percorso completo, con API in esecuzione
 npm run seed         # popola il DB con dati demo
 npm run seed -- --reset   # svuota le collezioni e ripopola
 npm run reset:produzione  # azzera il DB di produzione, vedi docs/reset-produzione.md
 ```
 
 Prima di dichiarare finito un intervento, `npm run typecheck` e `npm run lint`
-devono passare. Non aggiungere dipendenze senza un motivo concreto.
+devono passare. Se l'intervento tocca i permessi, anche `npm test`; se tocca un
+CRUD o una guardia, anche `npm run verifica`. Non aggiungere dipendenze senza un
+motivo concreto.
 
 `npm run reset:produzione` è l'unico modo per ottenere un account `superadmin` su
 un database svuotato: non esiste una rotta che promuova un utente esistente.
@@ -198,6 +202,10 @@ In `quoteVersamenti.service.ts`:
 
 - Un solo documento per `condominio + anno + tipo` (indice univolo). `tipo` è
   `preventivo` o `consuntivo`.
+- **`POST /bilanci` è una creazione, non un aggiornamento**: la stessa coppia
+  `anno + tipo` è un 409. Prima rispondeva 200 sostituendo le voci, quindi un
+  doppio invio azzerava il bilancio. Anno e tipo non sono modificabili con
+  `PATCH`, e `bilancioUpdateSchema` li omette a questo scopo.
 - **Un bilancio approvato non è modificabile**: `assicuraModificabile` risponde
   409. L'approvazione è il momento in cui l'assemblea ratifica le cifre, dopo il
   quale il verbale e le quote deliberate non possono più discostarsi.
@@ -253,7 +261,7 @@ I ruoli sono `superadmin`, `admin`, `portiere`, `condomino`.
   `amministrazione` e azioni `leggere`/`scrivere`. **`scrivere` implica `leggere`**
   (`haPermesso` in `types/domain.ts`).
 
-### I due guard di permesso
+### I guard di permesso
 
 Sono diversi e non vanno scambiati:
 
@@ -261,6 +269,7 @@ Sono diversi e non vanno scambiati:
 | --- | --- | --- |
 | `requirePermesso(p)` | solo `superadmin` e `admin` | **scritture** (blocca condòmini e portieri) |
 | `requirePermessoLettura(p)` | chiunque, ma controlla l'ambito se è `admin` | **liste e dettagli** |
+| `requirePermessoOPartecipante(p)` | chiunque, ma controlla l'ambito solo se è `admin` o `superadmin` | **scritture aperte anche ai condòmini** |
 
 `requirePermessoLettura` esiste perché `requirePermesso` sulle rotte `GET`
 impedirebbe ai condòmini di vedere i propri verbali e le proprie quote: i
@@ -268,6 +277,14 @@ condòmini non hanno `permessi` e per loro il filtro è dentro il controller.
 Applicare `requirePermesso` a una rotta di lettura rompe il pannello del
 condòmino; non applicare `requirePermessoLettura` a una lista lascia passare un
 assistente su ambiti non delegati.
+
+`requirePermessoOPartecipante` esiste per le rotte in cui la stessa scrittura è
+legittima per due soggetti diversi: il condòmino scrive all'amministratore,
+l'amministratore scrive ai condòmini (è il caso delle comunicazioni). Applicare
+`requirePermesso` vieterebbe al condòmino di scrivere, che è il diritto che
+l'applicazione gli riconosce. Il guard lascia passare i partecipanti ma non è
+tutto: `requireCondominioAccess` gli chiede una posizione nel condominio e i
+controller ne verificano la proprietà (`mittente`, `bozza`).
 
 `GET /condomini/:id/unita` è l'eccezione: usa `requirePermesso`, perché il
 condòmino conosce già la propria unità da `GET /auth/me` e non deve poter
@@ -330,14 +347,59 @@ sarebbe un danno peggiore di un indirizzo non verificato.
 
 ## Testing
 
-Non esiste ancora una suite di test automatici. Fino a che sarà disponibile,
-**verifica le modifiche a mano** contro l'API in esecuzione:
+Ci sono due livelli, con requisiti diversi.
+
+**1. Test automatici, senza database e senza API in esecuzione.** La logica dei
+permessi, che è l'area a rischio più alto:
+
+```bash
+npm test
+```
+
+Sono in `server/src/tests/*.test.ts` e girano con il runner di Node via `tsx`.
+Coprono `haPermesso`, `puoEseguire` e i guard: `requireCondominioAccess` è
+verificato sostituendo i metodi `exists` dei modelli, quindi nessuna connessione
+viene aperta. **Aggiungi un caso qui quando modifichi i permessi**: sono le
+implicazioni che un refactoring romperebbe in silenzio (`scrivere` implica
+`leggere`, `null` è accesso pieno e `[]` no, `assemblee` non concede `verbali`,
+un condòmino non amministrerebbe nemmeno con un elenco compilato).
+
+`tsconfig.build.json` esclude `src/tests` dalla build: `npm run typecheck`
+continua a controllarli, `dist` non li contiene.
+
+**2. Verifiche di percorso completo, con API in esecuzione e dati demo.**
 
 ```bash
 docker compose up -d mongo
 npm run seed -- --reset
-npm run dev
+npm run dev            # in un altro terminale
+npm run verifica       # dalla root: esegue gli script in sequenza
 ```
+
+`npm run verifica` riporta il totale dei controlli (90 al momento) e si ferma al
+primo script che fallisce. Gli script sono in `scripts/` e hanno tutti la stessa
+forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
+409 della transizione illegale) accanto a quelli positivi.
+
+| Script | Copre |
+| --- | --- |
+| `verifica-ruoli.ps1` | profili, contratti, assistenti |
+| `verifica-permessi.ps1` | matrice di accesso per ruolo |
+| `verifica-bilancio.ps1` | voci una alla volta, consuntivo, modelli |
+| `verifica-conferma-email.ps1` | conferma degli indirizzi |
+| `verifica-frontend-condomino.ps1` | che il condòmino conserva i propri dati |
+| `verifica-permesso-comunicazioni.ps1` | il guard delle comunicazioni, lato admin e lato condòmino |
+| `verifica-crud-condomini.ps1` | creazione, modifica, cancellazione, dipendenze bloccanti |
+| `verifica-crud-verbali.ps1` | generazione, modifica, approvazione, revoca, eliminazione |
+| `verifica-crud-versamenti.ps1` | registrazione, campi immutabili, cancellazione |
+| `verifica-crud-assemblee.ps1` | transizioni di stato, ricalcolo millesimi, eliminazione |
+| `verifica-crud-bilanci.ps1` | creazione, duplicata rifiutata, approvazione, revoca, eliminazione |
+| `verifica-millesimi.ps1` | tabella vuota non valida, tabella coerente, revisione squilibrata rifiutata |
+
+Un condominio creato da una verifica interrotta resta bloccato per sempre: le API
+rifiutano di eliminare un'unità che ha quote in vigore e contano anche le unità
+disattivate. `npm run purge:condominio -- <id>` rimuove condominio, unità e
+quote; va usato solo in locale.
 
 Credenziali demo:
 
@@ -347,13 +409,6 @@ Credenziali demo:
 | `admin@condomini.local` | `Admin123!` | admin (accesso pieno) |
 | `assistente@example.com` | `Assistente123!` | admin con solo `versamenti:scrivere` |
 | `marco.rossi@example.com` | `Condomino123!` | condòmino |
-
-Sono disponibili quattro script di verifica in `scripts/`, da eseguire con API e
-frontend attivi: `verifica-ruoli.ps1` (profili, contratti, assistenti),
-`verifica-permessi.ps1` (matrice di accesso per ruolo),
-`verifica-bilancio.ps1` (voci una alla volta, consuntivo, modelli),
-`verifica-conferma-email.ps1` (conferma degli indirizzi) e
-`verifica-frontend-condomino.ps1` (che il condòmino conserva i propri dati).
 
 > In PowerShell non chiamare una funzione `H`: `h` è l'alias di `Get-History` e
 > l'errore è fuorviante.
@@ -397,6 +452,16 @@ Controlli minimi dopo una modifica al dominio:
   dialog e li centra; il pannello di navigazione usa il modificatore `.velo-lato`
   per restare a sinistra. Senza il modificatore i form finirebbero in alto a
   sinistra, perché `.velo` era nato per il pannello.
+- **Le conferme passano da `useConferma`, mai da `window.confirm`.** L'hook
+  restituisce una promise, quindi il chiamante resta lineare:
+  `if (!(await chiedi({ titolo, messaggio, conferma, pericolo }))) return;`.
+  `pericolo: true` mette il pulsante rosso e sposta il focus sull'annullamento,
+  così `Invio` non distrugge nulla per riflesso: va usato su ogni eliminazione.
+- **Dentro una pagina che ha già un dialog, `{conferma}` va come ultimo figlio
+  del `.velo`.** `.velo` e `.scheda` sono entrambi `position: fixed` con lo
+  stesso `z-index`: a parità di z-index vince l'ultimo nell'ordine del DOM, quindi
+  una conferma renderizzata prima del dialog resterebbe sotto e sembrerebbe
+  non comparire.
 - **`.solo-stampa` esiste solo in stampa.** Serve a stampare il testo di una
   `textarea`: il browser stampa una `textarea` come un riquadro grigio delle
   sue dimensioni, con il testo tagliato.

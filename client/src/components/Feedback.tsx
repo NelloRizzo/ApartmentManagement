@@ -12,7 +12,9 @@ export function Notifiche() {
       style={{
         position: 'fixed',
         insetInline: 'var(--sp-4)',
-        bottom: 'calc(var(--nav-h) + var(--safe-bottom) + var(--sp-3))',
+        // Sotto l'intestazione, che è `sticky`: le notifiche devono restare
+        // leggibili senza passare sotto il titolo della pagina.
+        top: 'calc(var(--header-h) + var(--safe-top) + var(--sp-3))',
         zIndex: 60,
         display: 'flex',
         flexDirection: 'column',

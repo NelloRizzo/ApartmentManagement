@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { etichette } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { euro, data as fmtData, mese, perInputData } from '@/lib/formattazione';
@@ -26,6 +27,8 @@ export default function PaginaNuovoVersamento() {
   const [note, setNote] = useState('');
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  const [inModifica, setInModifica] = useState<Versamento | null>(null);
+  const { chiedi, elemento: conferma } = useConferma();
 
   const unita = useApi<ApiEnvelope<Unita[]>>(
     (segnale) =>
@@ -102,6 +105,7 @@ export default function PaginaNuovoVersamento() {
 
   return (
     <RichiediCondominio>
+      {conferma}
       <TitoloPagina
         titolo="Registra versamento"
         descrizione="Inserisci un pagamento ricevuto dal condòmino."
@@ -328,10 +332,241 @@ export default function PaginaNuovoVersamento() {
               <span className="etichetta etichetta-neutro">
                 {v.periodo.mese}/{v.periodo.anno}
               </span>
+              <button
+                type="button"
+                className="btn btn-fantasma btn-sm"
+                onClick={() => setInModifica(v)}
+                aria-label={`Modifica il versamento del ${fmtData(v.dataVersamento)}`}
+              >
+                Modifica
+              </button>
+              <button
+                type="button"
+                className="btn btn-pericolo btn-sm"
+                onClick={() => elimina(v)}
+                aria-label={`Elimina il versamento del ${fmtData(v.dataVersamento)}`}
+              >
+                Elimina
+              </button>
             </div>
           ))}
         </div>
       </section>
+
+      {inModifica && (
+        <ModificaVersamento
+          versamento={inModifica}
+          onChiudi={() => setInModifica(null)}
+          onSalvato={() => {
+            setInModifica(null);
+            ultimi.ricarica();
+            quote.ricarica();
+          }}
+        />
+      )}
     </RichiediCondominio>
+  );
+
+  /**
+   * Elimina un versamento.
+   *
+   * Il saldo del periodo torna a crescere, quindi l'operazione va confermata:
+   * è un pagamento reale, non una voce di una bozza.
+   */
+  async function elimina(v: Versamento) {
+    const confermato = await chiedi({
+      titolo: 'Eliminare il versamento',
+      messaggio: `Stai eliminando il versamento di ${euro(v.importo)} del ${fmtData(v.dataVersamento)} per l'unità ${v.unita?.codice ?? ''}. La quota tornerà a risultare dovuta.`,
+      conferma: 'Elimina',
+      pericolo: true,
+    });
+    if (!confermato) return;
+
+    try {
+      await api.delete(`/condomini/${condominioId}/versamenti/${v._id}`);
+      notifica('Versamento eliminato');
+      ultimi.ricarica();
+      quote.ricarica();
+    } catch (e) {
+      notifica(e instanceof ApiError ? e.message : 'Eliminazione non riuscita', 'errore');
+    }
+  }
+}
+
+/**
+ * Modifica di un versamento esistente.
+ *
+ * Unità e periodo non compaiono: `versamentoUpdateSchema` li esclude, perché
+ * spostare un pagamento su un'altra unità o su un altro periodo falsificherebbe
+ * il saldo storico. Per correggerli serve prima annullare e registrare di nuovo.
+ */
+function ModificaVersamento({
+  versamento,
+  onChiudi,
+  onSalvato,
+}: {
+  versamento: Versamento;
+  onChiudi: () => void;
+  onSalvato: () => void;
+}) {
+  const { condominioId } = useAuth();
+  const [importo, setImporto] = useState(String(versamento.importo));
+  const [dataVersamento, setDataVersamento] = useState(perInputData(new Date(versamento.dataVersamento)));
+  const [metodo, setMetodo] = useState<MetodoPagamento>(versamento.metodo);
+  const [causale, setCausale] = useState(versamento.causale ?? '');
+  const [identificativo, setIdentificativo] = useState(versamento.identificativoTransazione ?? '');
+  const [note, setNote] = useState(versamento.note ?? '');
+  const [inCorso, setInCorso] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  const valido = Number(importo) > 0 && dataVersamento;
+
+  async function salva() {
+    setErrore(null);
+    setInCorso(true);
+    try {
+      await api.patch(`/condomini/${condominioId}/versamenti/${versamento._id}`, {
+        importo: Number(importo),
+        dataVersamento,
+        metodo,
+        causale: causale.trim() || undefined,
+        identificativoTransazione: identificativo.trim() || undefined,
+        note: note.trim() || undefined,
+      });
+      notifica('Versamento aggiornato');
+      onSalvato();
+    } catch (e) {
+      setErrore(
+        e instanceof ApiError ? (e.primoErroreValidazione ?? e.message) : 'Salvataggio non riuscito',
+      );
+      setInCorso(false);
+    }
+  }
+
+  return (
+    <div className="velo" role="presentation" onClick={onChiudi}>
+      <div
+        className="scheda"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Modifica versamento"
+        style={{ width: 'min(34rem, 94vw)', maxHeight: '92dvh', overflowY: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="scheda-intestazione">
+          <h2>Modifica versamento</h2>
+          <button type="button" className="btn btn-fantasma btn-sm" onClick={onChiudi} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+
+        <div className="scheda-corpo pila-3">
+          {errore && (
+            <div className="avviso avviso-pericolo" role="alert">
+              {errore}
+            </div>
+          )}
+
+          <div className="avviso avviso-info">
+            Unità {versamento.unita?.codice} · periodo {versamento.periodo.mese}/{versamento.periodo.anno}: non
+            modificabili, perché determinano a quale quota il pagamento va attribuito.
+          </div>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="mv-importo">
+              Importo (€)
+            </label>
+            <input
+              id="mv-importo"
+              className="area"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              value={importo}
+              onChange={(e) => setImporto(e.target.value)}
+            />
+          </div>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="mv-data">
+              Data del versamento
+            </label>
+            <input
+              id="mv-data"
+              className="area"
+              type="date"
+              value={dataVersamento}
+              onChange={(e) => setDataVersamento(e.target.value)}
+            />
+          </div>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="mv-metodo">
+              Metodo
+            </label>
+            <select
+              id="mv-metodo"
+              className="area"
+              value={metodo}
+              onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
+            >
+              {METODI.map((m) => (
+                <option key={m} value={m}>
+                  {etichette.metodo(m)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="mv-causale">
+              Causale
+            </label>
+            <input
+              id="mv-causale"
+              className="area"
+              value={causale}
+              onChange={(e) => setCausale(e.target.value)}
+            />
+          </div>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="mv-identificativo">
+              Identificativo transazione
+            </label>
+            <input
+              id="mv-identificativo"
+              className="area"
+              value={identificativo}
+              onChange={(e) => setIdentificativo(e.target.value)}
+            />
+            <span className="campo-aiuto">Se indicato, non potranno esserci due versamenti con lo stesso valore.</span>
+          </div>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="mv-note">
+              Note
+            </label>
+            <textarea
+              id="mv-note"
+              className="area"
+              rows={3}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+
+          <div className="riga">
+            <button type="button" className="btn btn-primario cresci" onClick={salva} disabled={inCorso || !valido}>
+              {inCorso ? 'Salvataggio…' : 'Salva'}
+            </button>
+            <button type="button" className="btn btn-fantasma" onClick={onChiudi}>
+              Annulla
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

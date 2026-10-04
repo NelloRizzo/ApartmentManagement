@@ -171,7 +171,9 @@ export const aggiornaAmministratore = asyncHandler(async (req, res) => {
     if (target.role === 'superadmin') {
       throw badRequest('Un amministratore di sistema ha sempre accesso pieno');
     }
-    target.permessi = pulisciPermessi(body.permessi);
+    // `null` rimuove la delega e restituisce l'accesso pieno: senza questa via
+    // una volta ristretti i permessi non si potrebbe tornare indietro.
+    target.permessi = body.permessi === null ? null : pulisciPermessi(body.permessi);
     target.tokenVersion += 1;
   }
 

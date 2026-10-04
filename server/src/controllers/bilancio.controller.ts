@@ -1,6 +1,6 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created, noContent } from '../utils/http.js';
-import { notFound } from '../utils/errors.js';
+import { notFound, conflict } from '../utils/errors.js';
 import { Bilancio, type BilancioDoc } from '../models/index.js';
 import { currentUser } from '../middleware/auth.js';
 import { auditLog } from '../services/audit.service.js';
@@ -33,24 +33,12 @@ export const create = asyncHandler(async (req, res) => {
   const condominioId = req.params.condominioId!;
   const body = req.body as { anno: number; tipo: string; voci: { importo: number }[] };
 
-  const corpo = req.body as {
-    descrizione?: string;
-    note?: string;
-    deliberaAssemblea?: string;
-  };
-
   const esistente = await Bilancio.findOne({ condominio: condominioId, anno: body.anno, tipo: body.tipo });
+  // Non si sovrascrive un bilancio già esistente: la creazione è un'azione
+  // esplicita, mentre le voci si correggono una alla volta con le rotte `/voci`.
+  // Accettare la stessa coppia anno+tipo azzererebbe le voci già registrate.
   if (esistente) {
-    esistente.voci = body.voci as never;
-    esistente.totale = totalizza(body.voci);
-    esistente.descrizione = corpo.descrizione;
-    esistente.note = corpo.note;
-    esistente.deliberaAssemblea = corpo.deliberaAssemblea
-      ? oid(corpo.deliberaAssemblea)
-      : (esistente.deliberaAssemblea ?? undefined);
-    await esistente.save();
-    ok(res, esistente);
-    return;
+    throw conflict(`Esiste già il ${body.tipo} per il ${body.anno}: correggine le voci`);
   }
 
   const bilancio = await Bilancio.create({

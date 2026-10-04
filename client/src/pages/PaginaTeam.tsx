@@ -4,6 +4,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { TitoloPagina } from '@/components/TitoloPagina';
 import { RinviaConferma } from '@/components/RinviaConferma';
 import { data as fmtData } from '@/lib/formattazione';
@@ -157,6 +158,7 @@ function ModuloAssistente({
   const [errore, setErrore] = useState<string | null>(null);
   /** L'email non è partita: la password provvisoria va consegnata a mano. */
   const [passwordDaConsegnare, setPasswordDaConsegnare] = useState(false);
+  const { chiedi, elemento: conferma } = useConferma();
 
   function commuta(ambito: Ambito, azione: 'leggere' | 'scrivere') {
     setPermessi((precedenti) => {
@@ -234,6 +236,13 @@ function ModuloAssistente({
 
   async function revoca() {
     if (!assistente) return;
+    const confermato = await chiedi({
+      titolo: 'Revocare la delega',
+      messaggio: `${assistente.nome} ${assistente.cognome} perderà l'accesso a tutti i condomìni su cui è assistente. I dati che ha inserito restano.`,
+      conferma: 'Revoca',
+      pericolo: true,
+    });
+    if (!confermato) return;
     setInCorso(true);
     setErrore(null);
     try {
@@ -443,6 +452,7 @@ function ModuloAssistente({
           )}
         </div>
       </div>
+      {conferma}
     </div>
   );
 }

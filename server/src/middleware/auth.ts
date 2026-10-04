@@ -6,7 +6,7 @@ import { Condomino } from '../models/condomino.model.js';
 import { verifyAccessToken } from './token.js';
 import { condominiDiRuolo } from '../services/ruolo.service.js';
 import { haPermesso, type Permesso } from '../types/domain.js';
-import { forbidden, unauthorized } from '../utils/errors.js';
+import { forbidden, notFound, unauthorized } from '../utils/errors.js';
 import type { UserRole } from '../types/domain.js';
 
 function extractBearer(req: Request): string | null {
@@ -84,8 +84,8 @@ export const requirePermesso =
 
     if (permessi.some((p) => haPermesso(assegnati, p))) return next();
 
-return next(
-    forbidden('Non sei autorizzato a questa operazione: l’amministratore non ti ha delegato questo ambito'),
+    return next(
+      forbidden('Non sei autorizzato a questa operazione: l’amministratore non ti ha delegato questo ambito'),
     );
   };
 
@@ -116,6 +116,38 @@ export const requirePermessoLettura =
   };
 
 /**
+ * Richiede il permesso a chi amministra, lasciando passare i partecipanti.
+ *
+ * Serve dove la stessa scrittura è legittima per due soggetti diversi: il
+ * condòmino scrive all'amministratore, l'amministratore scrive ai condòmini.
+ * Applicare `requirePermesso` vieterebbe al condòmino di scrivere, che è
+ * proprio il diritto che l'applicazione gli riconosce, e gli lascerebbe
+ * leggere senza poter rispondere.
+ *
+ * Chi non amministra passa, ma non è libero: `requireCondominioAccess` gli
+ * chiede una posizione nel condominio e i controller ne verificano la proprietà
+ * (`mittente`, `bozza`). Qui il controllo serve solo sul lato amministrativo.
+ */
+export const requirePermessoOPartecipante =
+  (...permessi: Permesso[]): RequestHandler =>
+  (req, _res, next) => {
+    if (!req.user) return next(unauthorized());
+
+    const ruolo = req.user.role;
+    if (ruolo === 'superadmin') return next();
+    if (ruolo !== 'admin') return next();
+
+    const assegnati = req.user.permessi;
+    if (assegnati === null) return next();
+
+    if (permessi.some((p) => haPermesso(assegnati, p))) return next();
+
+    return next(
+      forbidden('Non sei autorizzato a questa operazione: l’amministratore non ti ha delegato questo ambito'),
+    );
+  };
+
+/**
  * Verifica che l'utente abbia accesso al condominio indicato.
  * Gli amministratori devono essere il titolare o un assistente delegato; i
  * portieri devono servire il condominio; i condomini devono avere una posizione.
@@ -131,18 +163,19 @@ export const requireCondominioAccess: RequestHandler = async (req, _res, next) =
     const condominioId = String(id);
     const { sub, role } = req.user;
 
-    if (role === 'superadmin' || role === 'admin') {
+    if (role === 'superadmin') {
+      // Il superadmin non è titolare di nessun condominio: il filtro per
+      // proprietario lo avrebbe escluso da tutti, restituendo "non trovato"
+      // anche per stabili che esistono. Qui basta che lo stabile ci sia, e
+      // l'assenza è un 404 vero, non un permesso.
+      const esiste = await Condominio.exists({ _id: condominioId });
+      if (!esiste) throw notFound('Condominio non trovato');
+    } else if (role === 'admin') {
       const ok = await Condominio.exists({
         _id: condominioId,
         $or: [{ amministratore: sub }, { assistenti: sub }],
       });
-      if (!ok) {
-        throw forbidden(
-          role === 'superadmin'
-            ? 'Condominio non trovato'
-            : 'Non sei l’amministratore di questo condominio né un suo assistente',
-        );
-      }
+      if (!ok) throw forbidden("Non sei l'amministratore di questo condominio n\u00e9 un suo assistente");
     } else if (role === 'portiere') {
       const serves = await Condominio.exists({ _id: condominioId, condominiServito: sub });
       if (!serves) throw forbidden('Non operi in questo condominio');

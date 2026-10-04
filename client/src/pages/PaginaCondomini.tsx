@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { TitoloPagina } from '@/components/TitoloPagina';
 import { millesimi, data as fmtData } from '@/lib/formattazione';
 import type { ApiEnvelope, Condominio } from '@/types/domain';
@@ -48,10 +49,13 @@ const VUOTO: Modello = {
  * questo il pulsante per crearne uno è la prima cosa che offre.
  */
 export default function PaginaCondomini() {
-  const { selezionaCondominio } = useAuth();
+  const { selezionaCondominio, puo, ricarica } = useAuth();
   const naviga = useNavigate();
   const [ricerca, setRicerca] = useState('');
-  const [inCreazione, setInCreazione] = useState(false);
+  const [aperto, setAperto] = useState<Condominio | 'nuovo' | null>(null);
+  const [errore, setErrore] = useState<string | null>(null);
+  const puoScrivere = puo('amministrazione:scrivere');
+  const { chiedi, elemento: conferma } = useConferma();
 
   const elenco = useApi<ApiEnvelope<Condominio[]>>(
     (segnale) =>
@@ -76,12 +80,42 @@ export default function PaginaCondomini() {
     naviga('/c/unita');
   }
 
+  /**
+   * Elimina un condominio vuoto.
+   *
+   * Il backend rifiuta la cancellazione se ci sono unità, iscritti, assemblee o
+   * altro: l'errore che torna nomina cosa blocca, quindi si mostra così com'è
+   * invece di un messaggio generico.
+   */
+  async function elimina(c: Condominio) {
+    setErrore(null);
+    const confermato = await chiedi({
+      titolo: 'Eliminare il condominio',
+      messaggio: `Stai eliminando ${c.nome} (${c.codice}) con tutte le sue unità, assemblee e bilanci. L'operazione non è reversibile.`,
+      conferma: 'Elimina',
+      pericolo: true,
+    });
+    if (!confermato) return;
+
+    try {
+      await api.delete(`/condomini/${c._id}`);
+      notifica('Condominio eliminato');
+      // Se era il selezionato, il selettore in testata punterebbe a uno stabile
+      // che non esiste più: lo ricarico lascia scegliere il primo rimasto.
+      await ricarica();
+      elenco.ricarica();
+    } catch (e) {
+      setErrore(e instanceof ApiError ? e.message : 'Eliminazione non riuscita');
+    }
+  }
+
   return (
     <>
+      {conferma}
       <TitoloPagina
         titolo="Condomini"
         descrizione="Gli stabili che gestisci. Unità immobiliari, quote e assemblee appartengono a un condominio."
-        azioni={<NuovoCondominio suInvio={() => setInCreazione(true)} />}
+        azioni={<NuovoCondominio suInvio={() => setAperto('nuovo')} />}
       />
 
       <div className="campo" style={{ marginBottom: 'var(--sp-3)' }}>
@@ -100,6 +134,12 @@ export default function PaginaCondomini() {
       {elenco.inCorso && <Caricamento />}
       {elenco.errore && <ErroreCaricamento messaggio={elenco.errore} onRiprova={elenco.ricarica} />}
 
+      {errore && (
+        <div className="avviso avviso-pericolo" role="alert" style={{ marginBottom: 'var(--sp-3)' }}>
+          {errore}
+        </div>
+      )}
+
       {elenco.dati && condomini.length === 0 && (
         <PaginaVuota
           titolo={ricerca ? 'Nessun risultato' : 'Nessun condominio'}
@@ -108,19 +148,13 @@ export default function PaginaCondomini() {
               ? 'Nessun condominio corrisponde alla ricerca.'
               : 'Crea il tuo primo condominio: è il contenitore di unità immobiliari, quote, assemblee e bilanci.'
           }
-          azione={!ricerca ? <NuovoCondominio suInvio={() => setInCreazione(true)} /> : undefined}
+          azione={!ricerca ? <NuovoCondominio suInvio={() => setAperto('nuovo')} /> : undefined}
         />
       )}
 
       <div className="elenco">
         {condomini.map((c) => (
-          <button
-            key={c._id}
-            type="button"
-            className="scheda voce-clicabile"
-            style={{ marginBottom: 'var(--sp-2)', textAlign: 'left' }}
-            onClick={() => gestisci(c._id)}
-          >
+          <div key={c._id} className="scheda" style={{ marginBottom: 'var(--sp-2)' }}>
             <div className="scheda-corpo pila-2">
               <div className="riga riga-tra">
                 <strong>{c.nome}</strong>
@@ -136,16 +170,32 @@ export default function PaginaCondomini() {
                   {c.dataDeliberaRipartizione ? ` del ${fmtData(c.dataDeliberaRipartizione)}` : ''}
                 </div>
               )}
+              <div className="riga">
+                <button type="button" className="btn btn-secondario btn-sm" onClick={() => gestisci(c._id)}>
+                  Gestisci
+                </button>
+                {puoScrivere && (
+                  <>
+                    <button type="button" className="btn btn-fantasma btn-sm" onClick={() => setAperto(c)}>
+                      Modifica
+                    </button>
+                    <button type="button" className="btn btn-pericolo btn-sm" onClick={() => elimina(c)}>
+                      Elimina
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </button>
+          </div>
         ))}
       </div>
 
-      {inCreazione && (
+      {aperto && (
         <ModuloCondominio
-          onChiuso={() => setInCreazione(false)}
-          onCreato={() => {
-            setInCreazione(false);
+          condominio={aperto === 'nuovo' ? undefined : aperto}
+          onChiuso={() => setAperto(null)}
+          onSalvato={() => {
+            setAperto(null);
             elenco.ricarica();
           }}
         />
@@ -178,9 +228,34 @@ function indirizzoDi(c: Condominio): string {
     .join(', ');
 }
 
-function ModuloCondominio({ onChiuso, onCreato }: { onChiuso: () => void; onCreato: () => void }) {
+/** Dall'elenco al form: l'indirizzo è annidato, il form ha campi piatti. */
+function daCondominio(c: Condominio): Modello {
+  return {
+    nome: c.nome,
+    codice: c.codice,
+    via: c.indirizzo.via,
+    civico: c.indirizzo.civico ?? '',
+    citta: c.indirizzo.citta ?? '',
+    cap: c.indirizzo.cap ?? '',
+    provincia: c.indirizzo.provincia ?? '',
+    totaleMillesimi: c.totaleMillesimi,
+    deliberaRipartizione: c.deliberaRipartizione ?? '',
+    dataDeliberaRipartizione: c.dataDeliberaRipartizione ? c.dataDeliberaRipartizione.slice(0, 10) : '',
+    note: c.note ?? '',
+  };
+}
+
+function ModuloCondominio({
+  condominio,
+  onChiuso,
+  onSalvato,
+}: {
+  condominio?: Condominio;
+  onChiuso: () => void;
+  onSalvato: () => void;
+}) {
   const { ricarica } = useAuth();
-  const [modello, setModello] = useState<Modello>({ ...VUOTO });
+  const [modello, setModello] = useState<Modello>(condominio ? daCondominio(condominio) : { ...VUOTO });
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
 
@@ -193,7 +268,7 @@ function ModuloCondominio({ onChiuso, onCreato }: { onChiuso: () => void; onCrea
     setErrore(null);
     setInCorso(true);
     try {
-      await api.post('/condomini', {
+      const corpo = {
         nome: modello.nome.trim(),
         // Il server mette il codice in maiuscolo, ma lo normalizzo anche qui per
         // non mostrare nell'elenco un valore diverso da quello salvato.
@@ -209,12 +284,19 @@ function ModuloCondominio({ onChiuso, onCreato }: { onChiuso: () => void; onCrea
         deliberaRipartizione: modello.deliberaRipartizione.trim() || undefined,
         dataDeliberaRipartizione: modello.dataDeliberaRipartizione || undefined,
         note: modello.note.trim() || undefined,
-      });
-      notifica('Condominio creato');
-      // Il condominio nuovo deve comparire nel selettore in testata: `ricarica`
+      };
+
+      if (condominio) {
+        await api.patch(`/condomini/${condominio._id}`, corpo);
+        notifica('Condominio aggiornato');
+      } else {
+        await api.post('/condomini', corpo);
+        notifica('Condominio creato');
+      }
+      // Il condominio deve comparire nel selettore in testata: `ricarica`
       // rilegge il profilo, che è la sola fonte da cui la UI conosce le posizioni.
       await ricarica();
-      onCreato();
+      onSalvato();
     } catch (e) {
       setErrore(
         e instanceof ApiError ? (e.primoErroreValidazione ?? e.message) : 'Salvataggio non riuscito',
@@ -230,12 +312,12 @@ function ModuloCondominio({ onChiuso, onCreato }: { onChiuso: () => void; onCrea
         className="scheda"
         role="dialog"
         aria-modal="true"
-        aria-label="Nuovo condominio"
+        aria-label={condominio ? `Modifica ${condominio.nome}` : 'Nuovo condominio'}
         style={{ width: 'min(36rem, 94vw)', maxHeight: '92dvh', overflowY: 'auto' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="scheda-intestazione">
-          <h2>Nuovo condominio</h2>
+          <h2>{condominio ? `Modifica ${condominio.codice}` : 'Nuovo condominio'}</h2>
           <button type="button" className="btn btn-fantasma btn-sm" onClick={onChiuso} aria-label="Chiudi">
             ✕
           </button>
@@ -399,7 +481,7 @@ function ModuloCondominio({ onChiuso, onCreato }: { onChiuso: () => void; onCrea
 
           <div className="riga">
             <button type="button" className="btn btn-primario cresci" onClick={salva} disabled={inCorso || !completo}>
-              {inCorso ? 'Creazione…' : 'Crea condominio'}
+              {inCorso ? 'Salvataggio…' : condominio ? 'Salva' : 'Crea condominio'}
             </button>
             <button type="button" className="btn btn-fantasma" onClick={onChiuso}>
               Annulla

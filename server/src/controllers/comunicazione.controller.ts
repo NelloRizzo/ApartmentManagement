@@ -105,20 +105,28 @@ export const create = asyncHandler(async (req, res) => {
     salvaComeBozza: boolean;
   };
 
+// Il condominio viene dalla rotta, che ha già eseguito `requireCondominioAccess`:
+  // dedurlo dall'utenza sbagliava per il superadmin (non è titolare di nessuno
+  // stabile, quindi restava `undefined` e la comunicazione nasceva senza
+  // condominio) e per gli assistenti che amministrano più stabili (il primo
+  // della lista non è necessariamente quello della rotta).
   const condominio =
-    body.unita && body.unita.length > 0
+    req.params.condominioId ??
+    (body.unita && body.unita.length > 0
       ? String(await condomioDiUnita(String(body.unita[0])))
       : utente.role === 'admin'
         ? utente.condominiIds[0]
-        : (await condomioDiUtente(utente.sub))[0];
+        : (await condomioDiUtente(utente.sub))[0]);
 
   const daAmministratore = body.tipo === 'avviso' || body.tipo === 'convocazione';
 
   // Avviso e convocazione sono riservati a chi amministra: senza questo controllo
-  // un condòmino che modifica il corpo della richiesta si metterebbe in tasca un
-  // avviso "inviato" a tutto lo stabile.
-  if (daAmministratore && utente.role !== 'admin') {
-    throw forbidden('Solo l’amministratore può inviare avvisi e convocazioni');
+  // un condomino che modifica il corpo della richiesta si metterebbe in tasca un
+  // avviso "inviato" a tutto lo stabile. Il superadmin non amministra uno stabile
+  // in particolare, ma è un operatore della piattaforma e non è un partecipante:
+  // escluderlo gli renderebbe impossibile usare la pagina.
+  if (daAmministratore && utente.role !== 'admin' && utente.role !== 'superadmin') {
+    throw forbidden('Solo l\'amministratore può inviare avvisi e convocazioni');
   }
 
   const destinatari = [...(body.destinatari ?? [])];

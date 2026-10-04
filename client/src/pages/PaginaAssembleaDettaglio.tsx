@@ -5,11 +5,12 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { EtichettaStato, etichette } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { AreaStampa, PulsanteStampa } from '@/components/Stampa';
 import { data as fmtData, numero, percentuale } from '@/lib/formattazione';
-import type { Assemblea, Votazione } from '@/types/domain';
+import type { Assemblea, StatoAssemblea, TipoAssemblea, Votazione } from '@/types/domain';
 
 interface DettaglioVerbale {
   assemblea: Assemblea;
@@ -70,12 +71,18 @@ function ContenutoDettaglio({
   onCambiato: () => void;
   onEsci: () => void;
 }) {
-  const { condominioId } = useAuth();
+  const { condominioId, puo } = useAuth();
   const a = dati.assemblea;
   const [votazioni, setVotazioni] = useState<Votazione[]>([]);
   const [delibere, setDelibere] = useState<Record<number, string>>({});
   const [inSalvataggio, setInSalvataggio] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  const [inModifica, setInModifica] = useState(false);
+  const [statoScelto, setStatoScelto] = useState('');
+  const [inStato, setInStato] = useState(false);
+  const puoScrivere = puo('assemblee:scrivere');
+  const transizioni = a.transizioniConsentite ?? [];
+  const { chiedi, elemento: conferma } = useConferma();
 
   useEffect(() => {
     setVotazioni(
@@ -102,6 +109,69 @@ function ContenutoDettaglio({
   const millesimiPresenti = presenti.reduce((s, c) => s + c.millesimi, 0);
   const millesimiTotali = dati.condomini.reduce((s, c) => s + c.millesimi, 0);
   const deleghe = new Set(presenti.filter((c) => c.delegaA).map((c) => c.delegaA));
+
+  /**
+   * Cambia stato dell'assemblea.
+   *
+   * Le transizioni valide arrivano dal server: la UI non replica la regola, così
+   * un cambio di stato non lascia pulsanti che il backend rifiuterebbe.
+   */
+  async function cambiaStato() {
+    if (!statoScelto) return;
+    setErrore(null);
+    setInStato(true);
+    try {
+      await api.post(`/condomini/${condominioId}/assemblee/${a._id}/stato`, { stato: statoScelto });
+      notifica(`Assemblea ${statoScelto === 'conclusa' ? 'conclusa' : statoScelto.replace('_', ' ')}`);
+      setStatoScelto('');
+      onCambiato();
+    } catch (e) {
+      setErrore(e instanceof ApiError ? e.message : 'Cambio stato non riuscito');
+    } finally {
+      setInStato(false);
+    }
+  }
+
+  async function ricalcolaMillesimi() {
+    setErrore(null);
+    setInSalvataggio(true);
+    try {
+      await api.post(`/condomini/${condominioId}/assemblee/${a._id}/millesimi/ricalcola`);
+      notifica('Millesimi ricalcolati');
+      onCambiato();
+    } catch (e) {
+      setErrore(e instanceof ApiError ? e.message : 'Ricalcolo non riuscito');
+    } finally {
+      setInSalvataggio(false);
+    }
+  }
+
+  /**
+   * Elimina l'assemblea.
+   *
+   * Il server rifiuta se esiste già un verbale o se è conclusa: quei due casi
+   * sono messaggi di merito, quindi si lasciano arrivare come sono invece di
+   * anticiparli qui.
+   */
+  async function eliminaAssemblea() {
+    const confermato = await chiedi({
+      titolo: 'Eliminare l\'assemblea',
+      messaggio: `Stai eliminando l'assemblea ${etichette.tipoAssemblea(a.tipo)} n. ${a.numero} del ${fmtData(a.data)}. L'operazione non è reversibile.`,
+      conferma: 'Elimina',
+      pericolo: true,
+    });
+    if (!confermato) return;
+
+    setInSalvataggio(true);
+    try {
+      await api.delete(`/condomini/${condominioId}/assemblee/${a._id}`);
+      notifica('Assemblea eliminata');
+      onEsci();
+    } catch (e) {
+      setErrore(e instanceof ApiError ? e.message : 'Eliminazione non riuscita');
+      setInSalvataggio(false);
+    }
+  }
 
   async function salvaPresenze() {
     setErrore(null);
@@ -153,6 +223,7 @@ function ContenutoDettaglio({
 
   return (
     <>
+      {conferma}
       <TitoloPagina
         titolo={`Assemblea ${etichette.tipoAssemblea(a.tipo)} n. ${a.numero}`}
         descrizione={`${fmtData(a.data)}${a.oraInizio ? ` ore ${a.oraInizio}` : ''} · ${a.luogo}`}
@@ -186,6 +257,92 @@ function ContenutoDettaglio({
         <div className="avviso avviso-pericolo" style={{ marginBottom: 'var(--sp-3)' }} role="alert">
           {errore}
         </div>
+      )}
+
+      {puoScrivere && (
+        <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
+          <div className="scheda-intestazione">
+            <h2>Gestione assemblea</h2>
+            <EtichettaStato stato={a.stato} />
+          </div>
+          <div className="scheda-corpo pila-3">
+            {readonly ? (
+              <div className="avviso avviso-info">
+                L&apos;assemblea è conclusa: non è più modificabile. Il verbale è l&apos;atto che ne dà conto.
+              </div>
+            ) : (
+              <>
+                {transizioni.length > 0 ? (
+                  <div className="riga">
+                    <div className="campo cresci">
+                      <label className="campo-etichetta" htmlFor="stato-assemblea">
+                        Cambia stato
+                      </label>
+                      <select
+                        id="stato-assemblea"
+                        className="area"
+                        value={statoScelto}
+                        onChange={(e) => setStatoScelto(e.target.value as StatoAssemblea)}
+                      >
+                        <option value="">Scegli lo stato</option>
+                        {transizioni.map((s) => (
+                          <option key={s} value={s}>
+                            {etichette.stato(s)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primario"
+                      onClick={cambiaStato}
+                      disabled={inStato || !statoScelto}
+                    >
+                      {inStato ? 'Cambio…' : 'Applica'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="avviso avviso-avviso">
+                    Da questo stato non ci sono altre transizioni consentite.
+                  </div>
+                )}
+
+                <div className="riga">
+                  <button
+                    type="button"
+                    className="btn btn-secondario"
+                    onClick={ricalcolaMillesimi}
+                    disabled={inSalvataggio}
+                  >
+                    Ricalcola millesimi
+                  </button>
+                  <button type="button" className="btn btn-secondario" onClick={() => setInModifica(true)}>
+                    Modifica assemblea
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-pericolo"
+                    onClick={eliminaAssemblea}
+                    disabled={inSalvataggio}
+                  >
+                    Elimina
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {inModifica && (
+        <ModificaAssemblea
+          assemblea={a}
+          onChiudi={() => setInModifica(false)}
+          onSalvata={() => {
+            setInModifica(false);
+            onCambiato();
+          }}
+        />
       )}
 
       <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
@@ -376,6 +533,166 @@ function ContenutoDettaglio({
 
       <SezioneVerbale assemblea={a} onEsci={onEsci} />
     </>
+  );
+}
+
+/**
+ * Modifica dei dati di convocazione dell'assemblea.
+ *
+ * Solo i campi che il server consente di cambiare dopo la creazione: lo stato
+ * si cambia con la sua rotta, che ne controlla le transizioni, e l'ordine del
+ * giorno si gestisce nella sezione dedicata.
+ */
+function ModificaAssemblea({
+  assemblea,
+  onChiudi,
+  onSalvata,
+}: {
+  assemblea: Assemblea;
+  onChiudi: () => void;
+  onSalvata: () => void;
+}) {
+  const { condominioId } = useAuth();
+  const [tipo, setTipo] = useState<TipoAssemblea>(assemblea.tipo);
+  const [data, setData] = useState(assemblea.data.slice(0, 10));
+  const [oraInizio, setOraInizio] = useState(assemblea.oraInizio ?? '');
+  const [luogo, setLuogo] = useState(assemblea.luogo);
+  const [seconda, setSeconda] = useState(assemblea.secondaConvocazione);
+  const [quattordici, setQuattordici] = useState(assemblea.quattordiciGgiorni);
+  const [note, setNote] = useState(assemblea.note ?? '');
+  const [inCorso, setInCorso] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  const valido = data !== '' && luogo.trim() !== '';
+
+  async function salva() {
+    setErrore(null);
+    setInCorso(true);
+    try {
+      await api.patch(`/condomini/${condominioId}/assemblee/${assemblea._id}`, {
+        tipo,
+        data,
+        oraInizio: oraInizio.trim() || undefined,
+        luogo: luogo.trim(),
+        secondaConvocazione: seconda,
+        quattordiciGgiorni: quattordici,
+        note: note.trim() || undefined,
+      });
+      notifica('Assemblea aggiornata');
+      onSalvata();
+    } catch (e) {
+      setErrore(
+        e instanceof ApiError ? (e.primoErroreValidazione ?? e.message) : 'Salvataggio non riuscito',
+      );
+      setInCorso(false);
+    }
+  }
+
+  return (
+    <div className="velo" role="presentation" onClick={onChiudi}>
+      <div
+        className="scheda"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Modifica assemblea n. ${assemblea.numero}`}
+        style={{ width: 'min(36rem, 94vw)', maxHeight: '92dvh', overflowY: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="scheda-intestazione">
+          <h2>Modifica assemblea</h2>
+          <button type="button" className="btn btn-fantasma btn-sm" onClick={onChiudi} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+
+        <div className="scheda-corpo pila-3">
+          {errore && (
+            <div className="avviso avviso-pericolo" role="alert">
+              {errore}
+            </div>
+          )}
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="ma-tipo">
+              Tipo
+            </label>
+            <select id="ma-tipo" className="area" value={tipo} onChange={(e) => setTipo(e.target.value as TipoAssemblea)}>
+              <option value="ordinaria">Ordinaria</option>
+              <option value="straordinaria">Straordinaria</option>
+            </select>
+          </div>
+
+          <div className="riga">
+            <div className="campo cresci">
+              <label className="campo-etichetta" htmlFor="ma-data">
+                Data
+              </label>
+              <input
+                id="ma-data"
+                className="area"
+                type="date"
+                value={data}
+                onChange={(e) => setData(e.target.value)}
+              />
+            </div>
+            <div className="campo">
+              <label className="campo-etichetta" htmlFor="ma-ora">
+                Ora
+              </label>
+              <input
+                id="ma-ora"
+                className="area"
+                type="time"
+                value={oraInizio}
+                onChange={(e) => setOraInizio(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="ma-luogo">
+              Luogo
+            </label>
+            <input id="ma-luogo" className="area" value={luogo} onChange={(e) => setLuogo(e.target.value)} />
+          </div>
+
+          <div className="riga">
+            <label className="etichetta">
+              <input
+                type="checkbox"
+                checked={seconda}
+                onChange={(e) => setSeconda(e.target.checked)}
+              />{' '}
+              Seconda convocazione
+            </label>
+            <label className="etichetta">
+              <input
+                type="checkbox"
+                checked={quattordici}
+                onChange={(e) => setQuattordici(e.target.checked)}
+              />{' '}
+              Quattordici giorni
+            </label>
+          </div>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="ma-note">
+              Note
+            </label>
+            <textarea id="ma-note" className="area" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+
+          <div className="riga">
+            <button type="button" className="btn btn-primario cresci" onClick={salva} disabled={inCorso || !valido}>
+              {inCorso ? 'Salvataggio…' : 'Salva'}
+            </button>
+            <button type="button" className="btn btn-fantasma" onClick={onChiudi}>
+              Annulla
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

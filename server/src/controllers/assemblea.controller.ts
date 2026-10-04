@@ -11,6 +11,7 @@ import { millesimiDiCondomino } from '../services/verbale.service.js';
 import {
   nextNumeroAssemblea,
   puoTransizionare,
+  transizioniConsentite,
   testoConvocazione,
   validaChiusura,
 } from '../services/assemblea.service.js';
@@ -96,7 +97,12 @@ export const getOne = asyncHandler(async (req, res) => {
       .lean(),
   ]);
 
-  ok(res, { ...assemblea, verbale: verbale ?? null, elencoCondomini: condomini });
+ok(res, {
+    ...assemblea,
+    verbale: verbale ?? null,
+    elencoCondomini: condomini,
+    transizioniConsentite: transizioniConsentite(assemblea.stato),
+  });
 });
 
 export const create = asyncHandler(async (req, res) => {
@@ -137,14 +143,17 @@ export const update = asyncHandler(async (req, res) => {
   if (!assemblea) throw notFound('Assemblea non trovata');
   if (assemblea.stato === 'conclusa') throw conflict('Un’assemblea conclusa non è più modificabile');
 
-  const aggiornata = await Assemblea.findOneAndUpdate(
+const aggiornata = await Assemblea.findOneAndUpdate(
     { _id: assemblea._id, condominio: assemblea.condominio },
     req.body,
     { new: true, runValidators: true },
   );
+  // Il filtro è lo stesso della `findOne` qui sopra: se il doc esisteva, esiste
+  // ancora. Il controllo serve a non passare `null` al resto della risposta.
+  if (!aggiornata) throw notFound('Assemblea non trovata');
 
   await auditLog({
-    condominio: req.params.condominioId,
+    condominio: String(assemblea.condominio),
     attore: currentUser(req).sub,
     azione: 'aggiornamento',
     entita: 'Assemblea',
@@ -153,7 +162,9 @@ export const update = asyncHandler(async (req, res) => {
     req,
   });
 
-  ok(res, aggiornata);
+  // `transizioniConsentite` serve alla UI dopo un salvataggio: se il PATCH ha
+  // cambiato lo stato, l'elenco delle prossime mosse va ricalcolato.
+ok(res, { ...aggiornata.toObject(), transizioniConsentite: transizioniConsentite(aggiornata.stato) });
 });
 
 export const changeState = asyncHandler(async (req, res) => {
@@ -167,7 +178,7 @@ export const changeState = asyncHandler(async (req, res) => {
 
   if (stato === 'conclusa') await validaChiusura(assemblea);
 
-  assemblea.stato = stato;
+assemblea.stato = stato;
   if (stato === 'convocata' && !assemblea.dataConvocazione) assemblea.dataConvocazione = new Date();
   if (stato === 'conclusa') assemblea.dataChiusura = new Date();
   await assemblea.save();
@@ -181,7 +192,7 @@ export const changeState = asyncHandler(async (req, res) => {
     req,
   });
 
-  ok(res, assemblea);
+  ok(res, { ...assemblea.toObject(), transizioniConsentite: transizioniConsentite(assemblea.stato) });
 });
 
 export const salvaPresenze = asyncHandler(async (req, res) => {
@@ -318,8 +329,13 @@ export const dettaglioVerbale = asyncHandler(async (req, res) => {
   const quotaPerUnita = new Map(tabella.righe.map((r) => [r.unitaId, r.quote.diritto]));
   const codiceUnita = new Map(unita.map((u) => [String(u._id), u.codice]));
 
-  ok(res, {
-    assemblea,
+ok(res, {
+    // Le transizioni consentite viaggiano con il dettaglio: la UI costruisce il
+    // selettore del cambio stato su questo elenco, senza replicare la regola.
+    assemblea: {
+      ...assemblea,
+      transizioniConsentite: transizioniConsentite(assemblea.stato),
+    },
     condomini: condomini.map((c) => {
       const presenza = assemblea.presenze.find((p) => String(p.condomino) === String(c._id));
       const utente = c.utente as unknown as { nome: string; cognome: string; email: string };
@@ -332,7 +348,7 @@ export const dettaglioVerbale = asyncHandler(async (req, res) => {
         quota: c.quota,
         unita: c.unita.map((u) => codiceUnita.get(String(u)) ?? '?'),
         millesimi: Number(millesimiDiCondomino(c, quotaPerUnita).toFixed(2)),
-        presente: presenza?.presente ?? false,
+presente: presenza?.presente ?? false,
         delegaA: presenza?.delegaA ? String(presenza.delegaA) : null,
         motivazioneAstenuto: presenza?.motivazioneAstenuto,
       };

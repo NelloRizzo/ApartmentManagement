@@ -4,6 +4,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { etichette } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { millesimi, numero } from '@/lib/formattazione';
@@ -152,6 +153,7 @@ function ModuloUnita({
   const [modello, setModello] = useState<Modello>(unita ? { ...unita } : { ...VUOTO });
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  const { chiedi, elemento: conferma } = useConferma();
 
   const aggiorna = <K extends keyof Modello>(campo: K, valore: Modello[K]) =>
     setModello((m) => ({ ...m, [campo]: valore }));
@@ -186,6 +188,13 @@ function ModuloUnita({
 
   async function elimina() {
     if (!unita) return;
+    const confermato = await chiedi({
+      titolo: 'Eliminare l\'unità',
+      messaggio: `Stai eliminando l'unità ${unita.codice}. Se ha quote millesimali o iscritti, il server rifiuterà l'operazione.`,
+      conferma: 'Elimina',
+      pericolo: true,
+    });
+    if (!confermato) return;
     setInCorso(true);
     setErrore(null);
     try {
@@ -349,6 +358,7 @@ function ModuloUnita({
           </div>
         </div>
       </div>
+      {conferma}
     </div>
   );
 }

@@ -4,6 +4,176 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-04
 
+### Le conferme: una finestra invece di `window.confirm`
+
+Le eliminazioni chiedevano conferma con `window.confirm`, che è bloccante e non
+stilabile: su Android è una riga di testo grigia e non dice nulla su *cosa* sta
+per succedere. Tre eliminazioni non chiedevano affatto conferma
+(`PaginaIscritti`, `PaginaTeam`, `PaginaUnita`).
+
+`useConferma` in `client/src/components/Conferma.tsx` sostituisce il dialog: la
+chiamata resta lineare (`if (!(await chiedi({...}))) return;`) perché l'hook
+restituisce una promise, quindi il flusso non si complica di `useState` sparsi
+nelle pagine. Il pulsante è rosso e si chiama "Elimina" quando l'azione è
+distruttiva, con il testo che dice cosa sparisce ("il verbale n. 4, già
+approvato"), e non ci si passa con `Invio`: il focus parte
+dall'annullamento. Le due conferme sul costo zero restano neutre, perché
+stipulare un contratto gratuito non è una cancellazione.
+
+Nota di composizione: dentro un dialog che è già un `.velo`, la conferma va
+renderizzata **dopo** il dialog stesso. `velo` e `.scheda` sono entrambi
+`position: fixed` con lo stesso `z-index`, quindi a parità di z-index vince
+l'ultimo nell'ordine del DOM: una conferma renderizzata prima finirebbe sotto.
+Le pagine che hanno una modale (`PaginaVerbali`, `PaginaContratti`,
+`PaginaContrattoDettaglio`, `PaginaIscritti`, `PaginaTeam`, `PaginaUnita`)
+hanno `{conferma}` come ultimo figlio del proprio `.velo`.
+
+### Le notifiche in testa alla pagina
+
+I toast comparivano in fondo, sopra la barra di navigazione: su mobile finivano
+sopra il pollice e coprivano l'ultima riga di una tabella. Ora sono ancorati in
+alto, subito sotto l'intestazione (`--header-h` + `--safe-top`), che è
+`sticky`: restano leggibili senza passare sopra il titolo della pagina.
+
+### Comunicazioni: il permesso di scrittura è davvero richiesto
+
+`POST /`, `PATCH /:id`, `POST /:id/invia`, `POST /:id/risposte` e `DELETE /:id`
+passavano solo per `controllaServizio`: un assistente delegato sui soli
+versamenti poteva scrivere e cancellare comunicazioni ai condòmini.
+
+Il permesso non può essere applicato come sulle altre rotte, perché la stessa
+scrittura è legittima per due soggetti diversi: il condòmino scrive
+all'amministratore (una `richiesta`, un `reclamo`, una `segnalazione`) e
+l'amministratore scrive ai condòmini (un `avviso`, una `convocazione`).
+`requirePermesso` avrebbe vietato al condòmino di scrivere, che è il diritto che
+l'applicazione gli riconosce, e gli avrebbe lasciato leggere senza poter
+rispondere. È nato quindi `requirePermessoOPartecipante`, che controlla solo il
+lato amministrativo: il condòmino passa e resta vincolato dal filtro per utente
+del controller. `POST /:id/letti` resta aperto a tutti perché è un'azione sul
+proprio thread, non una scrittura.
+
+Bug incontrato applicando il permesso: `/:id/letti` rispondeva 404 perché la
+rotta era dichiarata sotto il percorso sbagliato. Inoltre il controller leggeva
+`req.body.condominioId`, che in una rotta annidata non esiste mai: il
+condominio viene da `req.params`, e senza quella correzione il permesso sarebbe
+stato valutato sull'elenco sbagliato. La stessa verifica ha mostrato che il
+superadmin restava fuori dalle comunicazioni dei condomini che amministra: ora
+gli avvisi e le convocazioni li può emettere anche lui.
+
+### Il superadmin non è più escluso dai condomini altrui
+
+`requireCondominioAccess` filtrava per proprietario anche il superadmin, che non
+è titolare di nessun stabilo: riceveva 403 su ogni condominio anche se
+esistente. Ora per il superadmin basta che lo stabile ci sia, e l'assenza è un
+404 vero. Su tutte le altre rotte i filtri per proprietario restano, perché
+l'amministratore deve vedere solo i suoi condomini.
+
+### `permessi: null` non è più irreversibile
+
+`aggiornaAmministratoreSchema` accettava solo un elenco di permessi: un amministratore
+delegato sui versamenti non poteva più tornare ad accesso pieno, perché non
+esisteva il modo di mandare "nessun elenco". Con `null` il controller riporta
+l'accesso pieno, che è il significato che il modello dà già a quel valore.
+
+### Il messaggio sulla tabella millesimale non prometteva una tabella inesistente
+
+Il Panorama diceva "La tabella millesimale è valida: la somma dei millesimi di
+diritto fa (revisione 0)" in un condominio senza quote. `buildTabella` costruisce
+`totale` iterando le quote salvate, quindi senza revisione `totale` è `{}`,
+`totaleDiritto` è `undefined` e la chiave sparisce dal JSON; e `valida` diceva
+`problemi.length === 0`, che con zero ripartizioni attive è vero. Il messaggio
+dichiarava valida una tabella che non esiste.
+
+Ora una tabella senza quote è `valida: false` con lo scarto di 1000 sulla
+ripartizione di diritto, il riepilogo espone `ripartizioniAttive` e `problemi`, e
+la UI distingue i tre casi: nessuna quota definita, tabella valida con il totale,
+scarto da correggere con l'elenco delle ripartizioni. `totaleDiritto` è `0` e non
+più `undefined`.
+
+### Operazioni CRUD assenti nella UI
+
+L'API esponeva il CRUD completo di ogni dominio, la UI solo una parte. Aggiunti:
+
+- **condomini**: modifica e cancellazione, con l'errore del server mostrato
+  com'è quando la guardia nomina la dipendenza che blocca;
+- **verbali**: approvazione, revoca ed eliminazione. Un verbale approvato diventa
+  in sola lettura, come vuole il 409 del server;
+- **versamenti**: modifica ed eliminazione. Unità e periodo sono mostrati come
+  immutabili perché lo sono: il PATCH li ignora e il totale non li riconta;
+- **assemblee**: modifica, cambio stato, ricalcolo dei millesimi ed eliminazione.
+  Gli stati che il server accetterebbe arrivano nella risposta
+  (`transizioniConsentite`), così il selettore non replica la regola delle
+  transizioni e non offre mosse che il backend rifiuterebbe;
+- **bilanci**: creazione del preventivo, approvazione e revoca, modifica di
+  descrizione e note, eliminazione. Anno e tipo non sono editabili: sono la chiave
+  del documento.
+
+### `POST /bilanci` non sovrascrive più un bilancio esistente
+
+Se la stessa coppia `anno + tipo` arrivava due volte, il controller sostituiva le
+voci con quelle nuove e rispondeva 200: un doppio invio, o un form che riprova,
+azzerava le voci registrate. Ora la seconda creazione è un 409 che nomina
+l'anno e il tipo. Le voci si correggono una alla volta con le rotte `/voci`, che
+esistono già.
+
+### La pagina dei bilanci descriveva il consuntivo al contrario
+
+La descrizione diceva "consuntivo dell'anno che lo precede", ma il modello è
+un altro: `creaConsuntivo` copia il preventivo **dello stesso anno**
+(`anno: preventivo.anno`), quindi preventivo e consuntivo 2025 convivono ed è
+giusto, perché il consuntivo confronta il realizzato con il previsto di quell'anno.
+Con quel testo l'utente cercava il consuntivo 2026 tra i documenti del 2025 e non
+lo trovava.
+
+Con la verifica è emerso anche che il "non si può rinnovare un consuntivo chiuso"
+non era un blocco: `POST /:id/approva` con `approvato: false` revoca senza
+guardie, quindi revoca → elimina → genera è percorribile e quei pulsanti sono in
+UI. Resta un problema vero, diverso: il selettore offre solo `anno -2 … anno +1`.
+
+### Costo zero nei contratti, con conferma esplicita
+
+`creaContrattoSchema` accetta `costo: 0` e i due contratti in produzione hanno
+`costo: 0`: lo zero è ammesso di proposito. Il form accettava però `min={0}` e
+mandava `Number('')` = 0 senza dire nulla, così una stipula a zero passava
+come qualunque altra. Ora, sia in creazione sia nel passaggio a zero in
+modifica, la UI chiede conferma e dice che le rate future saranno a zero fino a
+una proroga.
+
+### Test automatici sulla logica dei permessi
+
+`npm test` eseguiva `npm run test --workspace server` che non esisteva: la root
+prometteva una suite che non c'era. Ora `server/src/tests/permessi.test.ts`
+copre `haPermesso`, `puoEseguire` e i guard dei permessi, 30 casi senza database:
+i guard dei permessi dipendono solo da `req.user`, e `requireCondominioAccess` è
+verificato sostituendo i metodi `exists` dei modelli.
+
+I casi coprono le implicazioni che un refactoring romperebbe in silenzio:
+`scrivere` implica `leggere` e non viceversa, `null` è accesso pieno e `[]` no,
+`assemblee` non concede `verbali`, un condòmino non amministrerebbe nemmeno con
+un elenco di permessi compilato, e l'esistenza del condominio per il superadmin
+è un 404 e non un 403.
+
+`tsconfig.build.json` esclude `src/tests` dalla build: `typecheck` continua a
+controllare i test, `dist` non li contiene più.
+
+### Verifiche automatiche degli ambiti
+
+`npm run verifica` esegue in sequenza sette script e riporta il totale: 90
+controlli. Ogni script è un test di percorso completo contro l'API in esecuzione,
+copre anche i casi negativi (403 del condòmino, 409 della transizione illegale,
+409 della creazione duplicata) ed è pensato per essere esteso nello stesso
+intervento che tocca i permessi.
+
+Aggiunti `verifica-crud-assemblee.ps1`, `verifica-crud-bilanci.ps1` e
+`verifica-millesimi.ps1`. Il primo ha scoperto che la risposta del dettaglio
+assemblea non portava le transizioni consentite, che è il dato di cui il
+selettore dello stato ha bisogno.
+
+Un condominio creato da una verifica interrotta resta bloccato per sempre: le
+API rifiutano di eliminare un'unità che ha quote in vigore e contano anche le
+unità disattivate. `npm run purge:condominio -- <id>` rimuove condominio, unità e
+quote per gli scenari di test locale.
+
 ### Capacità contrattuale contata in condomìni
 
 `Contratto.unitaMassime` è diventato `condominiMassimi` e il consumo della

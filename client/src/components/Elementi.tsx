@@ -85,6 +85,11 @@ export function EtichettaStato({ stato, testo }: { stato: string; testo?: string
   return <span className={`etichetta etichetta-${tono}`}>{testo ?? etichetteStato[stato] ?? stato}</span>;
 }
 
+/** Etichetta leggibile di uno stato: usata anche nei selettori, non solo nei badge. */
+export function testoStato(stato: string): string {
+  return etichetteStato[stato] ?? stato;
+}
+
 const etichetteRegime: Record<string, string> = {
   proprietario: 'Proprietario',
   inquilino: 'Inquilino',
@@ -160,6 +165,7 @@ export const etichette = {
   tipoUnita: (v: string) => etichetteTipo[v] ?? v,
   ripartizione: (v: string) => etichetteRipartizione[v] ?? v,
   tipoAssemblea: (v: string) => etichetteTipoAssemblea[v] ?? v,
+  stato: (v: string) => etichetteStato[v] ?? v,
   tipoComunicazione: (v: string) => etichetteTipoComunicazione[v] ?? v,
   metodo: (v: string) => etichetteMetodo[v] ?? v,
   categoria: (v: string) => etichetteCategoria[v] ?? v,

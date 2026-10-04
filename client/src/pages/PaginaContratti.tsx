@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { EtichettaStato } from '@/components/Elementi';
 import { TitoloPagina } from '@/components/TitoloPagina';
 import { euro, data as fmtData } from '@/lib/formattazione';
@@ -118,6 +119,7 @@ function ModuloContratto({ onChiuso, onCreato }: { onChiuso: () => void; onCreat
   const [note, setNote] = useState('');
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  const { chiedi, elemento: conferma } = useConferma();
 
   const candidati = useApi<{ data: { id: string; nome: string; email: string }[] }>(
     async (segnale) => {
@@ -142,6 +144,20 @@ function ModuloContratto({ onChiuso, onCreato }: { onChiuso: () => void; onCreat
 
   async function salva() {
     setErrore(null);
+    // Lo zero è ammesso dal server di proposito (una gratuità è un contratto
+    // valido), ma non deve poter passare per dimenticanza: svuotare il campo
+    // dà `Number('') === 0` e la richiesta va a buon fine. Qui si chiede
+    // conferma, e la stessa domanda la fa il form di modifica.
+    if (costo === 0) {
+      const confermato = await chiedi({
+        titolo: 'Contratto gratuito',
+        messaggio:
+          'Il costo per periodo è zero: le rate generate non varranno nulla. Confermi di voler stipulare un contratto gratuito?',
+        conferma: 'Sì, è gratuito',
+      });
+      if (!confermato) return;
+    }
+
     setInCorso(true);
     try {
       await api.post('/contratti', {
@@ -237,6 +253,9 @@ function ModuloContratto({ onChiuso, onCreato }: { onChiuso: () => void; onCreat
                 value={costo}
                 onChange={(e) => setCosto(Number(e.target.value))}
               />
+              {costo === 0 && (
+                <span className="campo-aiuto">Uno stipendio a zero è ammesso: le rate varranno 0.</span>
+              )}
             </div>
             <div className="campo cresci">
               <label className="campo-etichetta" htmlFor="c-per">
@@ -325,6 +344,7 @@ function ModuloContratto({ onChiuso, onCreato }: { onChiuso: () => void; onCreat
           </div>
         </div>
       </div>
+      {conferma}
     </div>
   );
 }

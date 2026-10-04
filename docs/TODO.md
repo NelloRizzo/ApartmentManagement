@@ -1,106 +1,48 @@
 # Idee da fare
 
-Solo cose **da realizzare**, ordinate per urgenza. Quello che è già stato fatto,
-con le ragioni delle scelte, sta in `CHANGELOG.md`.
+PRIORITA ALTA
+- Campi sconosciuti scartati in silenzio
+  - Zod rimuove le chiavi non dichiarate: un `PATCH /versamenti/:id` con `unita` o `periodo` risponde 200 e lascia i valori come erano
+  - l'interfaccia mostra già quei due campi come immutabili, quindi non è un bug visibile; resta però una risposta che sembra aver applicato la modifica
+  - da decidere: schema `strict` come su `PATCH /contratti/:id`, oppure `passthrough` con un avviso
+- Associazioni modificabili ⏸ rimandato
+  - le unità già a database devono poter essere riassociate a un condominio diverso, oggi `condominio` è immutabile
+  - decidere cosa ostacola lo spostamento: i millesimi assegnati cambierebbero la somma di due tabelle, gli iscritti collegati, i versamenti registrati
+  - se lo spostamento è consentito va fatto in una transazione e con il ricalcolo delle due tabelle, altrimenti il vincolo "sommano 1000" si rompe in silenzio
+- Delega per condominio: compiti distribuiti ⏸ rimandato
+  - oggi un assistente ha un elenco di permessi unico per tutti i condomìni (`User.permessi`) più l'elenco in `Condominio.assistenti`: non si può dire "su questo stabile tutto, su quello solo i versamenti"
+  - "pieno qui e limitato lì" non è esprimibile: `permessi: null` significa accesso pieno, quindi servono elenchi multipli o togliere il `null` e trattare "tutti i permessi" come elenco completo
+  - `requirePermesso` e `requirePermessoLettura` ricevono già `req.params.condominioId` e possono risolvere l'elenco giusto, ma ogni rotta sotto `/condomini/:condominioId` va controllata una per una
 
-## Come si usa
+PRIORITA MEDIA
+- Test automatici sulla logica delle quote e del verbale
+  - `npm test` copre oggi solo i permessi, che sono l'area a rischio più alto
+  - `quoteVersamenti.service.ts` (riparto del residuo sui centesimi, nuda proprietà, regime) e `verbale.service.ts` (quorum ordinaria e straordinaria, millesimi rappresentati, delibere con segnaposto) sono la seconda area a rischio alto e non hanno test
+  - `scripts/verifica-bilancio.ps1` e `verifica-crud-verbali.ps1` coprono il percorso via API, ma non i casi limite del calcolo
+- Gestione del consuntivo per anno nella UI
+  - il problema reale è il selettore degli anni: offre solo `anno -2 … anno +1`, quindi un condominio con bilanici più vecchi non li raggiunge
+  - la pagina descriveva il consuntivo come "dell'anno che lo precede", ma il modello è preventivo e consuntivo **dello stesso anno** (`creaConsuntivo` copia `anno: preventivo.anno`): la frase era semplicemente sbagliata ed è stata corretta
+  - rifare un anno è possibile in tre passi (revoca approvazione → elimina → genera), non è un blocco: è una mancanza di indicazione nella UI
+- Privacy policy per ruolo ⏸ rimandato
+  - serve un'informativa distinta per chi usa l'applicazione, perché il titolare del trattamento cambia
+  - condòmini: il titolare è l'amministratore di condominio, che tratta i dati delle unità e delle quote per conto del condominio; Gestione Condomini agisce da responsabile del trattamento
+  - amministratori di condominio: il titolare è l'amministratore di piattaforma, che tratta i dati del team e degli amministratori
+  - da decidere: firma del consenso o presa visione, se serve un registro dei consensi, e dove pubblicarla
+  - l'esportazione dei dati propri non è esposta: `mieDati` in `comunicazione.controller.ts` raccoglie comunicazioni, legami e registro operazioni di un utente ma nessuna rotta la chiama, quindi oggi l'interessato non può scaricarli
 
-- **Il proprietario** aggiunge un'idea in fondo, con l'urgenza che ritiene
-  giusta. Non serve che sia chiara né giusta: serve che sia là.
-- **L'agente**, prima di proporre un intervento, legge questo file e controlla se
-  riguarda ciò che sta per toccare. Se sì, chiede quale dei punti aperti
-  affrontare, invece di indovinare l'ordine.
-- **Quando un punto è realizzato** va in `CHANGELOG.md`, non qui: qui dentro
-  rimane solo ciò che manca.
-
-Urgenza: **Alta** = blocca il lavoro o è un buco di sicurezza; **Media** =
-funzionalità che si nota mancante; **Bassa** = rifinitura.
-
----
-
-## Alta
-
-### Le scritture delle comunicazioni non chiedono il permesso
-
-`POST /`, `PATCH /:id`, `POST /:id/invia`, `POST /:id/risposte` e `DELETE /:id` in
-`comunicazione.routes.ts` passano solo per `controllaServizio`: manca
-`requirePermesso('comunicazioni:scrivere')`, che le letture hanno già nella
-forma di `requirePermessoLettura`. Un assistente delegato che può solo registrare
-versamenti può quindi scrivere e cancellare comunicazioni ai condòmini.
-
-### Delega per condominio: compiti distribuiti
-
-Oggi un assistente ha un elenco di permessi unico per tutti i condomìni
-(`User.permessi`) e l'elenco dei condomìni in `Condominio.assistenti`: non si può
-dire "su questo stabile tutto, su quello solo i versamenti".
-
-Serve una delega per condominio, con tre casi: tutti i condomìni dell'amministratore
-(anche quelli futuri), un elenco preciso, o nessuno. Da decidere se una persona
-può avere più elenchi diversi: con il modello attuale `permessi: null` vuol dire
-accesso pieno, quindi "pieno qui e limitato lì" non è esprimibile. Il punto di
-riferimento sono `requirePermesso` e `requirePermessoLettura` in
-`middleware/auth.ts`, che già ricevono `req.params.condominioId` e possono
-quindi risolvere il giusto elenco.
-
-### Associazioni modificabili
-
-Le unità già a database devono poter essere riassociate a un condominio diverso,
-così un immobile esistente non resta inutilizzabile. Da decidere cosa ostacola
-lo spostamento: i millesimi assegnati (spostarli cambierebbe la somma di due
-tabelle), gli iscritti collegati, i versamenti registrati. Serve anche decidere se
-lo spostamento vale solo per le unità o anche per iscritti, assemblee e bilanci.
-
-## Media
-
-### Privacy policy per ruolo
-
-Serve un'informativa distinta per chi usa l'applicazione, perché il titolare del
-trattamento cambia:
-
-- **condòmini**: il titolare è l'amministratore di condominio, che tratta i dati
-  delle unità e delle quote per conto del condominio; Gestione Condomini agisce
-  da responsabile del trattamento. Dati raccolti, finalità, base giuridica,
-  conservazione, diritti dell'interessato e come esercitarli.
-- **amministratori di condominio**: il titolare è l'amministratore di
-  piattaforma, che tratta i dati del team e degli amministratori. Da valutare
-  anche l'informativa per l'amministratore di piattaforma.
-- Da decidere: firma del consenso o presa visione, se serve un registro dei
-  consensi, e dove pubblicarla (in app, sul sito, entrambi).
-
-### Operazioni CRUD mancanti nella UI
-
-L'API espone il CRUD completo di ogni dominio, la UI solo una parte:
-
-- **condomini**: mancano modifica e cancellazione (`PATCH` e `DELETE` esistono);
-- **assemblee**: mancano modifica, cancellazione, cambio stato e ricalcolo
-  millesimi;
-- **verbali**: mancano approvazione e cancellazione;
-- **bilanci**: mancano creazione, modifica, cancellazione e approvazione (esiste
-  solo la gestione delle voci e il consuntivo);
-- **versamenti**: mancano modifica e cancellazione;
-- **comunicazioni**: mancano modifica e cancellazione.
-
-### Un contratto può essere stipulato con costo zero
-
-`creaContrattoSchema` accetta `costo: 0` e il form ha `min={0}`: svuotando il
-campo, `Number('')` manda 0 e la richiesta passa. In produzione i due contratti
-esistenti hanno `costo: 0` e una rata da 0. Serve una decisione: rifiutare lo
-zero, o distinguerlo da un campo vuoto.
-
-## Bassa
-
-### Storico delle revisioni della tabella millesimali
-
-`GET /tabella-millesimi/revisioni` esiste e non è mostrato da nessuna parte.
-
-### Allineare il nome nelle email
-
-Oggetto e firma dei modelli email dicono ancora "Steward", mentre la UI dice
-"Gestione Condomini".
-
-### Tenere allineati blueprint e pannello Render
-
-`BREVO_API_KEY`, `BREVO_MITTENTE_EMAIL` e `MONGODB_URI` sono `sync: false`: il
-blueprint non le valorizza e il pannello le tiene. Ogni modifica futura va
-annunciata da qualche parte, altrimenti si perde il sincronismo e ci si
-ritrova con un mittente sbagliato in produzione.
+PRIORITA BASSA
+- alle diverse voci di bilancio, delle assemblee, dei verbali e ai messaggi deve essere possibile allegare dei documenti: ogni documento ha un "oggetto" (obbligatorio), una "descrizione" (facoltativa), una "fonte" (facoltativa), un riferimento (facoltativo), e ovviamente un contenuto (in byte) oltre che un formato (mimetype). gli allegati saranno salvati nel database (upload in campi blob)
+- Attività: bacheca del team amministrativo
+  - Il dominio si chiama **attività**, non "todo": `TODO.md` è la lista delle cose da fare di chi scrive il codice, e con due "todo" in giro tra sei mesi non si saprebbe di quale si sta parlando
+  - Va su `/staff/attivita`, l'unico perimetro fuori da `/condomini/:id`, perché l'attività è del team e non di uno stabile. Lì il team esiste già: `User.delegatoDa` lega ogni assistente a chi l'ha delegato e `requireRole('admin')` ne governa la creazione
+  - Destinatari: più assistenti contemporaneamente, al limite tutti quelli del team. **Elenco id esplicito**, mai "elenco vuoto significa tutti": è la trappola di `permessi: null`, dove `null` è pieno e `[]` è vuoto
+  - Chi può fare cosa: solo il proprietario cancella, l'assegnatario può solo marcare "fatto". È un'asimmetria **sul documento**, non sul ruolo, quindi nessuno dei tre guard la esprime: il controllo va nel service (`se il proprietario non sono io, no`)
+  - **Non serve un ambito in `AMBITI`**: l'accesso nasce dalla relazione di assegnazione, non da un permesso. La bacheca la vede l'amministratore delegante, perché il team è il suo; l'assistente vede solo le attività a lui assegnate
+  - I completati restano visibili con aspetto diverso e spariscono solo su eliminazione esplicita
+  - Thread: ogni attività può generare un thread con altre voci dello stesso tipo. Essendo `parent` su se stesso, serve un controllo di profondità per non costruire un ciclo
+  - Ogni attività ha data di inizio e data di fine
+  - Bacheca a card: cliccando la card il contenuto della bacheca viene sostituito dal thread
+  - Un'attività in un thread può essere **milestone**: il figlio ha le proprie date, il padre le vede ma non le governa
+  - Cascata delle proroghe ⏸ rimandata
+    - la proroga di una milestone deve prorogare anche l'attività di livello superiore, in cascata
+    - in v1 non esiste, e va bene: le date prima si stabilizzano, poi si propaga. Quando si farà, serviranno prevenzione dei cicli, ordine delle scritture definito e comportamento deciso quando un figlio viene eliminato o spostato sotto un altro padre

@@ -93,8 +93,12 @@ export async function buildTabella(
     revisione: rev,
     totale,
     ripartizioniAttive,
-    valida: problemi.length === 0,
-    problemi,
+    // Una tabella senza nessuna quota non è una tabella valida: senza righe
+    // `ripartizioniAttive` è vuota, `analizzaSomme` non ha nulla da confrontare
+    // e restituirebbe `valida: true` su un totale inesistente. La ripartizione
+    // di diritto è la base di ogni quota, quindi è quella che si assume lo scarto.
+    valida: ripartizioniAttive.length > 0 && problemi.length === 0,
+    problemi: ripartizioniAttive.length === 0 ? [{ ripartizione: 'diritto', totale: 0, scarto: -1000 }] : problemi,
     righe,
     delibera: condominio.deliberaRipartizione,
     dataDelibera: condominio.dataDeliberaRipartizione?.toISOString(),

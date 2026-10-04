@@ -269,7 +269,10 @@ export interface RiepilogoCondominio {
   tabella?: {
     revisione: number;
     valida: boolean;
+    /** Ripartizioni per cui esiste almeno una quota: se vuota, la tabella non è ancora definita. */
+    ripartizioniAttive: Ripartizione[];
     totaleDiritto: number;
+    problemi: { ripartizione: Ripartizione; totale: number; scarto: number }[];
     delibera?: string;
   };
 }
@@ -399,6 +402,11 @@ export interface Assemblea {
   allegati: Allegato[];
   note?: string;
   verbale?: { assemblea: string; numero: number; approvato: boolean } | null;
+  /**
+   * Stati che il server accetterebbe da questo stato. Li calcola il server:
+   * replicare la regola nel client la farebbe divergere.
+   */
+  transizioniConsentite?: StatoAssemblea[];
 }
 
 export interface Allegato {

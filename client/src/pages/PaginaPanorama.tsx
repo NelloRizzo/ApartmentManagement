@@ -3,9 +3,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useApi } from '@/hooks/useApi';
 import { api } from '@/api/client';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
-import { Statistica } from '@/components/Elementi';
+import { Statistica, etichette } from '@/components/Elementi';
 import { TitoloPagina } from '@/components/TitoloPagina';
-import { euro, data as fmtData, mese } from '@/lib/formattazione';
+import { euro, numero, data as fmtData, mese } from '@/lib/formattazione';
 import type { Permesso, RiepilogoCondominio, RiepilogoQuote } from '@/types/domain';
 
 /**
@@ -100,15 +100,33 @@ export default function PaginaPanorama() {
       {riepilogo.dati?.tabella && (
         <div className={`avviso ${riepilogo.dati.tabella.valida ? 'avviso-successo' : 'avviso-avviso'}`} style={{ marginTop: 'var(--sp-4)' }}>
           <span>
-            {riepilogo.dati.tabella.valida ? (
+            {riepilogo.dati.tabella.ripartizioniAttive.length === 0 ? (
+              <>
+                <strong>Attenzione:</strong> non è definita alcuna quota millesimale. Le quote non possono
+                essere calcolate finché la tabella non è stata impostata.
+              </>
+            ) : riepilogo.dati.tabella.valida ? (
               <>
                 La tabella millesimale è valida: la somma dei millesimi di diritto fa{' '}
-                <strong>{riepilogo.dati.tabella.totaleDiritto}</strong> (revisione {riepilogo.dati.tabella.revisione}).
+                <strong>{numero(riepilogo.dati.tabella.totaleDiritto)}</strong> (revisione{' '}
+                {riepilogo.dati.tabella.revisione}).
               </>
             ) : (
               <>
                 <strong>Attenzione:</strong> la tabella millesimale non raggiunge i 1000 millesimi. Le quote non
                 possono essere calcolate correttamente.
+                {riepilogo.dati.tabella.problemi.length > 0 && (
+                  <>
+                    {' '}
+                    Scarto per {riepilogo.dati.tabella.problemi.map((p) => (
+                      <span key={p.ripartizione} className="testo-faint">
+                        {etichette.ripartizione(p.ripartizione)} {numero(p.totale)} ({p.scarto > 0 ? '+' : ''}
+                        {numero(p.scarto)})
+                      </span>
+                    ))}{' '}
+                    <br />
+                  </>
+                )}
               </>
             )}
             {riepilogo.dati.tabella.delibera && (

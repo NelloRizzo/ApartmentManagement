@@ -4,6 +4,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { useConferma } from '@/components/Conferma';
 import { EtichettaStato } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { AreaStampa, PulsanteStampa } from '@/components/Stampa';
@@ -63,6 +64,9 @@ export default function PaginaBilanci() {
   const [voceInModifica, setVoceInModifica] = useState<{ bilancio: string; voce: string } | null>(null);
   const [nuovaVoce, setNuovaVoce] = useState<{ bilancio: string } | null>(null);
   const [consuntivoInCorso, setConsuntivoInCorso] = useState(false);
+  const [inAzione, setInAzione] = useState(false);
+  const [bilancioInModifica, setBilancioInModifica] = useState<Bilancio | null>(null);
+  const { chiedi, elemento: conferma } = useConferma();
 
   const anni = [oggi.getFullYear() - 2, oggi.getFullYear() - 1, oggi.getFullYear(), oggi.getFullYear() + 1];
 
@@ -94,8 +98,81 @@ export default function PaginaBilanci() {
     }
   }
 
-  async function eliminaVoce(bilancioId: string, voceId: string, descrizione: string) {
-    if (!window.confirm(`Eliminare la voce «${descrizione}»? L'operazione non è reversibile.`)) return;
+  /**
+ * Crea il preventivo dell'anno, vuoto: le voci si aggiungono dopo.
+ *
+ * Il server rifiuta la stessa coppia anno+tipo, quindi il pulsante compare solo
+ * quando l'anno è davvero vuoto.
+ */
+async function creaPreventivo() {
+  setInAzione(true);
+  try {
+    await api.post(`/condomini/${condominioId}/bilanci`, {
+      anno,
+      tipo: 'preventivo',
+      voci: [],
+      descrizione: `Preventivo ${anno}`,
+    });
+    notifica(`Preventivo ${anno} creato`);
+    await bilanci.ricarica();
+  } catch (e) {
+    notifica(e instanceof ApiError ? e.message : 'Creazione non riuscita', 'errore');
+  } finally {
+    setInAzione(false);
+  }
+}
+
+/** Approva o revoca l'approvazione del bilancio. */
+async function approva(bilancio: Bilancio, approvato: boolean) {
+  setInAzione(true);
+  try {
+    await api.post(`/condomini/${condominioId}/bilanci/${bilancio._id}/approva`, { approvato });
+    notifica(approvato ? 'Bilancio approvato' : 'Approvazione revocata');
+    await bilanci.ricarica();
+  } catch (e) {
+    notifica(e instanceof ApiError ? e.message : 'Operazione non riuscita', 'errore');
+  } finally {
+    setInAzione(false);
+  }
+}
+
+/**
+ * Elimina l'intero bilancio.
+ *
+ * Il server lo rifiuta se è approvato: quel pulsante resta nascosto in quel caso,
+ * perché un rifiuto qui sarebbe un vicolo cieco e non un errore da correggere.
+ */
+async function eliminaBilancio(bilancio: Bilancio) {
+    const nome = bilancio.tipo === 'consuntivo' ? 'consuntivo' : 'preventivo';
+    const confermato = await chiedi({
+      titolo: 'Eliminare il bilancio',
+      messaggio: `Stai eliminando il ${nome} ${bilancio.anno} con tutte le sue ${bilancio.voci.length} voci. L'operazione non è reversibile.`,
+      conferma: 'Elimina',
+      pericolo: true,
+    });
+    if (!confermato) return;
+
+
+  setInAzione(true);
+  try {
+    await api.delete(`/condomini/${condominioId}/bilanci/${bilancio._id}`);
+    notifica('Bilancio eliminato');
+    await bilanci.ricarica();
+  } catch (e) {
+    notifica(e instanceof ApiError ? e.message : 'Eliminazione non riuscita', 'errore');
+  } finally {
+    setInAzione(false);
+  }
+}
+
+async function eliminaVoce(bilancioId: string, voceId: string, descrizione: string) {
+    const confermato = await chiedi({
+      titolo: 'Eliminare la voce',
+      messaggio: `Stai eliminando la voce «${descrizione}» e l'importo collegato. L'operazione non è reversibile.`,
+      conferma: 'Elimina',
+      pericolo: true,
+    });
+    if (!confermato) return;
     try {
       await api.delete(`/condomini/${condominioId}/bilanci/${bilancioId}/voci/${voceId}`);
       notifica('Voce eliminata');
@@ -108,9 +185,10 @@ export default function PaginaBilanci() {
 
   return (
     <RichiediCondominio>
+      {conferma}
       <TitoloPagina
         titolo="Bilanci"
-        descrizione="Preventivo dell'anno in corso e consuntivo dell'anno che lo precede."
+        descrizione="Preventivo e consuntivo dell'anno selezionato."
         azioni={
           <div className="riga">
             {bilanci.dati !== null && bilanci.dati.length > 0 && <PulsanteStampa etichetta="Stampa / PDF" />}
@@ -140,26 +218,44 @@ export default function PaginaBilanci() {
         <AreaStampa>
           <h1 className="visually-hidden">Bilanci {anno}</h1>
           <div className="pila-4">
-            {bilanci.dati.length === 0 && (
+{bilanci.dati.length === 0 && (
               <PaginaVuota
                 titolo={`Nessun bilancio per il ${anno}`}
                 descrizione="Crea il preventivo dell'anno: è la base su cui si calcolano le quote dovute ai condòmini."
               />
             )}
 
+            {puoScrivere && !preventivo && (
+              <section className="scheda">
+                <div className="scheda-corpo pila-2">
+                  <p className="testo-muto">
+                    Il preventivo {anno} non esiste ancora. Si crea vuoto, poi si aggiungono le voci
+                    una alla volta.
+                  </p>
+                  <button type="button" className="btn btn-primario" onClick={creaPreventivo} disabled={inAzione}>
+                    {inAzione ? 'Creazione…' : `Crea preventivo ${anno}`}
+                  </button>
+                </div>
+              </section>
+            )}
+
             {bilanci.dati.map((b) => (
-            <SezioneBilancio
-              key={b._id}
-              bilancio={b}
-              puoScrivere={puoScrivere}
-              voceInModifica={voceInModifica}
-              nuovaVoce={nuovaVoce}
-              setVoceInModifica={setVoceInModifica}
-              setNuovaVoce={setNuovaVoce}
-              onElimina={eliminaVoce}
-              onRicarica={bilanci.ricarica}
-            />
-          ))}
+              <SezioneBilancio
+                key={b._id}
+                bilancio={b}
+                puoScrivere={puoScrivere}
+                voceInModifica={voceInModifica}
+                nuovaVoce={nuovaVoce}
+                setVoceInModifica={setVoceInModifica}
+                setNuovaVoce={setNuovaVoce}
+                onElimina={eliminaVoce}
+                onRicarica={bilanci.ricarica}
+                onModifica={setBilancioInModifica}
+                onApprova={approva}
+                onEliminaBilancio={eliminaBilancio}
+                inAzione={inAzione}
+              />
+            ))}
 
           {preventivo && !consuntivo && puoScrivere && (
             <section className="scheda">
@@ -216,6 +312,17 @@ export default function PaginaBilanci() {
           </div>
         </AreaStampa>
       )}
+
+      {bilancioInModifica && (
+        <ModificaBilancio
+          bilancio={bilancioInModifica}
+          onChiudi={() => setBilancioInModifica(null)}
+          onSalvato={async () => {
+            setBilancioInModifica(null);
+            await bilanci.ricarica();
+          }}
+        />
+      )}
     </RichiediCondominio>
   );
 }
@@ -230,6 +337,10 @@ function SezioneBilancio({
   setNuovaVoce,
   onElimina,
   onRicarica,
+  onModifica,
+  onApprova,
+  onEliminaBilancio,
+  inAzione,
 }: {
   bilancio: Bilancio;
   puoScrivere: boolean;
@@ -239,6 +350,10 @@ function SezioneBilancio({
   setNuovaVoce: (v: { bilancio: string } | null) => void;
   onElimina: (bilancioId: string, voceId: string, descrizione: string) => void;
   onRicarica: () => void;
+  onModifica: (bilancio: Bilancio) => void;
+  onApprova: (bilancio: Bilancio, approvato: boolean) => void;
+  onEliminaBilancio: (bilancio: Bilancio) => void;
+  inAzione: boolean;
 }) {
   const { condominioId } = useAuth();
   const consuntivo = bilancio.tipo === 'consuntivo';
@@ -261,6 +376,42 @@ function SezioneBilancio({
             >
               {nuovaVoce?.bilancio === bilancio._id ? 'Annulla' : '+ Voce'}
             </button>
+          )}
+          {puoScrivere && (
+            <>
+              <button
+                type="button"
+                className="btn btn-sm btn-fantasma"
+                onClick={() => onApprova(bilancio, !bilancio.approvato)}
+                disabled={inAzione}
+                title={
+                  bilancio.approvato
+                    ? 'Revoca: il bilancio torna modificabile'
+                    : 'Approva: il bilancio diventa ratificato e non più modificabile'
+                }
+              >
+                {bilancio.approvato ? 'Revoca approvazione' : 'Approva'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-fantasma"
+                onClick={() => onModifica(bilancio)}
+                disabled={inAzione || bilancio.approvato}
+                aria-label={`Modifica i dati del bilancio ${bilancio.anno}`}
+              >
+                Modifica
+              </button>
+              {!bilancio.approvato && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-pericolo"
+                  onClick={() => onEliminaBilancio(bilancio)}
+                  disabled={inAzione}
+                >
+                  Elimina
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -357,6 +508,113 @@ function SezioneBilancio({
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Modifica dei dati del bilancio: descrizione e note.
+ *
+ * Anno e tipo non sono editabili: sono la chiave del documento (l'indice
+ * univoco li usa) e cambiare il tipo in un anno che ha già il consuntivo
+ * lascerebbe due documenti incompatibili.
+ */
+function ModificaBilancio({
+  bilancio,
+  onChiudi,
+  onSalvato,
+}: {
+  bilancio: Bilancio;
+  onChiudi: () => void;
+  onSalvato: () => void;
+}) {
+  const { condominioId } = useAuth();
+  const [descrizione, setDescrizione] = useState(bilancio.descrizione ?? '');
+  const [note, setNote] = useState(bilancio.note ?? '');
+  const [inCorso, setInCorso] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  async function salva() {
+    setErrore(null);
+    setInCorso(true);
+    try {
+      await api.patch(`/condomini/${condominioId}/bilanci/${bilancio._id}`, {
+        descrizione: descrizione.trim(),
+        note: note.trim(),
+      });
+      notifica('Bilancio aggiornato');
+      onSalvato();
+    } catch (e) {
+      setErrore(e instanceof ApiError ? (e.primoErroreValidazione ?? e.message) : 'Salvataggio non riuscito');
+      setInCorso(false);
+    }
+  }
+
+  return (
+    <div className="velo" role="presentation" onClick={onChiudi}>
+      <div
+        className="scheda"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Modifica bilancio ${bilancio.anno}`}
+        style={{ width: 'min(34rem, 94vw)', maxHeight: '92dvh', overflowY: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="scheda-intestazione">
+          <h2>
+            Dati del bilancio {bilancio.anno} ·{' '}
+            {bilancio.tipo === 'consuntivo' ? 'consuntivo' : 'preventivo'}
+          </h2>
+          <button type="button" className="btn btn-fantasma btn-sm" onClick={onChiudi} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+
+        <div className="scheda-corpo pila-3">
+          {errore && (
+            <div className="avviso avviso-pericolo" role="alert">
+              {errore}
+            </div>
+          )}
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="mb-descrizione">
+              Descrizione
+            </label>
+            <input
+              id="mb-descrizione"
+              className="area"
+              value={descrizione}
+              onChange={(e) => setDescrizione(e.target.value)}
+              placeholder="Es. preventivo deliberato dall'assemblea del 12 marzo"
+              maxLength={500}
+            />
+          </div>
+
+          <div className="campo">
+            <label className="campo-etichetta" htmlFor="mb-note">
+              Note
+            </label>
+            <textarea
+              id="mb-note"
+              className="area"
+              rows={4}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={4000}
+            />
+          </div>
+
+          <div className="riga">
+            <button type="button" className="btn btn-primario cresci" onClick={salva} disabled={inCorso}>
+              {inCorso ? 'Salvataggio…' : 'Salva'}
+            </button>
+            <button type="button" className="btn btn-fantasma" onClick={onChiudi}>
+              Annulla
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

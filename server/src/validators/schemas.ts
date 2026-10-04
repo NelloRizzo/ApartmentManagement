@@ -479,7 +479,9 @@ export const aggiornaAmministratoreSchema = z.object({
   cognome: z.string().trim().min(1).max(80).optional(),
   telefono: z.string().trim().max(30).nullable().optional(),
   attivo: z.boolean().optional(),
-  permessi: listaPermessi.optional(),
+  // `null` significa accesso pieno: senza questo modo la delega sarebbe una
+  // strada a senso unico, perché un elenco vuoto non concede nulla.
+  permessi: listaPermessi.nullable().optional(),
 });
 
 export const creaAssistenteSchema = z.object({
