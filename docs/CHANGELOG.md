@@ -4,6 +4,65 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-05
 
+### `pila-N` non dava nessuno spazio, in 76 punti del frontend
+
+`.pila-1` fino a `.pila-6` impostavano **solo** `gap`, mentre `display: flex` e
+`flex-direction: column` stavano su `.pila`, una classe che nessuno scriveva:
+`className="scheda-corpo pila-4"` non contiene `pila`. L'elemento restava un block e
+`gap` su un block non fa nulla.
+
+Non si vedeva come un problema di spaziatura, ma come "manca un margine sopra" in
+punti che sembravano non avere niente in comune: il modulo di un nuovo assistente, la
+pagina di un contratto, la tabella millesimale, la bacheca. **Sessantasei
+occorrenze in ventisette file** avevano la classe con lo spazio che non arrivava.
+
+Ora il `display: flex` è su `pila-1..6` oltre che su `.pila`: la classe sta in
+piedi da sola. Le quattro `.margine-sopra` che erano state messe a mano come
+tappo dentro un contenitore `pila-*` sono state tolte, perché adesso farebbero
+spazio doppio.
+
+### La stessa classe, in tre punti senza `riga`
+
+`riga-tra` è un `justify-content: space-between` e funziona **solo su un elemento
+flex**. Tre scavalchi su elementi che non lo erano, quindi la spazione non si
+vedeva: il bottone "Allega file" negli allegati, il bottone del materiale del punto
+in una assemblea, e una classe del tutto morta con uno stile inline ridondante
+nella pagina dei versamenti. La regola non è "serve `riga`" ma "l'elemento deve
+essere flex": `.voce riga-tra` va bene anche senza `riga`, perché `.voce` è già
+flex.
+
+### Nella tabella millesimale il campo era più a sinistra del titolo
+
+Le intestazioni hanno `className="num"`, quindi sono allineate a destra, ma il campo
+è un `<input>` a larghezza fissa dentro una cella allineata a destra: le cifre
+finivano `padding` e bordo più indietro rispetto al titolo sopra, e sembrava che il
+titolo fosse a destra e il campo a sinistra.
+
+Ora il simbolo dei millesimi sta **dopo** il campo e non dentro: dentro, l'utente
+potrebbe digitarlo e il campo è un `number` che rifiuterebbe la lettera senza
+spiegare perché. Resta con `aria-hidden`, perché l'`aria-label` del campo dice già di
+che quota si tratta e un simbolo ripetuto su ogni riga non aggiungerebbe nulla a chi
+lo ascolta.
+
+### "Legge" si poteva disattivare con "Scrive" attivo
+
+`haPermesso` **deriva** la lettura dalla scrittura, quindi togliere la casella non
+toglieva niente al collega: lasciava una casella spuntata che diceva il contrario di
+quanto concesso, e si salvava uno stato che il backend già considerava equivalente.
+La casella "Legge" ora è disabilitata quando "Scrive" è attivo, invece di ignorare il
+clic in silenzio.
+
+### `bugs.md` e `new_tasks.md` escono dal repository
+
+Entrambi sono in `.gitignore` e non sono più tracciati. Sono le due code di lavoro di
+chi guida il progetto e, per costruzione, sono transitorie: un bug viene risolto o
+spostato in `TODO.md`, un'idea viene discussa e poi entra in `TODO.md` o muore. Se
+finissero nella storia sembrerebbero decisioni prese, e non lo sono.
+
+Sono state svuotate: le quattro idee di `new_tasks.md` sono realizzate o spostate in
+`TODO.md`, e i quattro bug di `bugs.md` sono risolti tranne lo storico delle quote
+millesimali, che ora ha una voce in `TODO.md` con le due decisioni ancora da prendere.
+
 ### Un amministratore poteva leggere i messaggi di qualunque condominio
 
 Il condominio non arrivava mai alla query, e in due punti diversi.

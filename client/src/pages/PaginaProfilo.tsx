@@ -247,7 +247,7 @@ function ModuloPassword() {
           </div>
         )}
 
-        <button type="button" className="btn btn-secondario margine-sopra" onClick={cambia} disabled={inCorso || !completo}>
+        <button type="button" className="btn btn-secondario" onClick={cambia} disabled={inCorso || !completo}>
           {inCorso ? 'Cambio in corso…' : 'Cambia password'}
         </button>
       </div>

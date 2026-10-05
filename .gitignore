@@ -24,3 +24,8 @@ client/dev-dist/
 # Non e' "docs come gli altri": le idee non ancora decise non servono a chi
 # legge il codice, e committarle finisce per farle sembrare scelte.
 docs/new_tasks.md
+
+# Anche i bug restano in locale, per lo stesso motivo: `bugs.md` raccoglie cose
+# che stanno per essere sistemate o spostate in `TODO.md`, quindi non devono
+# entrare nella storia del repository.
+docs/bugs.md

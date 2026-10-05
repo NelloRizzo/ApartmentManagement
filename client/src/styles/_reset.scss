@@ -124,7 +124,27 @@ span.testo-faint { margin-left: var(--sp-1); }
 .testo-destra { text-align: right; }
 .testo-num { font-variant-numeric: tabular-nums; }
 
-.pila { display: flex; flex-direction: column; }
+/*
+ * `pila-N` sta in piedi da solo: il `display: flex` è qui e non solo in `.pila`.
+ *
+ * Prima era su `.pila` insieme a `flex-direction`, e le due classi andavano
+ * abbinate: `className="scheda-corpo pila-4"` non conteneva `pila`, quindi
+ * l'elemento restava un block e `gap` su un block non fa nulla. Sessantasei
+ * punti del frontend avevano la classe con lo spazio che non arrivava, e la
+ * cosa si vedeva come "manca un margine sopra" in punti che sembravano non
+ * avere niente in comune.
+ */
+.pila,
+.pila-1,
+.pila-2,
+.pila-3,
+.pila-4,
+.pila-5,
+.pila-6 {
+  display: flex;
+  flex-direction: column;
+}
+
 .pila-1 { gap: var(--sp-1); }
 .pila-2 { gap: var(--sp-2); }
 .pila-3 { gap: var(--sp-3); }

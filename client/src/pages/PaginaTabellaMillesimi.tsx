@@ -182,18 +182,31 @@ function EditorTabella({ tabella, onSalvato }: { tabella: TabellaMillesimale; on
                 <td className="num">{r.piano}</td>
                 {attive.map((rip) => (
                   <td key={rip} className="num">
-                    <input
-                      className="area"
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      max={1000}
-                      step="0.001"
-                      value={r.quote[rip] ?? ''}
-                      onChange={(e) => aggiornaQuota(r.unitaId, rip, e.target.value)}
-                      style={{ width: '5.5rem', textAlign: 'right', minHeight: '2.25rem', padding: '0.2rem 0.4rem' }}
-                      aria-label={`${r.codice} quota ${rip}`}
-                    />
+                    {/*
+                      Il simbolo dei millesimi va dopo il campo e non dentro: dentro
+                      l'utente potrebbe digitarlo, e il campo è un `number` che
+                      rifiuterebbe la lettera senza spiegare perché. `aria-hidden`
+                      perché l'`aria-label` del campo dice già di che quota si tratta
+                      e il simbolo ripetuto su ogni riga non aggiungerebbe nulla a
+                      chi lo ascolta.
+                    */}
+                    <span className="riga" style={{ justifyContent: 'flex-end' }}>
+                      <input
+                        className="area"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        max={1000}
+                        step="0.001"
+                        value={r.quote[rip] ?? ''}
+                        onChange={(e) => aggiornaQuota(r.unitaId, rip, e.target.value)}
+                        style={{ width: '5.5rem', textAlign: 'right', minHeight: '2.25rem', padding: '0.2rem 0.4rem' }}
+                        aria-label={`${r.codice} quota ${rip}`}
+                      />
+                      <span aria-hidden="true" className="testo-faint">
+                        ‰
+                      </span>
+                    </span>
                   </td>
                 ))}
               </tr>
@@ -288,7 +301,7 @@ function EditorTabella({ tabella, onSalvato }: { tabella: TabellaMillesimale; on
 
       <button
         type="button"
-        className="btn btn-primario btn-pieno btn-grande margine-sopra"
+        className="btn btn-primario btn-pieno btn-grande"
         onClick={salva}
         disabled={inSalvataggio || problemi.length > 0}
       >

@@ -462,7 +462,7 @@ export function AllegatiSezione({
 
   return (
     <div className="campo">
-      <div className="riga-tra">
+      <div className="riga riga-tra">
         <span className="campo-etichetta">{titolo}</span>
         {puoScrivere && !aperto && (
           <button type="button" className="btn btn-fantasma btn-sm" onClick={() => setAperto(true)}>

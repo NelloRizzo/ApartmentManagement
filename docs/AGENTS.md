@@ -8,8 +8,13 @@ Leggi questo file prima di toccare il codice.
 - `AGENTS.md` (questo file): convenzioni del codice e regole del dominio;
 - `reset-produzione.md`: come azzerare il database di produzione;
 - `TODO.md`: le cose da realizzare, ordinate per urgenza;
-- `bugs.md`: i difetti riscontrati navigando l'applicazione;
 - `CHANGELOG.md`: cosa è cambiato e perché.
+
+**`bugs.md` e `new_tasks.md` sono in `.gitignore`**: restano in locale e non
+entrano nel repository. Sono le due code di lavoro di chi guida il progetto, e
+per costruzione sono transitorie — un bug viene risolto o spostato in `TODO.md`,
+un'idea viene discussa e poi entra in `TODO.md` o muore. Se finissero nella
+storia del repository sembrerebbero decisioni prese, e non lo sono.
 
 **Prima di proporre un intervento, leggere `TODO.md`.** Se un punto aperto
 riguarda ciò che stai per toccare, chiedere quale affrontare e con quale
@@ -28,7 +33,9 @@ che nessuna verifica automatica copre.
 
 **Ogni difetto trovato in navigazione va messo in `bugs.md`**, con la pagina in
 cui si manifesta e come si arriva a riprodurlo. Serve a chi lo troverà dopo di te,
-che non avrà la tua sessione.
+che non avrà la tua sessione. Il file è in locale e non entra nel repository,
+perché è una coda di lavoro e non un documento: niente di quel che ci scrivi deve
+sopravvivere alla sessione.
 
 Un bug in `bugs.md` ha due destini, e non si lascia a metà:
 
@@ -39,7 +46,10 @@ Un bug in `bugs.md` ha due destini, e non si lascia a metà:
   priorità non spetta a chi lo ha trovato.
 
 Non si lascia un bug in `bugs.md` senza averlo né risolto né spostato: un file
-che si riempie e non si svuota non serve a nessuno.
+che si riempie e non si svuota non serve a nessuno. **A fine sessione `bugs.md`
+deve essere vuoto**: quello che resta va comunicato a chi guida il progetto e
+spostato in `TODO.md` sotto `PRIORITA ALTA`, perché è un difetto noto che
+rischia di essere perso.
 
 ## Cosa fa l'applicazione
 
@@ -259,7 +269,17 @@ già composti.
   diventa sidebar. I target touch sono almeno 2.75rem.
 - Gli input usano `font-size: 16px` (`var(--fs-md)`) per evitare lo zoom
   automatico su iOS.
-- Usare i token SCSS in `_tokens.scss`. Non inventare colori o spaziature.
+- **I pulsanti usano `token SCSS` in `_tokens.scss`.** Non inventare colori o
+  spaziature.
+- **`pila-N` sta in piedi da solo**: il `display: flex` è su `.pila-1..6` e non
+  solo su `.pila`. Non scrivere `className="pila-4"` aspettandoti che `.pila` ci
+  sia: `gap` su un elemento che non è flex non fa nulla, e il difetto si vede
+  come "manca un margine sopra" in punti che sembrano non avere niente in comune.
+- **`riga-tra` funziona solo su un elemento flex**, perché è un
+  `justify-content: space-between`. Va abbinata a `riga`, ma anche a un'altra
+  classe flex come `.voce`: la regola è che l'elemento sia flex, non che ci sia
+  per forza `riga`. Senza, i due figli si impilano e sembra un problema di
+  margini.
 - Il testo utente è in italiano. I messaggi di errore dell'API arrivano già
   in italiano: mostrarli così come sono.
 - `useApi` gestisce caricamento, errore e cancellazione della richiesta

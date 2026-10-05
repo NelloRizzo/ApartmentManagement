@@ -104,7 +104,7 @@ export default function PaginaVersamenti() {
             </div>
 
             {q.righe.map((r) => (
-              <details key={r.unitaId} className="riga-tra" style={{ display: 'block' }}>
+              <details key={r.unitaId}>
                 <summary style={{ cursor: 'pointer', fontSize: 'var(--fs-sm)' }}>
                   {r.codice} · {numero(r.millesimi)} millesimi · {euro(r.totale)}
                 </summary>

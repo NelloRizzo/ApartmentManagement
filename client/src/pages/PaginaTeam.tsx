@@ -164,14 +164,22 @@ function ModuloAssistente({
     setPermessi((precedenti) => {
       const prossimo = new Set(precedenti);
       const chiave = `${ambito}:${azione}` as Permesso;
+      const scrive = `${ambito}:scrivere` as Permesso;
+      const legge = `${ambito}:leggere` as Permesso;
       if (prossimo.has(chiave)) {
+        // La lettura si può togliere solo se l'ambito non è in scrittura.
+        // `haPermesso` deriva già la lettura dalla scrittura, quindi togliere
+        // "Legge" qui non toglierebbe niente al collega: lascerebbe una casella
+        // spuntata che dice il contrario di quanto concesso, e il salvataggio
+        // salverebbe uno stato che il backend già considera equivalente.
+        if (azione === 'leggere' && prossimo.has(scrive)) return prossimo;
         prossimo.delete(chiave);
-        // Togliere la scritture toglie anche la lettura: altrimenti l'ambito
+        // Togliere la scrittura toglie anche la lettura: altrimenti l'ambito
         // resterebbe attivo solo in sola lettura.
-        if (azione === 'scrivere') prossimo.delete(`${ambito}:leggere` as Permesso);
+        if (azione === 'scrivere') prossimo.delete(legge);
       } else {
         prossimo.add(chiave);
-        if (azione === 'scrivere') prossimo.add(`${ambito}:leggere` as Permesso);
+        if (azione === 'scrivere') prossimo.add(legge);
       }
       return prossimo;
     });
@@ -366,6 +374,10 @@ function ModuloAssistente({
                         <input
                           type="checkbox"
                           checked={permessi.has(`${a.chiave}:leggere` as Permesso)}
+                          // Disabilitato, non solo ignorato: con "Scrive" attivo la
+                          // casella resta spuntata e il clic non deve sembrare
+                          // che non funzioni.
+                          disabled={permessi.has(`${a.chiave}:scrivere` as Permesso)}
                           onChange={() => commuta(a.chiave, 'leggere')}
                         />
                         <span style={{ fontSize: 'var(--fs-sm)' }}>Legge</span>

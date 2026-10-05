@@ -441,7 +441,7 @@ function ContenutoDettaglio({
                   </div>
 
                   {puoScrivere && !readonly && (
-                    <div className="riga-tra">
+                    <div className="riga riga-tra">
                       <span className="testo-faint">Materiale del punto</span>
                       <AllegatiBottone
                         endpoint={`/condomini/${condominioId}/assemblee/${a._id}/ordine/${punto.ordine}/allegati`}

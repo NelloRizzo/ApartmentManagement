@@ -36,6 +36,11 @@ PRIORITA MEDIA
   - l'esportazione dei dati propri non è esposta: `mieDati` in `comunicazione.controller.ts` raccoglie comunicazioni, legami e registro operazioni di un utente ma nessuna rotta la chiama, quindi oggi l'interessato non può scaricarli
 
 PRIORITA BASSA
+- Lo storico delle quote millesimali non è consultabile, ma il messaggio lo promette
+  - la pagina della tabella dice "Salvando, la revisione precedente resta consultabile nello storico", e non c'è nessuno storico: segnalato in `bugs.md`
+  - intanto il testo va cambiato, perché un messaggio che promette uno storico che non c'è è peggio di uno che non lo nomina
+  - i dati ci sono già: `QuotaMillesimale` ha `revisione`, `validFrom` e `validTo`, e la tabella attiva si ottiene filtrando per revisione corrente. Manca solo la parte che mostra le revisioni chiuse
+  - va deciso cosa mostrare: la tabella completa di ogni revisione, o solo le variazioni rispetto alla precedente. La seconda è più utile per capire chi ha cambiato che cosa, e costa di più
 - Cascata delle proroghe fra attività ⏸ rimandato
   - la proroga di una milestone deve prorogare anche l'attività di livello superiore, in cascata: oggi ogni attività ha le sue date e il padre le vede senza governarle
   - va fatto quando le date sono stabili, e richiede prevenzione dei cicli, ordine delle scritture definito e comportamento deciso quando una voce viene eliminata o spostata sotto un altro padre
