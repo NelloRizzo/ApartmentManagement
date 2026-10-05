@@ -19,11 +19,11 @@ PRIORITA MEDIA
   - `npm test` copre oggi solo i permessi, che sono l'area a rischio più alto
   - `quoteVersamenti.service.ts` (riparto del residuo sui centesimi, nuda proprietà, regime) e `verbale.service.ts` (quorum ordinaria e straordinaria, millesimi rappresentati, delibere con segnaposto) sono la seconda area a rischio alto e non hanno test
   - `scripts/verifica-bilancio.ps1` e `verifica-crud-verbali.ps1` coprono il percorso via API, ma non i casi limite del calcolo
-- L'elenco degli assistenti può non mostrare chi è stato appena creato
-  - "il mio team" è definito in due modi diversi e non coincidono: `creaAssistente` scrive `User.delegatoDa`, ma `listAssistenti` deriva l'elenco da `Condominio.assistenti`, cioè dagli stabili che l'interessato amministra
-  - un assistente appena creato non è su nessun condominio, quindi non compare in `GET /staff/assistenti`: dalla pagina Team lo si crea e non lo si vede
-  - nel verso opposto, un assistente creato da un altro amministratore ma aggiunto a uno dei miei stabili compare nella mia lista pur non essendo mio
-  - le attività usano `delegatoDa` e sono coerenti; questa voce riguarda solo l'elenco degli assistenti, che va deciso: mostrare `delegatoDa`, `Condominio.assistenti`, o entrambi come elenchi distinti
+- Delegare un assistente a un solo condominio
+  - oggi la delega è tutto o niente: `creaAssistente` fa `Condominio.updateMany({ amministratore: delegante }, { $addToSet: { assistenti } })`, quindi l'assistente entra in **tutti** gli stabili dell'amministratore in un colpo solo, e `revocaAssistente` lo esce da tutti
+  - non è un'incoerenza fra `User.delegatoDa` e `Condominio.assistenti`: i due campi si muovono insieme nello stesso codice e non possono divergere. È una scelta, non un difetto
+  - se si vuole la delega per stabile servono due schermate: scegliere i condomini in creazione, e toglierne qualcuno senza revocare tutto
+  - l'aggiunta di un assistente a un condominio **non** passa da `PATCH /condomini/:id`: gli unici scrittori di `Condominio.assistenti` sono la creazione e la revoca della delega
 - Gestione del consuntivo per anno nella UI
   - il problema reale è il selettore degli anni: offre solo `anno -2 … anno +1`, quindi un condominio con bilanici più vecchi non li raggiunge
   - la pagina descriveva il consuntivo come "dell'anno che lo precede", ma il modello è preventivo e consuntivo **dello stesso anno** (`creaConsuntivo` copia `anno: preventivo.anno`): la frase era semplicemente sbagliata ed è stata corretta

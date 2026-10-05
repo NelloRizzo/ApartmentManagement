@@ -20,6 +20,7 @@ import type { Permesso, RiepilogoCondominio, RiepilogoQuote, UserRole } from '@/
  */
 const SCORCIATOIE: { a: string; etichetta: string; permesso?: Permesso; ruoli?: UserRole[] }[] = [
   { a: '/c/bacheca', etichetta: 'Bacheca', ruoli: ['admin'] },
+  { a: '/c/unita', etichetta: 'Unità immobiliari', permesso: 'unita:leggere' },
   { a: '/c/quote', etichetta: 'Quote e versamenti', permesso: 'versamenti:leggere' },
   { a: '/c/tabella', etichetta: 'Gestisci quote millesimali', permesso: 'tabella:leggere' },
   { a: '/c/assemblee', etichetta: 'Assemblee', permesso: 'assemblee:leggere' },
@@ -86,19 +87,33 @@ export default function PaginaPanorama() {
       {riepilogo.inCorso && <Caricamento />}
       {riepilogo.errore && <ErroreCaricamento messaggio={riepilogo.errore} onRiprova={riepilogo.ricarica} />}
 
-      {riepilogo.dati && (
+{riepilogo.dati && (
         <div className="statistiche">
-          <Statistica valore={riepilogo.dati.unita} etichetta="Unità immobiliari" />
-          <Statistica valore={riepilogo.dati.condomini} etichetta="Condòmini iscritti" />
+          {/* Il numero si vede sempre: è un dato aggregato, e nasconderlo a chi
+              non può aprire la sezione sarebbe togliere un'informazione che
+              aveva. Diventa cliccabile solo dove l'utente può davvero arrivare,
+              altrimenti il backend risponderebbe 403. */}
+          <Statistica
+            valore={riepilogo.dati.unita}
+            etichetta="Unità immobiliari"
+            a={puo('unita:leggere') ? '/c/unita' : undefined}
+          />
+          <Statistica
+            valore={riepilogo.dati.condomini}
+            etichetta="Condòmini iscritti"
+            a={puo('iscritti:leggere') ? '/c/iscritti' : undefined}
+          />
           <Statistica
             valore={riepilogo.dati.assembleeAperte}
             etichetta="Assemblee aperte"
             tono={riepilogo.dati.assembleeAperte > 0 ? 'avviso' : 'neutro'}
+            a={puo('assemblee:leggere') ? '/c/assemblee' : undefined}
           />
           <Statistica
-            valore={riepilogo.dati.morosiMeseCorrente ?? '—'}
+            valore={riepilogo.dati.morosiMeseCorrente ?? '-'}
             etichetta="Morosi del mese"
             tono={riepilogo.dati.morosiMeseCorrente ? 'pericolo' : 'successo'}
+            a={puo('versamenti:leggere') ? '/c/quote' : undefined}
           />
         </div>
       )}

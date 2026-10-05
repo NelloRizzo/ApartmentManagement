@@ -4,6 +4,22 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-04
 
+### Le card del panorama portano alla sezione indicata
+
+"Unità immobiliari", "Condòmini iscritti", "Assemblee aperte" e "Morosi del mese"
+erano numeri su cui non si poteva cliccare. `Statistica` ora accetta una prop `a`:
+se c'è, la card è un `<Link>` invece di un `<div>`, senza cambiarne l'aspetto.
+
+Un link e non un `div` con `onClick`: sennò non si raggiunge da tastiera, non si
+apre col tasto destro e non ha un destinatario da cui tornare indietro.
+
+Il numero si vede **sempre**, anche a chi non ha il permesso della sezione: è un
+dato aggregato e nasconderlo sarebbe togliere un'informazione che l'utente aveva.
+Cambia solo la cliccabilità, perché un link verso una sezione vietata farebbe
+prendere un 403.
+
+Bug ripreso da `new_tasks.md`.
+
 ### Le card della bacheca hanno un colore e un'inclinazione
 
 Il proprietario può scegliere un colore fra sei, che è un accento sul bordo

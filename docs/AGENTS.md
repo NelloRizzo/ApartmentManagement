@@ -320,11 +320,16 @@ assistenti, quindi non appartiene a uno stabile. Non esiste un ambito
 delegabile in `AMBITI` e di conseguenza **nessun guard di permesso**: l'accesso
 dipende dal documento, ed è `attivita.service.ts` a stabilirlo.
 
-- **Il team è `User.delegatoDa`**, non `Condominio.assistenti`. Il primo dice chi
-  ho creato io, il secondo *dove* qualcuno può operare: se il team dipendesse
-  dagli stabili, aggiungere un condominio cambierebbe la bacheca da sola.
-  `GET /staff/assistenti` continua a usare `Condominio.assistenti` e va tenuto
-  presente che le due liste possono divergere.
+- **Il team è `User.delegatoDa`**, per stabilità e non perché `Condominio.assistenti`
+  sbagli: i due campi non possono divergere, perché `creaAssistente` scrive
+  `delegatoDa` e chiama `registraDelegazione`, che aggiunge l'assistente a **tutti**
+  i condomini del delegante, e `revocaAssistente` fa il contrario sugli stessi
+  campi. Se il team dipendesse dagli stabili, aggiungere un condominio
+  all'amministratore cambierebbe la bacheca da sola e toglierne uno toglierebbe
+  all'assistente i compiti.
+- **La delega a un assistente è tutto o niente**: non esiste modo di delegare su un
+  solo condominio, e `Condominio.assistenti` non si scrive da `PATCH /condomini/:id`:
+  gli unici scrittori sono la creazione e la revoca della delega.
 - **Il team non è visibile a ruolo**: `requireRole('admin')` non distingue
   l'amministratore dall'assistente, perché entrambi hanno `role: 'admin'`. Chi
   crea è l'amministratore delegante e la verifica è `assicuraCreatore`, sul

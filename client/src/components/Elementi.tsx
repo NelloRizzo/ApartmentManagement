@@ -1,13 +1,17 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 export function Statistica({
   valore,
   etichetta,
   tono,
+  a,
 }: {
   valore: ReactNode;
   etichetta: string;
   tono?: 'neutro' | 'successo' | 'pericolo' | 'avviso' | 'accento';
+  /** Se indicato, la card diventa un link a questa sezione. */
+  a?: string;
 }) {
   const colore =
     tono === 'successo' ? 'var(--c-success)'
@@ -16,14 +20,27 @@ export function Statistica({
     : tono === 'accento' ? 'var(--c-accent)'
     : 'var(--c-text)';
 
-  return (
-    <div className="statistica">
+  const contenuto = (
+    <>
       <div className="statistica-valore" style={{ color: colore }}>
         {valore}
       </div>
       <div className="statistica-etichetta">{etichetta}</div>
-    </div>
+    </>
   );
+
+  // Una card su cui si clicca è un link vero, non un `div` con `onClick`: sennò
+  // non si raggiunge da tastiera, non si apre col tasto destro e non ha un
+  // destinatario da cui si possa tornare indietro.
+  if (a) {
+    return (
+      <Link className="statistica statistica-linka" to={a}>
+        {contenuto}
+      </Link>
+    );
+  }
+
+  return <div className="statistica">{contenuto}</div>;
 }
 
 const coloriStato: Record<string, string> = {

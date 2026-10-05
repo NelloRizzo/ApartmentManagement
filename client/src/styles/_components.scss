@@ -255,6 +255,25 @@
   margin-top: var(--sp-1);
 }
 
+// La variante cliccabile è un `<a>`: senza `display: block` resterebbe inline e
+// il padding del link non racchiuderebbe la card.
+.statistica-linka {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.12s ease-out;
+}
+
+.statistica-linka:hover {
+  border-color: var(--c-border-strong);
+  background: var(--c-surface-alt);
+}
+
+.statistica-linka:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}
+
 // ===== Avvisi =====
 .avviso {
   display: flex;
