@@ -288,7 +288,7 @@ function EditorTabella({ tabella, onSalvato }: { tabella: TabellaMillesimale; on
 
       <button
         type="button"
-        className="btn btn-primario btn-pieno btn-grande"
+        className="btn btn-primario btn-pieno btn-grande margine-sopra"
         onClick={salva}
         disabled={inSalvataggio || problemi.length > 0}
       >

@@ -39,6 +39,25 @@ $r = Api Patch "/condomini/$id" (@{ nome="Verifica $suff rinominata"; note='modi
 Check 'patch nome' ($r.data.nome -eq "Verifica $suff rinominata") ($r.__errore)
 Check 'patch conserva codice' ($r.data.codice -eq "V$suff") ($r.__errore)
 
+"== 2b. il codice e' univoco =="
+# Riusare il codice di un altro condominio violava l'indice univoco e arrivava al
+# client come 500. Ora deve essere un 409 che nomina il campo.
+# Si riusa un codice già presente invece di creare un condominio: la capacità
+# contrattuale rifiuterebbe un ulteriore stabile e il test fallirebbe per un
+# motivo che non ha a che fare con l'univocità.
+$altro = (Api Get '/condomini' $null).data | Where-Object { $_.codice -and $_.codice -ne "V$suff" } | Select-Object -First 1
+if ($altro) {
+  $r = Api Patch "/condomini/$id" (@{ codice=$altro.codice })
+  Check 'patch con codice gia' preso rifiutato' ($r.__status -eq 409) "status $($r.__status): $($r.__errore)"
+  Check 'il conflitto nomina il campo' (($r.__errore -match 'codice')) $r.__errore
+  # Su un 409 la risposta non ha `data`: per verificare che il condominio sia
+  # rimasto com'era va riletto.
+  $riletta = (Api Get "/condomini/$id" $null).data
+  Check 'il condominio non ha cambiato codice' ($riletta.codice -eq "V$suff") "codice $($riletta.codice)"
+} else {
+  Check 'serve un secondo condominio per la prova' $false 'nessun altro codice disponibile'
+}
+
 "== 3. cancellazione di un condominio vuoto =="
 $r = Api Delete "/condomini/$id" $null
 Check 'delete vuoto' (-not $r.__errore) ($r.__errore)

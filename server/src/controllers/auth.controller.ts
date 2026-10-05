@@ -39,7 +39,7 @@ interface UtenteDaProfilare {
 async function profiloCompleto(u: UtenteDaProfilare) {
   const [legami, amministrati, servito] = await Promise.all([
     Condomino.find({ utente: u._id, attivo: true })
-      .populate('condominio', 'nome codice')
+      .populate('condominio', 'nome codice amministratore')
       .populate('unita', 'codice piano')
       .lean(),
     // L'amministratore e il suo assistente non compaiono in `Condomino`: i
@@ -57,29 +57,24 @@ async function profiloCompleto(u: UtenteDaProfilare) {
   ]);
 
   const posizioniDaLegame = legami.map((l) => {
-    const c = l.condominio as unknown as { _id: unknown; nome?: string; codice?: string } | string;
+    const c = l.condominio as unknown as
+      | { _id: unknown; nome?: string; codice?: string; amministratore?: unknown }
+      | string;
     return {
       condominioId: String(typeof c === 'string' ? c : c._id),
       nome: typeof c === 'string' ? undefined : c.nome,
       codice: typeof c === 'string' ? undefined : c.codice,
+      ruolo: 'condomino' as const,
+      /**
+       * `null` quando non è un legame di proprietà: un amministratore non è
+       * "proprietario" del condominio che amministra, e dirglielo faceva
+       * comparire un regime e una quota che non esistono. Prima qui finiva
+       * `regime: 'proprietario'` come segnalatore, e il frontend non aveva modo
+       * di distinguerlo da una posizione reale.
+       */
       regime: l.regime,
       quota: l.quota,
       unita: (l.unita as unknown as { codice: string }[]).map((x) => x.codice),
-    };
-  });
-
-  const giaPresenti = new Set(posizioniDaLegame.map((p) => p.condominioId));
-  const posizioniDaRuolo = [...amministrati, ...servito]
-    .filter((c) => !giaPresenti.has(String(c._id)))
-    .map((c) => ({
-      condominioId: String(c._id),
-      nome: c.nome,
-      codice: c.codice,
-      // `quota: 0` segnala una posizione puramente operativa: non ci sono unità
-      // di proprietà da mostrare nel riepilogo quote.
-      regime: 'proprietario' as const,
-      quota: 0,
-      unita: [] as string[],
       /**
        * `true` quando l'utente non è il titolare: per l'assistente è il
        * condominio in cui opera per delega, per il superadmin uno dei tanti
@@ -87,8 +82,43 @@ async function profiloCompleto(u: UtenteDaProfilare) {
        * altrimenti il superadmin avrebbe `assistito: false` ovunque e le
        * sezioni di condominio gli offrirebbero strade che rispondono 403.
        */
-      assistito: String(c.amministratore ?? '') !== String(u._id),
-    }));
+      assistito: String((c as { amministratore?: unknown }).amministratore ?? '') !== String(u._id),
+    };
+  });
+
+  const giaPresenti = new Set(posizioniDaLegame.map((p) => p.condominioId));
+
+  /**
+   * Posizioni operative, cioè quelle che non vengono da un `Condomino`.
+   *
+   * Il ruolo è derivato dal confronto con `Condominio.amministratore` e non dal
+   * ruolo dell'utente: un admin è amministratore in uno stabile e assistente in
+   * un altro, e due righe con lo stesso testo sarebbero indistinguibili.
+   */
+  const posizioniDaRuolo = [...amministrati.map((c) => ({ c, servito: false })), ...servito.map((c) => ({ c, servito: true }))]
+    .filter(({ c }) => !giaPresenti.has(String(c._id)))
+    .map(({ c, servito: faServito }) => {
+      const amministra = String(c.amministratore ?? '') === String(u._id);
+      // Il superadmin vede ogni stabile senza amministrarlo: senza questo caso
+      // cadrebbe in "assistente", che è una delega che non gli è mai stata data.
+      const ruolo = u.role === 'superadmin'
+        ? 'osservatore'
+        : amministra
+          ? 'amministratore'
+          : faServito
+            ? 'servito'
+            : 'assistente';
+      return {
+        condominioId: String(c._id),
+        nome: c.nome,
+        codice: c.codice,
+        ruolo: ruolo as 'osservatore' | 'amministratore' | 'servito' | 'assistente',
+        regime: null as null,
+        quota: 0,
+        unita: [] as string[],
+        assistito: !amministra,
+      };
+    });
 
   const condomini = [...posizioniDaLegame, ...posizioniDaRuolo];
 

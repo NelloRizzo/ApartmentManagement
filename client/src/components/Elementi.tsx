@@ -159,6 +159,21 @@ const etichetteRuolo: Record<string, string> = {
   condomino: 'Condòmino',
 };
 
+/**
+ * Come l'utente sta in un singolo condominio.
+ *
+ * Distinto da `ruolo`, che è il ruolo dell'utente nell'applicazione: un admin è
+ * "Amministratore" in generale ma "Assistente" nello stabile dove opera per
+ * delega, e le due righe nella bacheca sarebbero altrimenti identiche.
+ */
+const etichettePosizione: Record<string, string> = {
+  amministratore: 'Amministratore di condominio',
+  assistente: 'Assistente, per delega',
+  servito: 'Servizio',
+  condomino: 'Condòmino',
+  osservatore: 'Accesso di piattaforma',
+};
+
 /** Etichette leggibili per ogni enumerazione del dominio. */
 export const etichette = {
   regime: (v: string) => etichetteRegime[v] ?? v,
@@ -170,4 +185,5 @@ export const etichette = {
   metodo: (v: string) => etichetteMetodo[v] ?? v,
   categoria: (v: string) => etichetteCategoria[v] ?? v,
   ruolo: (v: string) => etichetteRuolo[v] ?? v,
+  posizione: (v: string) => etichettePosizione[v] ?? v,
 };

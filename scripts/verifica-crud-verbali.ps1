@@ -71,7 +71,7 @@ if ($verbale) {
       else { Invoke-RestMethod -Method $rotta.m -Uri "$base/condomini/$cid$($rotta.p)" -Headers $h2 | Out-Null }
       Check "condomino non puo' $($rotta.m.ToLower()) $($rotta.p)" $false 'la richiesta è riuscita'
     } catch {
-      $code = ([regex]::Match($_.ErrorDetails.Message, '"code":"(\w+)"')).Groups[1].Value
+      $code = ([regex]::Match($_.ErrorDetails.Message, '"code"\s*:\s*"(\w+)"')).Groups[1].Value
       Check "condomino non puo' $($rotta.m.ToLower()) $($rotta.p)" ($code -eq 'FORBIDDEN') "esito $code"
     }
   }

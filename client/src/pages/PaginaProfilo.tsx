@@ -13,6 +13,9 @@ export default function PaginaProfilo() {
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
 
+  /** Almeno una riga con regime: l'utente è condomino da qualche parte. */
+  const haPosizioniDiProprieta = (utente?.condomini ?? []).some((c) => c.regime !== null);
+
   if (!utente) return null;
 
   async function salva() {
@@ -86,9 +89,11 @@ export default function PaginaProfilo() {
         <ModuloPassword />
       </section>
 
-      <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
+<section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
         <div className="scheda-intestazione">
-          <h2>Le mie posizioni</h2>
+          {/* Il titolo segue il contenuto: un amministratore che non ha unità di
+              proprietà non ha "posizioni", ha condomini che amministra. */}
+          <h2>{haPosizioniDiProprieta ? 'Le mie posizioni' : 'Condomìni amministrati'}</h2>
         </div>
         <div className="elenco">
           {utente.condomini.map((c) => (
@@ -98,8 +103,14 @@ export default function PaginaProfilo() {
                   {c.nome} ({c.codice})
                 </strong>
                 <span className="testo-faint">
-                  {etichette.regime(c.regime)} · unità {c.unita.join(', ')}
-                  {c.quota < 100 ? ` · quota ${c.quota}%` : ''}
+                  {/* `regime` è `null` per una posizione solo operativa: mostrare
+                      "Proprietario" e un elenco unità vuoto raccontava il
+                      contrario di quello che è. */}
+                  {c.regime
+                    ? `${etichette.regime(c.regime)} · unità ${c.unita.join(', ')}${
+                        c.quota < 100 ? ` · quota ${c.quota}%` : ''
+                      }`
+                    : etichette.posizione(c.ruolo)}
                 </span>
               </span>
             </div>
@@ -236,7 +247,7 @@ function ModuloPassword() {
           </div>
         )}
 
-        <button type="button" className="btn btn-secondario" onClick={cambia} disabled={inCorso || !completo}>
+        <button type="button" className="btn btn-secondario margine-sopra" onClick={cambia} disabled={inCorso || !completo}>
           {inCorso ? 'Cambio in corso…' : 'Cambia password'}
         </button>
       </div>

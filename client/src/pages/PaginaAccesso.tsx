@@ -85,7 +85,7 @@ export default function PaginaAccesso() {
             </div>
           )}
 
-          <button type="submit" className="btn btn-primario btn-pieno btn-grande" disabled={inCorso}>
+          <button type="submit" className="btn btn-primario btn-pieno btn-grande margine-sopra" disabled={inCorso}>
             {inCorso ? 'Accesso in corso…' : 'Accedi'}
           </button>
         </form>

@@ -24,7 +24,7 @@ function Status($method, $path, $body, $token) {
     return '200'
   } catch {
     $d = $_.ErrorDetails.Message
-    if ($d) { $m = [regex]::Match($d, '"code":"(\w+)"'); if ($m.Success) { return $m.Groups[1].Value } }
+    if ($d) { $m = [regex]::Match($d, '"code"\s*:\s*"(\w+)"'); if ($m.Success) { return $m.Groups[1].Value } }
     return "HTTP$([int]$_.Exception.Response.StatusCode)"
   }
 }

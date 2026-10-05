@@ -132,6 +132,16 @@ span.testo-faint { margin-left: var(--sp-1); }
 .pila-5 { gap: var(--sp-5); }
 .pila-6 { gap: var(--sp-6); }
 
+/**
+ * Spazio sopra un elemento.
+ *
+ * Serve dove un blocco segue dei campi: `.campo` è una colonna flex senza
+ * margin-bottom, quindi un pulsante a tutta larghezza si incolla all'ultimo
+ * campo. Non va abbinata a `pila-*`, che già dà il suo spazio con `gap` e
+ * raddopperebbe la distanza.
+ */
+.margine-sopra { margin-top: var(--sp-3); }
+
 .riga {
   display: flex;
   align-items: center;

@@ -304,7 +304,7 @@ export default function PaginaNuovoVersamento() {
               </div>
             )}
 
-            <button type="submit" className="btn btn-primario btn-pieno btn-grande" disabled={inCorso || !valido}>
+            <button type="submit" className="btn btn-primario btn-pieno btn-grande margine-sopra" disabled={inCorso || !valido}>
               {inCorso ? 'Registrazione…' : 'Registra versamento'}
             </button>
           </div>

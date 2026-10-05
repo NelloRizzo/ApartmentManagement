@@ -19,17 +19,47 @@ interface MongooseCastError extends Error {
   value?: unknown;
 }
 
+/**
+ * Violazione di un indice univoco (`E11000`).
+ *
+ * MongoDB la solleva su scrittura, non su lettura, quindi non c'è modo di
+ * impedire la collisione con una verifica prima: due richieste contemporanee
+ * passerebbero entrambe il controllo. Per questo si traduce qui l'errore del
+ * driver invece di fidarsi di un `if` preventivo in ogni controller, che
+ * dimenticherebbe un campo e lascerebbe un 500.
+ *
+ * `instanceof` sul driver è evitato di proposito: `MongoServerError` proviene da
+ * `mongodb`, non da `mongoose`, e la classe cambiare tra versioni. Qui basta il
+ * codice numerico, che è parte del protocollo e non del pacchetto.
+ */
+function indiceUnivocoViolato(err: unknown): { campo: string; valore: unknown } | null {
+  const e = err as { code?: number; keyPattern?: Record<string, unknown>; keyValue?: Record<string, unknown> };
+  if (e?.code !== 11000) return null;
+
+  const campo = Object.keys(e.keyPattern ?? {})[0] ?? '';
+  return { campo, valore: campo ? e.keyValue?.[campo] : undefined };
+}
+
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   let statusCode = 500;
   let code = 'INTERNAL_ERROR';
   let message = 'Errore interno del server';
   let details: unknown;
 
+  const duplicata = err instanceof AppError ? null : indiceUnivocoViolato(err);
+
   if (err instanceof AppError) {
     statusCode = err.statusCode;
     code = err.code;
     message = err.message;
     details = err.details;
+  } else if (duplicata) {
+    statusCode = 409;
+    code = 'CONFLICT';
+    message = duplicata.campo
+      ? `Esiste già un valore per "${duplicata.campo}"`
+      : 'Valore già esistente';
+    details = duplicata.campo ? { campo: duplicata.campo, valore: duplicata.valore } : undefined;
   } else if (err instanceof ZodError) {
     statusCode = 422;
     code = 'VALIDATION_ERROR';

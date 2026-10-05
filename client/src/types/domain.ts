@@ -233,7 +233,16 @@ export interface CondominioPosizione {
   condominioId: string;
   nome?: string;
   codice?: string;
-  regime: Regime;
+  /** Come l'utente sta in quel condominio. */
+  ruolo: 'amministratore' | 'assistente' | 'servito' | 'condomino' | 'osservatore';
+  /**
+   * Regime di proprietà, o `null` se la posizione è solo operativa.
+   *
+   * Un amministratore non è "proprietario" del condominio che amministra: qui
+   * vale `null` e non un regime fittizio, altrimenti la UI mostrerebbe un
+   * regime e una quota che non esistono.
+   */
+  regime: Regime | null;
   /** Quota di proprietà in percentuale. Vale 0 per le posizioni puramente operative. */
   quota: number;
   unita: string[];
@@ -558,4 +567,43 @@ export interface Comunicazione {
   rispostaA?: string;
   createdAt: string;
   thread?: Comunicazione[];
+}
+/** Utente che compare nelle attività: proprietario o assegnatario. */
+export interface UtenteAttivita {
+  id: string;
+  nome: string;
+  cognome: string;
+  nomeCompleto: string;
+}
+
+/** Assistente assegnabile, come lo restituisce `GET /staff/attivita/team`. */
+export interface AssistenteAttivita extends UtenteAttivita {
+  email: string;
+}
+
+/**
+ * Attività della bacheca del team.
+ *
+ * `sonoProprietario` e `assegnatoAMe` arrivano già calcolati dal server: la UI
+ * non deve dedurre il confronto fra id dal proprio elenco, che cambierebbe
+ * appena la bacheca si ricarica.
+ */
+export interface Attivita {
+  _id: string;
+  titolo: string;
+  descrizione: string;
+  proprietario: UtenteAttivita | null;
+  assegnatari: UtenteAttivita[];
+  /** Voce di un thread: `null` se è un'attività di primo livello. */
+  parent: string | null;
+  milestone: boolean;
+  dataInizio: string | null;
+  dataFine: string | null;
+  fatto: boolean;
+  fattoDa: { id: string; nome: string; cognome: string; nomeCompleto: string } | null;
+  fattoIl: string | null;
+  sonoProprietario: boolean;
+  assegnatoAMe: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
