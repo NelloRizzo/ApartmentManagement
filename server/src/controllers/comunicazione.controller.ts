@@ -18,7 +18,18 @@ import {
   contaNonLette,
 } from '../services/comunicazione.service.js';
 
+import type { Request } from 'express';
 const oid = (v: string): Types.ObjectId => new Types.ObjectId(String(v));
+
+/**
+ * Il condominio della rotta, che è il perimetro di ogni comunicazione.
+ *
+ * `condominioParams` lo ha già validato e `requireCondominioAccess` ha già
+ * deciso se l'utente può operarci: qui serve solo come confine, non come
+ * autorizzazione. Senza questo il confine non esisteva e un amministratore
+ * poteva aprire i messaggi di uno stabile che non amministra.
+ */
+const condominioDellaRota = (req: Request): string => String(req.params.condominioId ?? '');
 
 export const list = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
@@ -35,7 +46,10 @@ export const list = asyncHandler(async (req, res) => {
   const { page, limit, sort, order } = paginazioneDa(q, 'createdAt');
 
   const risultato = await listComunicazioni(utente.sub, utente.role, {
-    condominio: req.query.condominio ? String(req.query.condominio) : undefined,
+    // Il condominio viene dal percorso, non dalla query: la rotta ha già verificato
+    // `requireCondominioAccess` su quel condominio, e un filtro dichiarato in uno
+    // schema di lista verrebbe rimosso da `validate` come chiave non dichiarata.
+    condominio: String(req.params.condominioId),
     bandiera: q.bandiera,
     tipo: q.tipo,
     stato: q.stato,
@@ -76,7 +90,7 @@ export const getOne = asyncHandler(async (req, res) => {
     .lean<ComunicazioneDoc>();
   if (!doc) throw notFound('Comunicazione non trovata');
 
-  await assicuraAccesso(doc, utente.sub, utente.role);
+  await assicuraAccesso(doc, utente.sub, utente.role, condominioDellaRota(req));
 
   const thread = doc.threadId
     ? await Comunicazione.find({ threadId: doc.threadId })
@@ -163,7 +177,7 @@ export const create = asyncHandler(async (req, res) => {
 
   const base = await Comunicazione.findById(body.rispostaA).lean<ComunicazioneDoc>();
   if (body.rispostaA && !base) throw notFound('Comunicazione a cui rispondere non trovata');
-  if (body.rispostaA) await assicuraAccesso(base!, utente.sub, utente.role);
+  if (body.rispostaA) await assicuraAccesso(base!, utente.sub, utente.role, condominioDellaRota(req));
 
   const preparato = preparaComunicazione({
     mittente: utente.sub,
@@ -228,7 +242,7 @@ export const segnaLetta = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
   const doc = await Comunicazione.findById(req.params.id);
   if (!doc) throw notFound('Comunicazione non trovata');
-  await assicuraAccesso(doc as unknown as ComunicazioneDoc, utente.sub, utente.role);
+  await assicuraAccesso(doc as unknown as ComunicazioneDoc, utente.sub, utente.role, condominioDellaRota(req));
   ok(res, await marcaLetta(String(doc._id), utente.sub));
 });
 
@@ -236,7 +250,7 @@ export const rispondi = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
   const originale = await Comunicazione.findById(req.params.id);
   if (!originale) throw notFound('Comunicazione non trovata');
-  await assicuraAccesso(originale as unknown as ComunicazioneDoc, utente.sub, utente.role);
+  await assicuraAccesso(originale as unknown as ComunicazioneDoc, utente.sub, utente.role, condominioDellaRota(req));
 
   const body = req.body as { corpo: string };
   // Una risposta può avere i suoi allegati, e arrivano come file: gli id li

@@ -172,23 +172,37 @@ export const bilancioListQuery = z.object({
   tipo: z.enum(['preventivo', 'consuntivo']).optional(),
 });
 
-export const condominioCreateSchema = z.object({
-  nome: z.string().trim().min(2).max(200),
-  codice: z.string().trim().min(2).max(20).toUpperCase(),
-  indirizzo: z.object({
-    via: z.string().trim().min(1).max(200),
-    civico: z.string().trim().max(20).optional(),
-    citta: z.string().trim().max(100).optional(),
-    cap: z.string().trim().max(10).optional(),
-    provincia: z.string().trim().max(60).optional(),
-  }),
+/*
+ * `strict` perché il `codice` non è un campo dichiarato e deve quindi essere un
+ * errore esplicito: lo genera il server e non è modificabile, e una richiesta che
+ * lo mandasse si troverebbe un codice diverso da quello chiesto senza che nulla lo
+ * dica. Vale la stessa regola di `aggiornaContrattoSchema` e di
+ * `condominioUpdateSchema`.
+ */
+export const condominioCreateSchema = z
+  .object({
+    nome: z.string().trim().min(2).max(200),
+    indirizzo: z.object({
+      via: z.string().trim().min(1).max(200),
+      civico: z.string().trim().max(20).optional(),
+      citta: z.string().trim().max(100).optional(),
+      cap: z.string().trim().max(10).optional(),
+      provincia: z.string().trim().max(60).optional(),
+    }),
   totaleMillesimi: z.number().int().positive().default(1000),
-  deliberaRipartizione: z.string().trim().max(200).optional(),
-  dataDeliberaRipartizione: z.coerce.date().optional(),
-  note: z.string().trim().max(4000).optional(),
-});
+    deliberaRipartizione: z.string().trim().max(200).optional(),
+    dataDeliberaRipartizione: z.coerce.date().optional(),
+    note: z.string().trim().max(4000).optional(),
+  })
+  .strict();
 
-export const condominioUpdateSchema = condominioCreateSchema.partial();
+/**
+ * `strict` perché il `codice` non è dichiarato e deve quindi essere un errore
+ * esplicito: è autogenerato e non modificabile, e una `PATCH` che lo mandasse
+ * verrebbe ignorata in silenzio, sembrando una modifica riuscita. Vale la stessa
+ * regola di `aggiornaContrattoSchema`.
+ */
+export const condominioUpdateSchema = condominioCreateSchema.partial().strict();
 
 // ---------- Unità ----------
 export const unitaCreateSchema = z.object({

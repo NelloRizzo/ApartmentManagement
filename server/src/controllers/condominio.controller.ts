@@ -18,6 +18,7 @@ import {
 } from '../models/index.js';
 import { currentUser, puoEseguire } from '../middleware/auth.js';
 import { auditLog } from '../services/audit.service.js';
+import { generaCodiceCondominio } from '../services/condominio.service.js';
 import { buildTabella } from '../services/tabellaMillesimale.service.js';
 import { calcolaQuoteMensili } from '../services/quoteVersamenti.service.js';
 import type { CondominioDoc } from '../models/index.js';
@@ -134,7 +135,14 @@ export const create = asyncHandler(async (req, res) => {
     throw forbidden('Solo un amministratore può creare un condominio');
   }
 
-  const condominio = await Condominio.create({ ...req.body, amministratore: utente.sub });
+  // `codice` non arriva dal client: è generato qui, perché è univoco e compare
+  // nei contratti. Lasciarlo a chi crea lo stabili lo renderebbe una sigla che
+  // nessuno spiega, e che due amministratori possono scegliere uguale.
+  const condominio = await Condominio.create({
+    ...req.body,
+    codice: await generaCodiceCondominio(req.body.nome),
+    amministratore: utente.sub,
+  });
   await auditLog({
     condominio: String(condominio._id),
     attore: utente.sub,

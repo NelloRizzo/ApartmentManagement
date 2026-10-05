@@ -153,6 +153,63 @@ Check 'letta dal condomino, sparisce dal suo contatore' ((NonLette $mio $co) -eq
 
 Check 'un proprio avviso non è una non letta per chi lo ha scritto' ((NonLette $mio $ad) -eq $adPrima) "prima $adPrima, ora $((NonLette $mio $ad))"
 
+"== 8. il perimetro è il condominio della rotta =="
+# Il difetto: `condominio` non era dichiarato in `comunicazioneListQuery`, quindi
+# `validate` lo scartava, il controller leggeva un `undefined` e la lista non
+# filtrava nulla. Per un amministratore il filtro di visibilità è vuoto, quindi la
+# pagina "Messaggi" mostrava i messaggi di tutti gli stabili del database. Il
+# percorso indicava uno stabile suo, ma lo stabile non arrivava alla query.
+# `assicuraAccesso` poi escludeva il caso singolo: chiunque poteva aprire un
+# messaggio di un altro stabile conoscendone l'id.
+#
+# La prova usa una **bozza in uno stabili diverso** invece di creare uno stabili
+# nuovo: non consuma la capacità contrattuale e si può eliminare, cosa che un
+# avviso inviato non permette. Con il codice vecchio la bozza comparirebbe
+# comunque nella lista, perché il filtro non guardava il condominio e per un
+# amministratore `filtroVisibilita` è vuoto.
+SetPermessi 'amministratori' $idAd $null
+$ad = Login 'admin@condomini.local' 'Admin123!'
+
+$bozzaAltro = (Invoke-RestMethod -Method Post -Uri "$base/condomini/$altro/comunicazioni" -Headers (Auth $sa) -ContentType 'application/json' -Body (@{tipo='segnalazione'; oggetto="Segreto $suff"; corpo='riservato'; salvaComeBozza=$true}|ConvertTo-Json)).data
+$idBozzaAltro = if ($bozzaAltro.id) { $bozzaAltro.id } else { $bozzaAltro._id }
+
+# L'admin chiede la lista passando per uno stabile che amministra davvero.
+$lista = @((Invoke-RestMethod -Method Get -Uri "$base/condomini/$mio/comunicazioni?limit=100" -Headers (Auth $ad)).data)
+$rubati = @($lista | Where-Object { $_.oggetto -eq "Segreto $suff" })
+Check 'la lista non contiene messaggi di un altro stabile' ($rubati.Count -eq 0) "trovati $($rubati.Count) su $($lista.Count)"
+# E non lo raggiunge neanche apprendone l'id: 404, non 403, perché un 403
+# confermerebbe che il messaggio esiste.
+$sDettaglio = Status Get "/condomini/$mio/comunicazioni/$idBozzaAltro" $null $ad
+Check 'il messaggio di un altro stabile è 404' ($sDettaglio -eq 'NOT_FOUND') "esito $sDettaglio"
+# Nel suo stabile la bozza si vede: la restrizione è il condominio, non l'id.
+$listaSua = @((Invoke-RestMethod -Method Get -Uri "$base/condomini/$altro/comunicazioni?bandiera=tutte&limit=100" -Headers (Auth $sa)).data)
+Check 'nel suo stabile la lista contiene il messaggio' (@($listaSua | Where-Object { $_.oggetto -eq "Segreto $suff" }).Count -eq 1) "messaggi $($listaSua.Count)"
+# Il condòmino è legato a un solo stabile e non deve vedere quello dell'altro.
+$co = Login 'marco.rossi@example.com' 'Condomino123!'
+$listaCo = @((Invoke-RestMethod -Method Get -Uri "$base/condomini/$mio/comunicazioni?limit=100" -Headers (Auth $co)).data)
+Check 'il condomino non vede messaggi di un altro stabile' (@($listaCo | Where-Object { $_.oggetto -eq "Segreto $suff" }).Count -eq 0) "messaggi in lista $($listaCo.Count)"
+
+Invoke-RestMethod -Method Delete -Uri "$base/condomini/$altro/comunicazioni/$idBozzaAltro" -Headers (Auth $sa) | Out-Null
+Check 'la bozza di prova è stata eliminata' ((Status Get "/condomini/$altro/comunicazioni/$idBozzaAltro" $null $sa) -eq 'NOT_FOUND')
+
+"== 9. il mittente può aprire il proprio messaggio =="
+# `getOne` fa `populate` su mittente e destinatario, `segnaLetta` no. Confrontando
+# il campo popolato si ottiene "[object Object]" e il controllo di partecipazione
+# fallisce sempre: il condòmino non riusciva ad aprire la richiesta che aveva
+# scritto, mentre all'amministratore non diceva niente perché per lui quel controllo
+# non esiste. Il test passa dal percorso che chiama `getOne`.
+$co = Login 'marco.rossi@example.com' 'Condomino123!'
+$richiesta = (Invoke-RestMethod -Method Post -Uri "$base/condomini/$mio/comunicazioni" -Headers (Auth $co) -ContentType 'application/json' -Body (@{tipo='richiesta'; oggetto="Mia richiesta $suff"; corpo='prova'}|ConvertTo-Json)).data
+$sProprio = Status Get "/condomini/$mio/comunicazioni/$($richiesta._id)" $null $co
+Check 'il condomino apre il proprio messaggio' ($sProprio -eq '200') "esito $sProprio"
+# Stesso messaggio, altro stabile. Qui risponde 403 e non 404 perché a fermare la
+# richiesta è `requireCondominioAccess`, che chiede una posizione nel condominio
+# prima ancora di arrivare al messaggio: è il livello più esterno e non rivela
+# niente. Il 404 del perimetro lo si vede sopra, con l'amministratore che dei due
+# stabili è legittimamente ammesso.
+$sAltro = Status Get "/condomini/$altro/comunicazioni/$($richiesta._id)" $null $co
+Check 'il condomino non lo apre da un altro stabile' ($sAltro -eq 'FORBIDDEN') "esito $sAltro"
+
 "== ripristino: l'admin torna ad accesso pieno =="
 # `permessi: null` è l'accesso pieno. Il passaggio chiude anche le sessioni
 # aperte, quindi va per ultimo: senza, l'account resterebbe delegato e i

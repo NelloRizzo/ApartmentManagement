@@ -15,7 +15,6 @@ const MILLESIMI_CONVENZIONE = 1000;
 
 interface Modello {
   nome: string;
-  codice: string;
   via: string;
   civico: string;
   citta: string;
@@ -28,9 +27,8 @@ interface Modello {
 }
 
 const VUOTO: Modello = {
-  nome: '',
-  codice: '',
-  via: '',
+    nome: '',
+    via: '',
   civico: '',
   citta: '',
   cap: '',
@@ -257,7 +255,6 @@ function urlMappa(indirizzo: Condominio['indirizzo']): string {
 function daCondominio(c: Condominio): Modello {
   return {
     nome: c.nome,
-    codice: c.codice,
     via: c.indirizzo.via,
     civico: c.indirizzo.civico ?? '',
     citta: c.indirizzo.citta ?? '',
@@ -287,7 +284,7 @@ function ModuloCondominio({
   const aggiorna = <K extends keyof Modello>(campo: K, valore: Modello[K]) =>
     setModello((m) => ({ ...m, [campo]: valore }));
 
-  const completo = modello.nome.trim().length >= 2 && modello.codice.trim().length >= 2 && modello.via.trim() !== '';
+  const completo = modello.nome.trim().length >= 2 && modello.via.trim() !== '';
 
   async function salva() {
     setErrore(null);
@@ -295,9 +292,6 @@ function ModuloCondominio({
     try {
       const corpo = {
         nome: modello.nome.trim(),
-        // Il server mette il codice in maiuscolo, ma lo normalizzo anche qui per
-        // non mostrare nell'elenco un valore diverso da quello salvato.
-        codice: modello.codice.trim().toUpperCase(),
         indirizzo: {
           via: modello.via.trim(),
           civico: modello.civico.trim() || undefined,
@@ -362,19 +356,22 @@ function ModuloCondominio({
                 placeholder="Condominio Villa Verdi"
               />
             </div>
-            <div className="campo" style={{ maxWidth: '9rem' }}>
-              <label className="campo-etichetta" htmlFor="cd-codice">
-                Codice
-              </label>
-              <input
-                id="cd-codice"
-                className="area"
-                value={modello.codice}
-                onChange={(e) => aggiorna('codice', e.target.value)}
-                placeholder="CIV"
-              />
+{condominio && (
+            <div className="campo" style={{ maxWidth: '11rem' }}>
+              {/*
+                Il codice non è un campo di compilazione: lo genera il server e non
+                si può cambiare. Mostrarlo in un input disabilitato direbbe
+                "modificabile" e mentirebbe.
+              */}
+              <span className="campo-etichetta">Codice</span>
+              <p className="testo-faint testo-faint-blocco">
+                {condominio.codice}
+                <br />
+                generato automaticamente
+              </p>
             </div>
-          </div>
+          )}
+        </div>
 
           <div className="riga">
             <div className="campo cresci">

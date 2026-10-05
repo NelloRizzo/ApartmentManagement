@@ -19,24 +19,39 @@ export interface FiltroComunicazione {
 }
 
 /**
- * Visibilità: un admin/portiere vede tutto ciò che riguarda il proprio condominio;
- * un condomino vede le comunicazioni indirizzate a lui o inviate a tutte le
- * unità di cui è titolare, più le proprie e i thread in cui partecipa.
+ * Visibilità di una lista di comunicazioni.
+ *
+ * Il condominio è il perimetro e arriva dalla rotta, che ha già superato
+ * `requireCondominioAccess`. Prima non arrivava: `condominio` non era dichiarato in
+ * `comunicazioneListQuery`, quindi `validate` lo scartava, il controller leggeva un
+ * `undefined` e la lista **non filtrava nulla**. Per un admin o un portiere il
+ * filtro si riduceva a `{}`, quindi chiunque leggesse i messaggi di tutti gli
+ * stabili del database passando per la rotta di uno stabile proprio.
+ *
+ * Sopra il perimetro, un condomino vede solo le comunicazioni in cui è
+ * coinvolto; admin e portiere non hanno un filtro di partecipazione, perché
+ * operano nello stabile per il ruolo che hanno.
  */
-export function filtroVisibilita(utenteId: string, role: UserRole, unitaIds: string[]): Record<string, unknown> {
-  if (role === 'admin' || role === 'portiere') return {};
+export function filtroVisibilita(
+  utenteId: string,
+  role: UserRole,
+  unitaIds: string[],
+  condominioId?: string,
+): Record<string, unknown> {
+  const filtro: Record<string, unknown> = {};
+  if (condominioId) filtro.condominio = new Types.ObjectId(String(condominioId));
+  if (role === 'admin' || role === 'portiere') return filtro;
 
   const id = new Types.ObjectId(String(utenteId));
   const unita = unitaIds.map((u) => new Types.ObjectId(String(u)));
 
-  return {
-    $or: [
-      { destinatario: id },
-      { mittente: id },
-      { destinatari: id },
-      ...(unita.length ? [{ unita: { $in: unita } }] : []),
-    ],
-  };
+  filtro.$or = [
+    { destinatario: id },
+    { mittente: id },
+    { destinatari: id },
+    ...(unita.length ? [{ unita: { $in: unita } }] : []),
+  ];
+  return filtro;
 }
 
 export async function unitaDiCondomino(utenteId: string): Promise<string[]> {
@@ -73,8 +88,7 @@ export async function contaNonLette(
   const id = new Types.ObjectId(String(utenteId));
   return Comunicazione.countDocuments({
     $and: [
-      filtroVisibilita(utenteId, role, await unitaDiCondomino(utenteId)),
-      { condominio: new Types.ObjectId(String(condominioId)) },
+      filtroVisibilita(utenteId, role, await unitaDiCondomino(utenteId), condominioId),
       { mittente: { $ne: id } },
       { stato: { $ne: 'bozza' } },
       { lettaDa: { $ne: id } },
@@ -87,9 +101,10 @@ export async function listComunicazioni(
   role: UserRole,
   filtri: FiltroComunicazione,
 ): Promise<{ dati: unknown[]; totale: number; page: number; limit: number }> {
-  const query: Record<string, unknown> = { ...filtroVisibilita(utenteId, role, await unitaDiCondomino(utenteId)) };
+  const query: Record<string, unknown> = {
+    ...filtroVisibilita(utenteId, role, await unitaDiCondomino(utenteId), filtri.condominio),
+  };
 
-  if (filtri.condominio) query.condominio = new Types.ObjectId(filtri.condominio);
   if (filtri.tipo) query.tipo = filtri.tipo;
   if (filtri.stato) query.stato = filtri.stato;
 
@@ -220,16 +235,56 @@ export async function utenteEsiste(id: string): Promise<boolean> {
   return found !== null;
 }
 
+/**
+ * Id di un campo che può essere un id o un documento popolato.
+ *
+ * `assicuraAccesso` è chiamata da `getOne`, che ha fatto `populate` su mittente e
+ * destinatario, e da `segnaLetta` e `update`, che non lo fanno. Confrontoando
+ * `String(oggetto popolato)` si ottiene `"[object Object]"` e il controllo fallisce
+ * sempre: era quello che impediva a un condòmino di aprire il messaggio che aveva
+ * scritto lui, mentre all'amministratore non diceva niente perché per lui il
+ * controllo di partecipazione non esiste.
+ */
+function idDi(valore: unknown): string {
+  if (valore && typeof valore === 'object' && '_id' in valore) {
+    return String((valore as { _id: unknown })._id);
+  }
+  return String(valore ?? '');
+}
+
+/**
+ * Chi può leggere o scrivere una comunicazione.
+ *
+ * Il condominio è il perimetro, e viene dalla rotta, che ha già superato
+ * `requireCondominioAccess`: un messaggio di uno stabile diverso non è visibile a
+ * nessuno, nemmeno all'amministratore di un altro stabile. Prima questo controllo
+ * esisteva solo per i partecipanti, quindi **un amministratore poteva aprire una
+ * comunicazione di qualunque condominio** conoscendone l'id: il perimetro non
+ * guardava `condominio` e per admin e portieri il controllo finiva subito.
+ *
+ * Uno stabilio diverso risponde **404**, non 403: confermare che il messaggio
+ * esiste significherebbe rivelare che in quel condominio c'è stata una
+ * comunicazione, ed è la stessa ragione per cui un'attività non visibile è 404.
+ */
 export async function assicuraAccesso(
-  comunicazione: { mittente?: unknown; destinatario?: unknown; destinatari?: unknown[] },
+  comunicazione: { condominio?: unknown; mittente?: unknown; destinatario?: unknown; destinatari?: unknown[] },
   utenteId: string,
   role: UserRole,
+  condominioId: string,
 ): Promise<void> {
+  if (idDi(comunicazione.condominio) !== String(condominioId)) {
+    throw notFound('Comunicazione non trovata');
+  }
+
+  // Amministratore e portiere operano nello stabile per il ruolo che hanno, non
+  // perché siano fra i destinatari: dentro il perimetro non c'è altro da
+  // controllare.
   if (role === 'admin' || role === 'portiere') return;
+
   const id = String(utenteId);
   const coinvolto =
-    String(comunicazione.mittente ?? '') === id ||
-    String(comunicazione.destinatario ?? '') === id ||
-    (comunicazione.destinatari ?? []).some((d) => String(d) === id);
+    idDi(comunicazione.mittente) === id ||
+    idDi(comunicazione.destinatario) === id ||
+    (comunicazione.destinatari ?? []).some((d) => idDi(d) === id);
   if (!coinvolto) throw forbidden('Comunicazione non accessibile');
 }

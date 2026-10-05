@@ -4,6 +4,96 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-05
 
+### Un amministratore poteva leggere i messaggi di qualunque condominio
+
+Il condominio non arrivava mai alla query, e in due punti diversi.
+
+`comunicazioneListQuery` **non dichiara `condominio`**, quindi `validate` lo scartava
+come chiave non dichiarata: il controller leggeva `req.query.condominio`, trovava
+sempre `undefined`, e la lista **non filtrava nulla**. Per un amministratore o un
+portiere il filtro di visibilità è vuoto, quindi la pagina "Messaggi" elencava i
+messaggi di **tutti gli stabili del database**, mescolati. Il client non mandava
+quel parametro, quindi non era un problema di come si chiamava: semplicemente il
+filtro non esisteva.
+
+`assicuraAccesso` peggio: **restituiva subito** per admin e portieri, quindi il
+messaggio singolo non veniva nemmeno guardato. Conoscendo l'id di una
+comunicazione, qualsiasi amministratore poteva aprirne il contenuto e il thread
+intero, di uno stabile che non amministra. Verificato dal vivo prima di correggere.
+
+Il perimetro ora è **il condominio della rotta**, che ha già superato
+`requireCondominioAccess`: il controller passa `req.params.condominioId` e non legge
+più il condominio dalla query, che è il posto da cui il `validate` lo cancellava.
+Uno stabilio diverso risponde **404**, non 403, perché confermare che il messaggio
+esiste rivelerebbe che in quel condominio è stata Mandata una comunicazione.
+
+Il superadmin continua a poter leggere ogni stabile: è una scelta precedente e
+voluta, registrata in `requireCondominioAccess`. La mappa dei ruoli è la stessa di
+`filtroCondomini` e di `requireCondominioAccess`: superadmin tutto, amministratore
+e assistenti i propri stabili, portiere quelli che serve, condòmino i suoi.
+
+### Un condòmino non poteva aprire il messaggio che aveva scritto lui
+
+`getOne` fa `populate` su mittente e destinatario, `segnaLetta` e `update` no.
+Confrontando il campo popolato si ottiene `"[object Object]"`, quindi il controllo di
+partecipazione **falliva sempre**: chi scriveva all'amministratore riceveva un 403
+aprendo la propria richiesta. All'amministratore non diceva niente, perché per lui
+quel controllo non esiste: il bug si nascondeva dietro il fatto che il percorso
+interessato è quello del condòmino.
+
+`idDi` ora accetta sia un id sia un documento popolato, così il controllo non
+dipende da come è stata costruita la query.
+
+
+### Il codice del condominio non si sceglie più, si genera
+
+Era un campo di testo libero che nessuno sapeva spiegare: obbligatorio, univoco,
+maiuscolo, e nessun formato. Compariva nei contratti e nelle comunicazioni, dove
+il nome non basta perché due stabili possono omonimi.
+
+Ora lo genera il server: le prime cifre vengono dal nome e il resto è un suffisso
+casuale, quindi `Residenza Aurora` dà `RESIDENCEAUR-1A2B3C`. Il campo non è più
+compilabile e nel form di modifica è mostrato come testo con la nota che è
+autogenerato.
+
+**Non è modificabile**, e per questo `condominioCreateSchema` e
+`condominioUpdateSchema` sono `strict`: mandare `codice` in creazione o in
+modifica è un `400` esplicito. Senza `strict` la `PATCH` verrebbe ignorata in
+silenzio e sembrerebbe una modifica riuscita, che è la stessa ragione per cui
+`aggiornaContrattoSchema` è `strict`.
+
+### Il condòmino sceglie su quale condominio lavorare
+
+Il selettore in testata compariva solo a chi **amministrava** almeno uno stabile,
+e un condòmino non amministra mai nulla: chi è iscritto a due stabili non poteva
+scegliere quale guardare. La condizione ora è "ha più di uno stabile fra cui
+scegliere", con la sola eccezione del superadmin che non ne amministra nessuno,
+perché i suoi stabili sono quelli che vede senza amministrarli e le rotte gli
+rispondono 403.
+
+La situazione non è teorica: l'iscrizione cerca l'utente per email e, se esiste, lo
+aggancia. Scrivendo in uno stabile la email di un iscritto di un altro, l'utente
+finisce in entrambi e i due amministratori non vengono a saperlo.
+
+### Nell'intestazione c'è scritto su quale condominio si lavora
+
+Il nome da solo sembrava il titolo della pagina: ora l'amministratore di
+condominio e il condòmino leggono `Condominio attivo: Residenza Aurora`. Al
+superadmin si mostra `Dashboard`, perché la sua casa è la piattaforma e il nome
+dello stabile è già nella barra di selezione.
+
+Le due copie del selettore, una nella barra laterale e una nella barra stretta,
+avevano ognuna la propria condizione e il proprio commento: ora ne condividono una.
+
+### Le due voci sulla scadenza delle attività diventano una
+
+In `TODO.md` c'erano "le scadute in una sezione separata" e "i filtri per
+scadenza", che sono lo stesso asse. Sono una voce sola, con le due decisioni che
+restano da prendere: il gruppo delle scadute non può stare nel server senza una
+seconda query, perché la paginazione taglia a `limit`; e il rosso va derivato dalla
+data e non memorizzato, perché una card memorizzata resterebbe scaduta per sempre.
+
+
 ### In dashboard c'erano due sezioni "Account"
 
 Segnalato in `bugs.md` navigando come superadmin: la barra laterale mostrava **due
@@ -72,7 +162,6 @@ Quattro bug emersi scrivendo il dominio e le verifiche:
   `strictPopulate` attivo questo **fa fallire la rotta** invece di tornare `[]`
   silenziosamente. Il compilatore era tranquillo.
 
-## 2026-10-05
 
 ### Il pallino dei messaggi contava le cose sbagliate
 

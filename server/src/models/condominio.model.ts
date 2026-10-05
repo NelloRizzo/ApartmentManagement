@@ -5,7 +5,19 @@ import type { UserDoc } from './user.model.js';
 const condominioSchema = baseSchema(
   {
     nome: { type: String, required: [true, 'Nome obbligatorio'], trim: true },
-    codice: { type: String, required: [true, 'Codice obbligatorio'], unique: true, uppercase: true, trim: true },
+    /**
+     * Identificativo univoco, **autogenerato** e non modificabile: serve nei
+     * contratti e nelle comunicazioni, dove il nome non basta perché due
+     * stabili possono omonimi. Vedi `generaCodiceCondominio`.
+     */
+    codice: {
+      type: String,
+      required: [true, 'Codice obbligatorio'],
+      unique: true,
+      uppercase: true,
+      trim: true,
+      maxlength: 20,
+    },
     indirizzo: {
       via: { type: String, required: true, trim: true },
       civico: { type: String, trim: true },

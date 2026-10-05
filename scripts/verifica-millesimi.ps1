@@ -27,7 +27,6 @@ function Status($method, $path, $body) {
 
 $ad = Login 'admin@condomini.local' 'Admin123!'
 $h = Auth $ad
-$codice = "MILL$([guid]::NewGuid().ToString('N').Substring(0,6))"
 # Se una precedente esecuzione è stata interrotta prima della pulizia, il
 # condominio è ancora in carico e la capacità contrattuale potrebbe esaurirsi:
 # va rimosso con `npm run purge:condominio --workspace server -- <id>`.
@@ -38,7 +37,7 @@ if ($orfani) {
   exit 1
 }
 
-$c = (Invoke-RestMethod -Method Post -Uri "$base/condomini" -Headers $h -ContentType 'application/json' -Body (@{nome='Prova millesimi';codice=$codice;indirizzo=@{via='Via Prova';civico='1';citta='Milano';cap='20100';provincia='MI'};totaleMillesimi=1000} | ConvertTo-Json -Depth 6)).data
+$c = (Invoke-RestMethod -Method Post -Uri "$base/condomini" -Headers $h -ContentType 'application/json' -Body (@{nome='Prova millesimi';indirizzo=@{via='Via Prova';civico='1';citta='Milano';cap='20100';provincia='MI'};totaleMillesimi=1000} | ConvertTo-Json -Depth 6)).data
 $cid = Id $c
 
 "== 1. condominio nuovo: nessuna quota definita =="

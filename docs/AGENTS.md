@@ -326,9 +326,32 @@ sfogliare lo stabile.
 - **`order` si dichiara nello schema che ne ha bisogno**, non si sposta il default
   di `paginationQuery`: quel `desc` serve le liste archiviali e le inversioni
   riusano `listaOrdinata`.
+- **Il perimetro delle comunicazioni è il condominio della rotta**, non un filtro
+  della query: `condominio` non va dichiarato in `comunicazioneListQuery` perché
+  `validate` lo scarterebbe, e il controller deve usare `req.params.condominioId`.
+  Un condominio diverso risponde **404**, non 403. La mappa dei ruoli è quella di
+  `requireCondominioAccess` e di `filtroCondomini`, e il superadmin li vede tutti per
+  scelta.
+- **`assicuraAccesso` deve reggere il `populate`.** È chiamata da `getOne`, che
+  popola mittente e destinatario, e da `segnaLetta`/`update`, che non lo fanno:
+  usare `idDi` e non `String(campo)`, altrimenti il confronto con l'id fallisce
+  sempre e il mittente non riesce ad aprire il proprio messaggio. Il percorso
+  dell'amministratore non lo rivela, perché per lui il controllo di partecipazione
+  non esiste.
 - **`unita` non ha un indirizzo** e non è pensata per averne: l'unità si intende
   dentro il condominio, che ha un `indirizzo` obbligatorio. Per la posizione basta
   il link a Google Maps sull'indirizzo del condominio.
+- **`Condominio.codice` è autogenerato e immutabile.** Lo genera
+  `generaCodiceCondominio` (nome ripulito più 6 cifre esadecimali) e non è un campo
+  che il client possa scegliere: è l'identificativo con cui lo stabile compare nei
+  contratti. Perciò `condominioCreateSchema` e `condominioUpdateSchema` sono
+  `strict`: mandarlo è un 400 esplicito, non una modifica ignorata in silenzio.
+- **Il selettore del condominio non è riservato a chi amministra**: la condizione è
+  averne più di uno, perché un condòmino iscritto a due stabili deve poter
+  scegliere come un amministratore. Unica eccezione il superadmin che non
+  amministra nessuno, perché le sue rotte di condominio rispondono 403.
+- **Nell'intestazione il titolo è `Condominio attivo: <nome>`**, o `Dashboard` per
+  il superadmin: il nome da solo sembrava il titolo della pagina.
 
 ## Allegati
 
@@ -498,7 +521,7 @@ npm run dev            # in un altro terminale
 npm run verifica       # dalla root: esegue gli script in sequenza
 ```
 
-`npm run verifica` riporta il totale dei controlli (179 al momento) e si ferma al
+`npm run verifica` riporta il totale dei controlli (191 al momento) e si ferma al
 primo script che fallisce. Gli script sono in `scripts/` e hanno tutti la stessa
 forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 409 della transizione illegale) accanto a quelli positivi.
@@ -510,8 +533,8 @@ forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 | `verifica-bilancio.ps1` | voci una alla volta, consuntivo, modelli |
 | `verifica-conferma-email.ps1` | conferma degli indirizzi |
 | `verifica-frontend-condomino.ps1` | che il condòmino conserva i propri dati |
-| `verifica-permesso-comunicazioni.ps1` | il guard delle comunicazioni, lato admin e lato condòmino, e il conteggio delle non lette |
-| `verifica-crud-condomini.ps1` | creazione, modifica, cancellazione, dipendenze bloccanti |
+| `verifica-permesso-comunicazioni.ps1` | il guard delle comunicazioni, lato admin e lato condòmino, il conteggio delle non lette e il perimetro di condominio |
+| `verifica-crud-condomini.ps1` | creazione, codice autogenerato e non modificabile, modifica, cancellazione, dipendenze bloccanti |
 | `verifica-crud-verbali.ps1` | generazione, modifica, approvazione, revoca, eliminazione |
 | `verifica-crud-versamenti.ps1` | registrazione, campi immutabili, cancellazione |
 | `verifica-crud-assemblee.ps1` | transizioni di stato, ricalcolo millesimi, eliminazione |

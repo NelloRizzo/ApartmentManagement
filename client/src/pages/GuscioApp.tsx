@@ -5,27 +5,6 @@ import { iniziali } from '@/lib/formattazione';
 import { etichette } from '@/components/Elementi';
 import { gruppiNavigazione, vociPrimarie, type VoceNavigazione } from '@/components/navigazione';
 
-/** Titolo dell'intestazione per chi non amministra alcun condominio. */
-const TITOLI_SEZIONE: Record<string, string> = {
-  p: 'Dashboard',
-  'p/contratti': 'Contratti',
-  'p/amministratori': 'Amministratori',
-  'p/messaggi': 'Messaggi agli amministratori',
-  'c/condomini': 'I miei condomini',
-  profilo: 'Profilo e posizioni',
-  contratto: 'Il mio contratto',
-};
-
-/**
- * Riduce il percorso alla sezione: `/p/contratti/6abe…` restituisce `p/contratti`,
- * mentre le rotte di dettaglio senza sezione propria restano come sono.
- */
-function segnaleDiSezione(percorso: string): string {
-  const parti = percorso.split('/').filter(Boolean);
-  if (parti[0] === 'p') return parti.length > 1 ? `p/${parti[1]}` : 'p';
-  return parti.join('/');
-}
-
 export default function GuscioApp() {
   const { utente, logout, condominioId, selezionaCondominio, nonLette, puo } = useAuth();
   const naviga = useNavigate();
@@ -46,16 +25,28 @@ export default function GuscioApp() {
   const amministra = utente.condomini.some((c) => !c.assistito);
 
   /*
-   * Nell'intestazione il nome del condominio compare solo a chi quel condominio
-   * lo amministra. Al superadmin che non ne amministra nessuno mostrerebbe il
-   * nome di uno stabile su cui non può operare: meglio il titolo della sezione
-   * che sta aprendo. Gli altri ruoli, portiere compreso, continuano a vedere il
-   * nome dello stabile in cui operano.
+   * Nell'intestazione l'amministratore di condominio e il condòmino leggono su
+   * quale stabile stanno lavorando, e il prefisso serve a dirlo: il nome da solo
+   * sembrerebbe il titolo della pagina. Al superadmin invece si mostra
+   * "Dashboard", perché la sua casa è la piattaforma e non uno stabile: anche
+   * quando ha selezionato un condominio sta guardando la piattaforma attraverso
+   * quella lente, e il nome del condominio è già nella barra di selezione.
    */
-  const titoloIntestazione =
-    utente.role === 'superadmin' && !amministra
-      ? (TITOLI_SEZIONE[segnaleDiSezione(posizione.pathname)] ?? 'Gestione Condomini')
-      : (selezionata?.nome ?? 'Gestione Condomini');
+  const titoloIntestazione = utente.role === 'superadmin' ? 'Dashboard' : `Condominio attivo: ${selezionata?.nome ?? '—'}`;
+
+  /*
+   * Il selettore compare a chi ha più di uno stabile fra cui scegliere, non solo a
+   * chi li amministra: un condòmino iscritto a due stabili di amministratori
+   * diversi deve poterli scegliere esattamente come fa l'amministratore, ed è
+   * una situazione che nasce da sola perché l'iscrittura per email aggancia
+   * l'utente esistente invece di crearne uno nuovo.
+   *
+   * Il superadmin che non amministra nessuno resta escluso: i suoi stabili sono
+   * quelli che vede senza amministrarli e le rotte di condominio gli rispondono
+   * 403, quindi mostrarglieli significherebbe promettere pagine vuote.
+   */
+  const selettoreVisible =
+    utente.condomini.length > 1 && (amministra || utente.role !== 'superadmin');
 
   // Le sezioni non delegate non vengono mostrate: il backend le rifiuterebbe.
   const gruppi = gruppiNavigazione(utente.role, puo, amministra);
@@ -81,11 +72,10 @@ export default function GuscioApp() {
         </div>
 
         {/*
-          I selettori si mostrano solo a chi amministra almeno uno stabile: al
-          superadmin che non ne gestisce nessuno offrirebbero condomini su cui
-          tutte le sezioni rispondono 403.
+          Stesso selettore della barra laterale: le due barre si vedono a larghezze
+          diverse, ma l'elenco e la condizione devono restare gli stessi.
         */}
-        {amministra && utente.condomini.length > 1 && (
+        {selettoreVisible && (
           <div className="campo barra-condominio">
             <label className="campo-etichetta" htmlFor="sel-cond-barra">
               Condominio
@@ -143,12 +133,7 @@ export default function GuscioApp() {
           </span>
         </header>
 
-        {/*
-          Il selettore si mostra solo a chi amministra almeno uno stabile: al
-          superadmin che non ne gestisce nessuno offrirebbe condomini su cui
-          tutte le sezioni rispondono 403.
-        */}
-        {amministra && utente.condomini.length > 1 && (
+        {selettoreVisible && (
           <div className="condominio-sbarra">
             <select
               className="area"

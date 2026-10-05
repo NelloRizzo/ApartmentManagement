@@ -40,5 +40,8 @@ PRIORITA BASSA
   - la proroga di una milestone deve prorogare anche l'attività di livello superiore, in cascata: oggi ogni attività ha le sue date e il padre le vede senza governarle
   - va fatto quando le date sono stabili, e richiede prevenzione dei cicli, ordine delle scritture definito e comportamento deciso quando una voce viene eliminata o spostata sotto un altro padre
   - la bacheca è in `/c/attivita`, le regole in `docs/AGENTS.md` sotto "Bacheca delle attività"
-- Filtri della bacheca per scadenza
-  - oggi si filtra solo per stato (da fare, completate, tutte): con molte attività manca "in scadenza questa settimana", che è la domanda che ci si pone guardando una bacheca
+- Scadenze in bacheca: sezione delle scadute e filtro per periodo
+  - le attività con `dataFine` passata e non ancora fatte vanno in un gruppo in cima alla bacheca, distinguibile dalle altre, con il conteggio: oggi l'ordinamento le mette già prime ma senza separarle da quelle che scadono oggi
+  - e serve un filtro per periodo ("in scadenza questa settimana"), che oggi non c'è: si filtra solo per stato (da fare, completate, tutte)
+  - il gruppo delle scadute non può stare nel server senza una seconda query: la paginazione taglia a `limit`, quindi se le scadute sono più di una pagina le altre restano fuori dal gruppo. Va deciso se accettare il gruppo solo a pagina 1 o se rispondere con un envelope dedicato
+  - il colore di una scadenza va **derivato**, non memorizzato: una card "scaduta" memorizzata resterebbe rosso domani. E se l'attività ha già un colore scelto dal proprietario, il rosso non deve sostituirlo: meglio un badge, perché `colore` è un accento e non uno sfondo (vedi `docs/AGENTS.md`)
