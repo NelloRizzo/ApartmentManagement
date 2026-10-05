@@ -148,10 +148,21 @@ Check 'scadenza prima dell''inizio rifiutata' ($sDate -eq 'BAD_REQUEST') "esito 
 
 "== 9. il proprietario corregge =="
 $agg = Invoke-RestMethod -Method Patch -Uri "$base/staff/attivita/$aid" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{
-  titolo = 'Verifica impianto e centralina'; assegnatari = @($ass1)
+  titolo = 'Verifica impianto e centralina'; assegnatari = @($ass1); colore = 'arancio'
 } | ConvertTo-Json)
 Check 'titolo aggiornato' ($agg.data.titolo -eq 'Verifica impianto e centralina') $agg.error.message
 Check 'l''aggiornamento non tocca il thread' (@($agg.data.parent -eq $null))
+Check 'il colore è registrato' ($agg.data.colore -eq 'arancio') "colore $($agg.data.colore)"
+
+"== 9b. il colore =="
+$sColore = Status Post '/staff/attivita' @{ titolo = 'Colore assurdo'; assegnatari = @(); colore = 'fucsia' } $ad
+Check 'colore fuori elenco rifiutato' ($sColore -eq 'BAD_REQUEST') "esito $sColore"
+Check 'senza colore il default è nessuno' ((Status Post '/staff/attivita' @{ titolo = 'Senza colore'; assegnatari = @() } $ad) -ne 'BAD_REQUEST')
+$sNullo = Invoke-RestMethod -Method Post -Uri "$base/staff/attivita" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{
+  titolo = 'Colore annullato'; assegnatari = @(); colore = $null
+} | ConvertTo-Json)
+Check 'il colore si può togliere' ($null -eq $sNullo.data.colore) "colore $($sNullo.data.colore)"
+Elimina (Id $sNullo.data)
 
 "== 10. pulizia =="
 Elimina $aid

@@ -2,6 +2,16 @@ import { Schema, model, type Model } from 'mongoose';
 import { baseSchema, models, type ObjectId } from './base.js';
 
 /**
+ * Colori assegnabili a un'attività.
+ *
+ * Sono sei chiavi che il frontend mappa su token già esistenti, non un
+ * ColorPicker: un colore libero renderebbe illeggibile il testo della card e
+ * porterebbe colori fuori dal tema, in chiaro e in stampa.
+ */
+export const COLORI_ATTIVITA = ['blu', 'verde', 'ambra', 'arancio', 'rosso', 'grigio'] as const;
+export type ColoreAttivita = (typeof COLORI_ATTIVITA)[number];
+
+/**
  * Attività della bacheca del team amministrativo.
  *
  * È l'unico dominio che non appartiene a un condominio: l'attività è un
@@ -56,6 +66,16 @@ const attivitaSchema = baseSchema(
     dataInizio: { type: Date },
     dataFine: { type: Date },
 
+    /**
+     * Colore dell'attività, scelto dal proprietario.
+     *
+     * `null` è il default e non "senza colore": è l'assenza di una scelta, come
+     * per `assegnatari` vuota. Il colore è solo un accento, non uno sfondo: se
+     * fosse il fondo della card, il testo dovrebbe essere leggibile su ognuno dei
+     * sei colori e la scelta ricadrebbe di nuovo su chi la fa.
+     */
+    colore: { type: String, enum: COLORI_ATTIVITA, default: null },
+
     fatto: { type: Boolean, default: false },
     /** Chi ha segnato "fatto" e quando: serve a chi legge la bacheca. */
     fattoDa: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -79,6 +99,7 @@ export interface AttivitaDoc {
   milestone: boolean;
   dataInizio?: Date;
   dataFine?: Date;
+  colore: ColoreAttivita | null;
   fatto: boolean;
   fattoDa?: ObjectId;
   fattoIl?: Date;

@@ -6,7 +6,7 @@ import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedba
 import { Statistica, etichette } from '@/components/Elementi';
 import { TitoloPagina } from '@/components/TitoloPagina';
 import { euro, numero, data as fmtData, mese } from '@/lib/formattazione';
-import type { Permesso, RiepilogoCondominio, RiepilogoQuote } from '@/types/domain';
+import type { Permesso, RiepilogoCondominio, RiepilogoQuote, UserRole } from '@/types/domain';
 
 /**
  * Scorciatoie verso le sezioni frequenti.
@@ -14,8 +14,12 @@ import type { Permesso, RiepilogoCondominio, RiepilogoQuote } from '@/types/doma
  * Ogni voce porta il permesso necessario: un assistente che può solo registrare
  * versamenti non deve vedere il pulsante "Gestisci quote millesimali", che il
  * backend gli rifiuterebbe con un 403.
+ *
+ * La bacheca fa eccezione: non ha un permesso proprio, perché l'accesso dipende
+ * da chi ha ricevuto l'attività. È quindi filtrata per ruolo.
  */
-const SCORCIATOIE: { a: string; etichetta: string; permesso: Permesso }[] = [
+const SCORCIATOIE: { a: string; etichetta: string; permesso?: Permesso; ruoli?: UserRole[] }[] = [
+  { a: '/c/bacheca', etichetta: 'Bacheca', ruoli: ['admin'] },
   { a: '/c/quote', etichetta: 'Quote e versamenti', permesso: 'versamenti:leggere' },
   { a: '/c/tabella', etichetta: 'Gestisci quote millesimali', permesso: 'tabella:leggere' },
   { a: '/c/assemblee', etichetta: 'Assemblee', permesso: 'assemblee:leggere' },
@@ -24,7 +28,9 @@ const SCORCIATOIE: { a: string; etichetta: string; permesso: Permesso }[] = [
 
 export default function PaginaPanorama() {
   const { condominioId, utente, puo } = useAuth();
-  const accessi = SCORCIATOIE.filter((s) => puo(s.permesso));
+  const accessi = SCORCIATOIE.filter(
+    (s) => (!s.permesso || puo(s.permesso)) && (!s.ruoli || (utente && s.ruoli.includes(utente.role))),
+  );
 
   const riepilogo = useApi<RiepilogoCondominio>(
     (segnale) => api.get<RiepilogoCondominio>(`/condomini/${condominioId}/riepilogo`, undefined, { signal: segnale }).then((r) => r.data),

@@ -4,6 +4,40 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-04
 
+### Le card della bacheca hanno un colore e un'inclinazione
+
+Il proprietario può scegliere un colore fra sei, che è un accento sul bordo
+sinistro della card e non il fondo: se fosse il fondo, il testo dovrebbe essere
+leggibile su tutti e sei e la scelta ricadrebbe di nuovo su chi la fa. I colori
+non sono liberi, sono sei chiavi che il frontend mappa su token già esistenti in
+`_tokens.scss`: un colore scelto a caso porterebbe colori fuori dal tema e in
+stampa. `null` significa "nessun colore scelto" e si può togliere.
+
+L'inclinazione è di due gradi, al massimo, ed è **derivata dall'id** e non tirata a
+caso a ogni render: un `Math.random` qui farebbe saltare tutte le card a ogni
+ricarica, e il difetto sarebbe più fastidioso dell'effetto. Dall'id è anche senza
+migrazione e uguale su ogni dispositivo. Sotto il puntatore la card si raddrizza.
+In stampa rotazione e ombre spariscono e la griglia passa a blocco: un foglio con
+le card storte sembrerebbe un errore di stampa.
+
+### La sezione si chiama Bacheca ed è raggiungibile dal panorama
+
+Rinominata la sezione, la rotta (`/c/bacheca`) e la voce di navigazione, messa
+prima in "Amministrazione". Il dominio e l'API restano su `attivita`: l'entità è
+un'attività, la pagina è la bacheca che le contiene.
+
+Dal panorama si arriva alla bacheca con una scorciatoia, ed è la prima voce che
+non è filtrata per permesso: l'accesso dipende da chi ha ricevuto l'attività, non
+da un ambito delegabile. Per questo la scorciatoia è filtrata per ruolo.
+
+### Un pulsante senza margine nella bacheca
+
+`riga-tra` da solo non è un flex: imposta solo `justify-content`, quindi titolo e
+pulsante diventavano un blocco e un elemento inline, con il pulsante attaccato al
+titolo. In tutto il resto del codice `riga-tra` è sempre preceduto da `riga`.
+
+Bug ripreso da `bugs.md`, che ora non contiene più voci aperte.
+
 ### Il codice duplicato di un condominio rispondeva 500
 
 Riusare il codice di un altro condominio violava l'indice univoco e arrivava al

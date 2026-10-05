@@ -8,7 +8,8 @@ import { useConferma } from '@/components/Conferma';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
 import { TitoloPagina } from '@/components/TitoloPagina';
 import { data, dataLunga, perInputData } from '@/lib/formattazione';
-import type { ApiEnvelope, AssistenteAttivita, Attivita } from '@/types/domain';
+import type { ApiEnvelope, AssistenteAttivita, Attivita, ColoreAttivita } from '@/types/domain';
+import { COLORI_ATTIVITA, ETICHETTE_COLORE, TOKEN_COLORE } from '@/types/domain';
 
 type FiltroStato = 'aperta' | 'fatta' | 'tutte';
 
@@ -24,13 +25,43 @@ function scaduta(a: Attivita): boolean {
   return new Date(a.dataFine).getTime() < Date.now();
 }
 
+/**
+ * Inclinazione di una card, in gradi.
+ *
+ * Il effetto è quello di un post-it attaccato a una superficie: pochi gradi, non
+ * di più, o la griglia sembra rotta.
+ *
+ * Viene **derivata dall'id** e non tirata a caso a ogni render: un `Math.random`
+ * qui farebbe saltare tutte le card a ogni ricarica o a ogni `ricarica()`, e il
+ * risultato sarebbe più fastidioso dell'effetto. Dall'id è anche senza migrazione e
+ * uguale su ogni dispositivo.
+ */
+function inclinazione(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i += 1) h = (h * 31 + id.charCodeAt(i)) % 1000;
+  // Da -2.2° a +2.2°: abbastanza da non leggersi come una riga, poco da sembrare
+  // un errore.
+  return (h / 1000) * 4.4 - 2.2;
+}
+
 function CardAttivita({ attivita, onApri }: { attivita: Attivita; onApri: () => void }) {
   const classi = ['bacheca-card'];
   if (attivita.fatto) classi.push('bacheca-card-fatta');
   else if (scaduta(attivita)) classi.push('bacheca-card-scaduta');
+  // Il colore è un accento sul bordo: il fondo resta leggibile su tutti e sei, e
+  // la scelta non può rendere illeggibile il titolo.
+  if (attivita.colore) classi.push('bacheca-card-colore');
+
+  // La rotazione non entra in `--colore-attivita`: l'accento sta nel CSS, l'angolo
+  // dipende dall'id e quindi è un valore calcolato, qui accanto al colore.
+  const stile: React.CSSProperties = { transform: `rotate(${inclinazione(attivita._id)}deg)` };
+  if (attivita.colore) {
+    (stile as React.CSSProperties & { '--colore-attivita': string })['--colore-attivita'] =
+      TOKEN_COLORE[attivita.colore];
+  }
 
   return (
-    <button type="button" className={classi.join(' ')} onClick={onApri}>
+    <button type="button" className={classi.join(' ')} style={stile} onClick={onApri}>
       <span className="bacheca-titolo">{attivita.titolo}</span>
       {attivita.descrizione && <span className="testo-faint">{attivita.descrizione}</span>}
 
@@ -60,7 +91,7 @@ function CardAttivita({ attivita, onApri }: { attivita: Attivita; onApri: () => 
   );
 }
 
-export default function PaginaAttivita() {
+export default function PaginaBacheca() {
   const { utente } = useAuth();
   const [stato, setStato] = useState<FiltroStato>('aperta');
   const [soloAssegnate, setSoloAssegnate] = useState(false);
@@ -117,7 +148,7 @@ export default function PaginaAttivita() {
   if (!sonoAmministratore) {
     contenuto = (
       <PaginaVuota
-        titolo="Attività non disponibili"
+        titolo="Bacheca non disponibile"
         descrizione="La bacheca delle attività è riservata agli amministratori."
       />
     );
@@ -147,7 +178,7 @@ export default function PaginaAttivita() {
     contenuto = (
       <>
         <TitoloPagina
-          titolo="Attività"
+          titolo="Bacheca"
           descrizione="I compiti che dividi con il tuo team. Li vede solo chi li ha ricevuti."
           azioni={
             <button type="button" className="btn btn-primario" onClick={() => setInCreazione(true)}>
@@ -350,7 +381,7 @@ function DettaglioAttivita({
         </div>
       </div>
 
-      <div className="riga-tra" style={{ marginBottom: 'var(--sp-3)' }}>
+      <div className="riga riga-tra" style={{ marginBottom: 'var(--sp-3)' }}>
         <h2>Voci del thread</h2>
         {attivita.sonoProprietario && (
           <button type="button" className="btn btn-secondario btn-sm" onClick={() => setInNuovaVoce(true)}>
@@ -410,6 +441,7 @@ function ModuloAttivita({
   const [dataInizio, setDataInizio] = useState(perInputData(attivita?.dataInizio));
   const [dataFine, setDataFine] = useState(perInputData(attivita?.dataFine));
   const [milestone, setMilestone] = useState(attivita?.milestone ?? false);
+  const [colore, setColore] = useState<ColoreAttivita | null>(attivita?.colore ?? null);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
 
@@ -433,6 +465,7 @@ function ModuloAttivita({
       titolo: titolo.trim(),
       descrizione: descrizione.trim(),
       assegnatari,
+      colore,
       dataInizio: dataInizio || undefined,
       dataFine: dataFine || undefined,
     };
@@ -441,8 +474,7 @@ function ModuloAttivita({
         await api.patch(`/staff/attivita/${attivita._id}`, corpo);
         notifica('Attività aggiornata');
       } else {
-        await api.post('/staff/attivita', { ...corpo, ...(padre ? { parent: padre } : {}), milestone });
-        notifica(padre ? 'Voce aggiunta al thread' : 'Attività creata');
+        await api.post('/staff/attivita', { ...corpo, ...(padre ? { parent: padre } : {}), milestone });        notifica(padre ? 'Voce aggiunta al thread' : 'Attività creata');
       }
       onSalvato();
     } catch (e) {
@@ -556,6 +588,34 @@ function ModuloAttivita({
               <span>È una milestone</span>
             </label>
           )}
+
+          <div className="campo">
+            <span className="campo-etichetta">Colore</span>
+            <div className="riga" style={{ gap: 'var(--sp-2)' }}>
+              <button
+                type="button"
+                className={`campione${colore === null ? ' campione-scelto' : ''}`}
+                onClick={() => setColore(null)}
+                aria-label="Nessun colore"
+                aria-pressed={colore === null}
+              />
+              {COLORI_ATTIVITA.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`campione${colore === c ? ' campione-scelto' : ''}`}
+                  style={{ '--colore-campione': TOKEN_COLORE[c] } as React.CSSProperties}
+                  onClick={() => setColore(c)}
+                  aria-label={ETICHETTE_COLORE[c]}
+                  aria-pressed={colore === c}
+                  title={ETICHETTE_COLORE[c]}
+                />
+              ))}
+            </div>
+            <span className="testo-faint">
+              Il colore è un accento sulla card: il fondo resta leggibile su tutti e sei.
+            </span>
+          </div>
 
           {errore && (
             <div className="avviso avviso-pericolo" role="alert">

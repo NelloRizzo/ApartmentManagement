@@ -123,3 +123,20 @@ body.stampa-attiva h3 {
 body.stampa-attiva .solo-stampa {
   display: block;
 }
+// L'inclinazione delle card della bacheca è un effetto da schermo: su carta le
+// farebbe uscire dagli angoli della pagina e sembrerebbe un errore di stampa.
+// La stessa ragione vale per l'ombra di rilievo e per lo stato "hover".
+@media print {
+  .bacheca {
+    display: block;
+  }
+
+  .bacheca-card,
+  .bacheca-card:hover {
+    transform: none;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  .bacheca-card-colore { border-left-width: 2px; }
+}

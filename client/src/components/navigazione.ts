@@ -50,14 +50,13 @@ const amministratore: GruppoNavigazione[] = [
   {
     titolo: 'Amministrazione',
     voci: [
+      // Prima della pagina: la bacheca è il punto in cui si entra, e non ha
+      // permessi perché anche l'assistente deve arrivarci per i compiti ricevuti.
+      { a: '/c/bacheca', etichetta: 'Bacheca', icona: '☐', primaria: true },
       { a: '/c/bilanci', etichetta: 'Bilanci', icona: '▤', permesso: 'bilanci:leggere' },
       { a: '/c/quote', etichetta: 'Quote e versamenti', icona: '€', primaria: true, permesso: 'versamenti:leggere' },
       { a: '/c/versamenti/nuovo', etichetta: 'Registra versamento', icona: '＋', permesso: 'versamenti:scrivere' },
       { a: '/c/team', etichetta: 'Team e deleghe', icona: '👥', permesso: 'amministrazione:leggere' },
-      // Nessun permesso: la bacheca è del team, e anche l'assistente deve poterci
-      // arrivare per vedere i compiti che ha ricevuto. Chi non è amministratore
-      // non vede questa voce perché il gruppo è quello degli amministratori.
-      { a: '/c/attivita', etichetta: 'Attività', icona: '☐', primaria: true },
     ],
   },
   {

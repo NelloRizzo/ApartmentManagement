@@ -14,6 +14,7 @@ import {
 } from '../types/domain.js';
 import { PERIODICITA, STATI_CONTRATTO } from '../models/contratto.model.js';
 import { TIPI_MESSAGGIO } from '../models/messaggioPiattaforma.model.js';
+import { COLORI_ATTIVITA } from '../models/attivita.model.js';
 
 export const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'ObjectId non valido');
 
@@ -591,6 +592,8 @@ export const creaAttivitaSchema = z
     assegnatari: assegnatari.default([]),
     parent: objectId.optional(),
     milestone: z.boolean().default(false),
+    /** `null` è "nessun colore scelto", non "nero". */
+    colore: z.enum(COLORI_ATTIVITA).nullable().default(null),
     dataInizio: z.coerce.date().optional(),
     dataFine: z.coerce.date().optional(),
   })
@@ -611,6 +614,11 @@ export const aggiornaAttivitaSchema = z
     titolo: z.string().trim().min(1, 'Il titolo è obbligatorio').max(300),
     descrizione: z.string().trim().max(20_000).default(''),
     assegnatari: assegnatari,
+    // Come sopra, ma `default(null)` e non `optional()`: questa rotta sostituisce
+    // il documento, quindi un campo omesso viene azzerato. Senza il default un
+    // PATCH senza colore fallirebbe la validazione prima ancora di controllare chi
+    // può modificarlo, e ogni client esistente si romperebbe.
+    colore: z.enum(COLORI_ATTIVITA).nullable().default(null),
     dataInizio: z.coerce.date().optional(),
     dataFine: z.coerce.date().optional(),
   })

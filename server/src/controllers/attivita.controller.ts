@@ -3,7 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created, noContent, paginated } from '../utils/http.js';
 import { getObjectId, paginazioneDa, regexDaTesto } from '../utils/pagination.js';
 import { notFound } from '../utils/errors.js';
-import { Attivita, User, type AttivitaDoc, type UserDoc } from '../models/index.js';
+import { Attivita, User, type AttivitaDoc, type ColoreAttivita, type UserDoc } from '../models/index.js';
 import { currentUser } from '../middleware/auth.js';
 import { auditLog } from '../services/audit.service.js';
 import {
@@ -76,6 +76,7 @@ function riepilogo(doc: AttivitaPopolata, utenteId: string) {
     })),
     parent: doc.parent ?? null,
     milestone: doc.milestone,
+    colore: doc.colore ?? null,
     dataInizio: doc.dataInizio ?? null,
     dataFine: doc.dataFine ?? null,
     fatto: doc.fatto,
@@ -188,6 +189,7 @@ export const crea = asyncHandler(async (req, res) => {
     assegnatari: string[];
     parent?: string;
     milestone: boolean;
+    colore?: ColoreAttivita | null;
     dataInizio?: Date;
     dataFine?: Date;
   };
@@ -205,6 +207,7 @@ export const crea = asyncHandler(async (req, res) => {
     assegnatari,
     parent: parent ?? undefined,
     milestone: body.milestone ?? false,
+    colore: body.colore ?? null,
     dataInizio: body.dataInizio,
     dataFine: body.dataFine,
   });
@@ -241,6 +244,7 @@ export const aggiorna = asyncHandler(async (req, res) => {
     titolo: string;
     descrizione: string;
     assegnatari: string[];
+    colore?: ColoreAttivita | null;
     dataInizio?: Date;
     dataFine?: Date;
   };
@@ -252,6 +256,7 @@ export const aggiorna = asyncHandler(async (req, res) => {
         titolo: body.titolo,
         descrizione: body.descrizione ?? '',
         assegnatari: await assicuraAssegnatari(utente.sub, body.assegnatari ?? []),
+        colore: body.colore ?? null,
         dataInizio: body.dataInizio,
         dataFine: body.dataFine,
       },

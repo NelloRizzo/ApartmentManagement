@@ -64,8 +64,8 @@ export type {
   TipoMessaggio,
 } from './messaggioPiattaforma.model.js';
 
-export { Attivita } from './attivita.model.js';
-export type { AttivitaDoc, AttivitaModel } from './attivita.model.js';
+export { Attivita, COLORI_ATTIVITA } from './attivita.model.js';
+export type { AttivitaDoc, AttivitaModel, ColoreAttivita } from './attivita.model.js';
 
 export { baseSchema, sanitize } from './base.js';
 export type { ObjectId } from './base.js';

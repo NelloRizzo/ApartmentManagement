@@ -374,9 +374,15 @@
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   cursor: pointer;
+  // L'inclinazione è inline (dipende dall'id), ma la transizione sta qui: sotto
+  // il puntatore la card si raddrizza, come un post-it che si stacca.
+  transition: transform 0.12s ease-out, border-color 0.12s ease-out;
 }
 
-.bacheca-card:hover { border-color: var(--c-border-strong); }
+.bacheca-card:hover {
+  border-color: var(--c-border-strong);
+  transform: rotate(0deg);
+}
 
 // La card è un pulsante: senza questo lo sfondo e il bordo la farebbero sembrare
 // un controllo da tenere premuto.
@@ -419,3 +425,34 @@
 
 // In ritardo sulla scadenza, e non ancora completata.
 .bacheca-card-scaduta { border-color: var(--c-danger); }
+
+// Il colore scelto dal proprietario è solo un accento sul bordo sinistro: il
+// fondo resta `--c-surface` e il contrasto del titolo non dipende dalla scelta.
+// `--colore-attivita` è impostato inline dalla pagina, dal token del colore.
+.bacheca-card-colore {
+  border-left: 4px solid var(--colore-attivita, transparent);
+}
+
+// ===== Selettore del colore =====
+
+// Il campione è un bottone tondo colorato; quello scelto si distingue dal bordo
+// esterno, non dal colore di fondo, che è già il suo.
+.campione {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-full);
+  background: var(--colore-campione, var(--c-surface));
+  cursor: pointer;
+}
+
+.campione-scelto {
+  border-color: var(--c-text);
+  box-shadow: 0 0 0 2px var(--c-surface) inset;
+}
+
+.campione:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}

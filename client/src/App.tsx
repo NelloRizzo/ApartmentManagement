@@ -24,7 +24,7 @@ import PaginaIscritti from '@/pages/PaginaIscritti';
 import PaginaBilanci from '@/pages/PaginaBilanci';
 import PaginaNuovoVersamento from '@/pages/PaginaNuovoVersamento';
 import PaginaTeam from '@/pages/PaginaTeam';
-import PaginaAttivita from '@/pages/PaginaAttivita';
+import PaginaBacheca from '@/pages/PaginaBacheca';
 import PaginaContratti from '@/pages/PaginaContratti';
 import PaginaContrattoDettaglio from '@/pages/PaginaContrattoDettaglio';
 import PaginaAmministratori from '@/pages/PaginaAmministratori';
@@ -116,10 +116,10 @@ export default function App() {
               c'è un permesso. `RichiediRuoli` esclude il superadmin, che dal
               server riceve 403 su queste rotte. */}
           <Route
-            path="c/attivita"
+            path="c/bacheca"
             element={
               <RichiediRuoli ruoli={['admin']}>
-                <PaginaAttivita />
+                <PaginaBacheca />
               </RichiediRuoli>
             }
           />

@@ -568,8 +568,37 @@ export interface Comunicazione {
   createdAt: string;
   thread?: Comunicazione[];
 }
-/** Utente che compare nelle attività: proprietario o assegnatario. */
-export interface UtenteAttivita {
+/**
+ * Colori assegnabili a un'attività.
+ *
+ * Le chiavi corrispondono all'enum del server: il frontend non sceglie il colore,
+ * sceglie una chiave, e la chiave diventa un token. Un colore libero renderebbe
+ * illeggibile il testo della card e porterebbe colori fuori dal tema.
+ */
+export const COLORI_ATTIVITA = ['blu', 'verde', 'ambra', 'arancio', 'rosso', 'grigio'] as const;
+export type ColoreAttivita = (typeof COLORI_ATTIVITA)[number];
+
+/** Chiave del colore → token di `_tokens.scss`. Nessun colore scritto a mano. */
+export const TOKEN_COLORE: Record<ColoreAttivita, string> = {
+  blu: 'var(--c-primary)',
+  verde: 'var(--c-success)',
+  ambra: 'var(--c-warning)',
+  arancio: 'var(--c-accent)',
+  rosso: 'var(--c-danger)',
+  grigio: 'var(--c-text-soft)',
+};
+
+/** Etichette per il selettore del colore. */
+export const ETICHETTE_COLORE: Record<ColoreAttivita, string> = {
+  blu: 'Blu',
+  verde: 'Verde',
+  ambra: 'Ambra',
+  arancio: 'Arancio',
+  rosso: 'Rosso',
+  grigio: 'Grigio',
+};
+
+/** Utente che compare nelle attività: proprietario o assegnatario. */export interface UtenteAttivita {
   id: string;
   nome: string;
   cognome: string;
@@ -597,6 +626,8 @@ export interface Attivita {
   /** Voce di un thread: `null` se è un'attività di primo livello. */
   parent: string | null;
   milestone: boolean;
+  /** Colore dell'attività, scelto dal proprietario. `null` se nessuno. */
+  colore: ColoreAttivita | null;
   dataInizio: string | null;
   dataFine: string | null;
   fatto: boolean;
