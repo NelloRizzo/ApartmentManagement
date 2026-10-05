@@ -54,6 +54,10 @@ const amministratore: GruppoNavigazione[] = [
       { a: '/c/quote', etichetta: 'Quote e versamenti', icona: '€', primaria: true, permesso: 'versamenti:leggere' },
       { a: '/c/versamenti/nuovo', etichetta: 'Registra versamento', icona: '＋', permesso: 'versamenti:scrivere' },
       { a: '/c/team', etichetta: 'Team e deleghe', icona: '👥', permesso: 'amministrazione:leggere' },
+      // Nessun permesso: la bacheca è del team, e anche l'assistente deve poterci
+      // arrivare per vedere i compiti che ha ricevuto. Chi non è amministratore
+      // non vede questa voce perché il gruppo è quello degli amministratori.
+      { a: '/c/attivita', etichetta: 'Attività', icona: '☐', primaria: true },
     ],
   },
   {

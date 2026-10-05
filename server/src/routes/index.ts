@@ -3,6 +3,7 @@ import authRoutes from './auth.routes.js';
 import condominioRoutes from './condominio.routes.js';
 import ambitoCondominioRoutes from './ambitoCondominio.routes.js';
 import staffRoutes from './staff.routes.js';
+import attivitaRoutes from './attivita.routes.js';
 import contrattoRoutes from './contratto.routes.js';
 import { apiLimiter } from '../middleware/rateLimit.js';
 
@@ -16,6 +17,7 @@ router.get('/health', (_req, res) => {
 
 router.use('/auth', authRoutes);
 router.use('/staff', staffRoutes);
+router.use('/staff/attivita', attivitaRoutes);
 router.use('/contratti', contrattoRoutes);
 
 // `/condomini` gestisce il condominio come risorsa; tutto ciò che è interno

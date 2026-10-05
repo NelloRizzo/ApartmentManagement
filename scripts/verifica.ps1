@@ -17,7 +17,8 @@ $scriptVerifiche = @(
   'verifica-crud-versamenti.ps1',
   'verifica-crud-assemblee.ps1',
   'verifica-crud-bilanci.ps1',
-  'verifica-millesimi.ps1'
+  'verifica-millesimi.ps1',
+  'verifica-attivita.ps1'
 )
 
 $falliti = @()

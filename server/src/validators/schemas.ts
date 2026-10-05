@@ -574,3 +574,59 @@ export const messaggioPiattaformaSchema = z.object({
   oggetto: z.string().trim().min(1).max(300),
   corpo: z.string().trim().max(50_000).default(''),
 });
+
+/** Destinatari di un'attività: ids, con almeno uno ammesso. */
+const assegnatari = z.array(objectId).max(50);
+
+/**
+ * Creazione di un'attività.
+ *
+ * `assegnatari` è un elenco esplicito e può essere vuoto: significa che
+ * l'attività non è ancora passata a nessuno e resta del solo proprietario.
+ */
+export const creaAttivitaSchema = z
+  .object({
+    titolo: z.string().trim().min(1, 'Il titolo è obbligatorio').max(300),
+    descrizione: z.string().trim().max(20_000).default(''),
+    assegnatari: assegnatari.default([]),
+    parent: objectId.optional(),
+    milestone: z.boolean().default(false),
+    dataInizio: z.coerce.date().optional(),
+    dataFine: z.coerce.date().optional(),
+  })
+  .refine((v) => !v.dataInizio || !v.dataFine || v.dataFine >= v.dataInizio, {
+    message: 'La scadenza non può precedere la data di inizio',
+    path: ['dataFine'],
+  });
+
+/**
+ * Modifica di un'attività.
+ *
+ * Senza `assegnatari`, `parent` e `milestone`: il thread si decide alla creazione
+ * e cambiarlo in corsa farebbe dipendere la struttura da chi tocca il record per
+ * primo. Per spostare una voce in un altro thread si crea un'altra attività.
+ */
+export const aggiornaAttivitaSchema = z
+  .object({
+    titolo: z.string().trim().min(1, 'Il titolo è obbligatorio').max(300),
+    descrizione: z.string().trim().max(20_000).default(''),
+    assegnatari: assegnatari,
+    dataInizio: z.coerce.date().optional(),
+    dataFine: z.coerce.date().optional(),
+  })
+  .refine((v) => !v.dataInizio || !v.dataFine || v.dataFine >= v.dataInizio, {
+    message: 'La scadenza non può precedere la data di inizio',
+    path: ['dataFine'],
+  });
+
+/** Segnatura di "fatto": va e torna, quindi il booleano è obbligatorio. */
+export const fattoAttivitaSchema = z.object({ fatto: z.boolean() });
+
+export const listaAttivitaQuery = paginationQuery.extend({
+  /** `fatto` filtra le aperte o le chiuse; `tutte` non filtra. */
+  stato: z.enum(['tutte', 'aperta', 'fatta']).default('aperta'),
+  /** Le attività che mi sono state assegnate, escludendo le mie. */
+  soloAssegnate: flagQuery.default(false),
+  sort: z.string().trim().max(40).default('dataFine'),
+});
+

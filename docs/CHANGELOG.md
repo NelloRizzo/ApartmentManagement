@@ -4,6 +4,134 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-04
 
+### Il codice duplicato di un condominio rispondeva 500
+
+Riusare il codice di un altro condominio violava l'indice univoco e arrivava al
+client come `500 INTERNAL_ERROR`, con dentro lo stack di MongoDB. Il motivo è che
+`E11000` è sollevato dal driver **sulla scrittura**: non si può impedire la
+collisione con una verifica preventiva, perché due richieste contemporanee
+passerebbero entrambe quel controllo.
+
+Per questo la traduzione sta nel gestore errori e non in ogni controller: `11000`
+diventa un `409` che nomina il campo e il valore, e vale per ogni indice univoco
+dell'applicazione, anche per quelli che non si sono ancora toccati. Non si usa
+`instanceof` sulla classe del driver, che cambia tra versioni: basta il codice
+numerico, che è parte del protocollo.
+
+Lo stack nella risposta era un falso allarme: `error.ts` lo espone solo quando
+`config.isProd` è falso.
+
+### Nel profilo un amministratore risultava "Proprietario"
+
+`GET /auth/me` costruiva le posizioni non da un `Condomino` (l'amministratore non
+ne ha uno) ma sul posto, con `regime: 'proprietario'` come segnalatore di
+"posizione solo operativa". La UI leggeva quel valore e mostrava "Proprietario ·
+unità " con un elenco vuoto: raccontava il contrario di quello che è.
+
+Ora `regime` è `null` quando non c'è una posizione di proprietà, e accanto c'è un
+campo `ruolo` che dice come l'utente sta in **quel** condominio:
+`amministratore`, `assistente`, `servito`, `condomino` o `osservatore`. Il ruolo è
+derivato dal confronto con `Condominio.amministratore` e non dal ruolo dell'utente,
+perché un admin è amministratore in uno stabile e assistente in un altro.
+
+È emerso anche che al superadmin tutto questo non tornava: vedendo ogni stabile
+senza amministrarne nessuno, sarebbe caduto nel ramo "assistente", che è una
+delega che non gli è mai stata data. Da qui `osservatore`.
+
+Come effetto collaterale il selettore del condominio in testata non compare più
+per un condòmino collegato a più di uno stabile: prima glielo offriva, e poteva
+scegliere un condominio non suo.
+
+### Margini mancanti
+
+Segnalati in `bugs.md`: il messaggio "Nessuna voce: il totale è zero" era addossato
+al bordo mentre le righe sopra avevano il padding, e i pulsanti a tutta larghezza
+che seguono dei campi non avevano margine sopra. `.campo` è una colonna flex senza
+`margin-bottom`, quindi il pulsante si incolla all'ultimo campo.
+
+Il pulsante è risolto con una utility `.margine-sopra` invece che con stili
+inline sparsi: non va abbinata a `pila-*`, che dà già il suo spazio con `gap`.
+
+### Attività: la bacheca del team, lato UI
+
+La bacheca è in `/c/attivita`, una card per attività in una griglia che su schermo
+stretto scende a una colonna. Il filtro è per stato (da fare, completate, tutte)
+più l'interruttore "solo quelle affidate a me", che per l'assistente è la vista
+naturale.
+
+Cliccando una card il contenuto della bacheca viene **sostituito** dal thread, che
+è il comportamento richiesto: il ritorno è un cambiamento di stato e non una
+navigazione, quindi non si perde il filtro con cui si era entrati.
+
+Le card completate restano in bacheca con aspetto diverso (fondo verde, titolo
+barrato) e spariscono solo su eliminazione esplicita. Una scadenza superata e non
+ancora completata mette il bordo della card in rosso: è l'informazione che si cerca
+guardando una bacheca.
+
+Sul lato permessi la pagina è sotto `RichiediRuoli(['admin'])` e non sotto un
+`RichiediPermesso`, per due ragioni. L'assistente deve arrivarci anche se non ha
+`amministrazione:leggere` (l'assistente del seed ha solo `versamenti:*` e non
+vedrebbe la pagina), e il superadmin è escluso perché il server gli risponde 403 su
+queste rotte.
+
+### Attività: la bacheca del team, lato API
+
+Primo pezzo del dominio `attivita`, montato su `/staff/attivita`. È l'unico
+router che non sta sotto `/condomini/:id`, perché l'attività non appartiene a uno
+stabile: è un compito che l'amministratore affida ai propri assistenti.
+
+Non c'è un ambito delegabile in `AMBITI` e quindi nessun guard di permesso:
+l'accesso nasce dal documento ed è `attivita.service.ts` a stabilirlo. La
+distinzione che i tre guard non possono esprimere è fra **chi possiede** e **chi
+ha ricevuto**: il proprietario modifica ed elimina, l'assegnatario può solo
+segnare "fatto", e nessun altro vedere l'attività.
+
+Tre scelte che vale la pena ricordare.
+
+**Il team è `User.delegatoDa`, non `Condominio.assistenti`.** Il primo campo dice
+chi ho creato io, il secondo *dove* qualcuno può operare. Se il team dipendesse
+dagli stabili, aggiungere un condominio all'amministratore cambierebbe la
+bacheca da sola, e togliere un assistente da uno stabile gli toglierebbe i
+compiti. `GET /staff/attivita/team` è stato separato per non far derivare la
+scelta dei destinatari da `GET /staff/assistenti`, che legge l'altra fonte.
+
+**"Non visibile" risponde 404 e non 403.** Un 403 confermerebbe a chi non deve
+vederla che quell'attività esiste. Il 403 resta per chi la vede ma non può
+agire: l'assistente che prova a eliminare riceve 403 con il motivo.
+
+**Il thread è di un solo livello.** Un'attività che ha già un padre non può
+diventare padre, altrimenti A → B → A e la risoluzione non termina. La cascata
+delle proroghe dalle milestone ai padri è rimandata: propagare una data in su
+richiede prevenzione dei cicli e un ordine di scritture, e le date prima si
+stabilizzano.
+
+Bug trovati scrivendo il dominio:
+
+- `requireRole('admin')` non distingue l'amministratore dall'assistente, perché
+  entrambi hanno `role: 'admin'`. Un assistente avrebbe potuto creare attività
+  diventandone proprietario. La creazione ora è verificata su `delegatoDa`
+  dell'utente corrente (`assicuraCreatore`), e se un assistente non può creare
+  attività non ne è mai proprietario: i controlli "solo il proprietario" delle
+  altre rotte escludono da soli ciò che non gli spetta.
+- Il predicato di visibilità confrontava id, ma veniva applicato a documenti già
+  popolati, dove `proprietario` è un oggetto e `String({})` vale
+  `[object Object]`: la regola sarebbe passata sempre falsa. Ora il controller
+  riduce il documento ai due id prima di passarlo al service, così la regola
+  resta in un posto solo.
+
+### I codici di errore erano invisibili alle verifiche lanciate con `pwsh`
+
+Gli script di verifica estraggono il codice (`CONFLICT`, `FORBIDDEN`,
+`BAD_REQUEST`) dal corpo dell'errore con il regex `"code":"(\w+)"`. Funzionava
+sotto Windows PowerShell 5.1, dove `ErrorDetails.Message` è il corpo grezzo
+compatto, ma non sotto PowerShell 7, dove è una stringa riformattata con spazi:
+l'8/8 di `verifica-crud-bilanci.ps1` che si vedeva lanciandolo con `pwsh` non
+era un difetto del bilanci.
+
+Il regex ora accetta spazi opzionali e regge con entrambe le shell. La trappola è
+documentata in `AGENTS.md`, perché il sintomo (falliscono solo i casi che
+confrontano un codice di errore) non dice nulla sulla causa.
+
 ### Le conferme: una finestra invece di `window.confirm`
 
 Le eliminazioni chiedevano conferma con `window.confirm`, che è bloccante e non

@@ -8,6 +8,7 @@ Leggi questo file prima di toccare il codice.
 - `AGENTS.md` (questo file): convenzioni del codice e regole del dominio;
 - `reset-produzione.md`: come azzerare il database di produzione;
 - `TODO.md`: le cose da realizzare, ordinate per urgenza;
+- `bugs.md`: i difetti riscontrati navigando l'applicazione;
 - `CHANGELOG.md`: cosa è cambiato e perché.
 
 **Prima di proporre un intervento, leggere `TODO.md`.** Se un punto aperto
@@ -18,6 +19,27 @@ evidenti ma non lo sono.
 Quando un punto del `TODO.md` viene realizzato, si sposta in `CHANGELOG.md` con
 la ragione della scelta, che è la parte che serve a chi leggerà il codice fra sei
 mesi.
+
+## I bug che si trovano navigando
+
+`bugs.md` raccoglie i difetti noti, ed è scritto da chi usa l'applicazione, non da
+chi scrive il codice: contiene cose che si vedono solo girando fra le pagine, e
+che nessuna verifica automatica copre.
+
+**Ogni difetto trovato in navigazione va messo in `bugs.md`**, con la pagina in
+cui si manifesta e come si arriva a riprodurlo. Serve a chi lo troverà dopo di te,
+che non avrà la tua sessione.
+
+Un bug in `bugs.md` ha due destini, e non si lascia a metà:
+
+- **si risolve subito**, se è contenuto e il rischio di toccarlo è basso;
+- **si sposta in `TODO.md`**, se è complesso, se mette mano a più domini o se
+  richiede una scelta di prodotto. **In questo caso va chiesto conferma prima**,
+  perché spostare qualcosa in `TODO.md` significa rinunciare a farlo adesso, e la
+  priorità non spetta a chi lo ha trovato.
+
+Non si lascia un bug in `bugs.md` senza averlo né risolto né spostato: un file
+che si riempie e non si svuota non serve a nessuno.
 
 ## Cosa fa l'applicazione
 
@@ -290,6 +312,39 @@ controller ne verificano la proprietà (`mittente`, `bozza`).
 condòmino conosce già la propria unità da `GET /auth/me` e non deve poter
 sfogliare lo stabile.
 
+## Bacheca delle attività
+
+`/staff/attivita` è l'unico dominio che **non** sta sotto
+`/condomini/:id`: l'attività è un compito che l'amministratore dà ai propri
+assistenti, quindi non appartiene a uno stabile. Non esiste un ambito
+delegabile in `AMBITI` e di conseguenza **nessun guard di permesso**: l'accesso
+dipende dal documento, ed è `attivita.service.ts` a stabilirlo.
+
+- **Il team è `User.delegatoDa`**, non `Condominio.assistenti`. Il primo dice chi
+  ho creato io, il secondo *dove* qualcuno può operare: se il team dipendesse
+  dagli stabili, aggiungere un condominio cambierebbe la bacheca da sola.
+  `GET /staff/assistenti` continua a usare `Condominio.assistenti` e va tenuto
+  presente che le due liste possono divergere.
+- **Il team non è visibile a ruolo**: `requireRole('admin')` non distingue
+  l'amministratore dall'assistente, perché entrambi hanno `role: 'admin'`. Chi
+  crea è l'amministratore delegante e la verifica è `assicuraCreatore`, sul
+  documento `delegatoDa` dell'utente corrente.
+- **Visibile = proprietario o assegnatario.** "Non visibile" è **404, non 403**:
+  rispondere 403 confermerebbe che l'attività esiste a chi non deve vederla. Il
+  403 è per chi la vede ma non può agire (l'assistente che tenta di eliminare).
+- **`assegnatari` è un elenco esplicito e può essere vuoto**, che significa "non
+  ancora passata a nessuno" e quindi visibile solo al proprietario. Non è "tutti":
+  è la trappola di `permessi: null` capovolta.
+- **Gli assegnatari sono validati contro il team** in `assicuraAssegnatari`,
+  altrimenti si assegnerebbe lavoro a chiunque, compreso il superadmin.
+- **Un thread è di un solo livello**: `parent` su se stesso, e un'attività che ha
+  già un padre non può diventare padre. Senza il controllo A → B → A non
+  termina.
+- **La cancellazione non è in cascata**: le voci del thread si eliminano a parte,
+  il client le propone una per una.
+- `sonoProprietario` e `assegnatoAMe` arrivano calcolati nelle risposte: la UI
+  non deve dedurre il confronto fra id dal proprio elenco.
+
 ## Controllo del contratto
 
 - Ogni scrittura di dominio passa per `controllaServizio`: se il contratto è
@@ -376,7 +431,7 @@ npm run dev            # in un altro terminale
 npm run verifica       # dalla root: esegue gli script in sequenza
 ```
 
-`npm run verifica` riporta il totale dei controlli (90 al momento) e si ferma al
+`npm run verifica` riporta il totale dei controlli (130 al momento) e si ferma al
 primo script che fallisce. Gli script sono in `scripts/` e hanno tutti la stessa
 forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 409 della transizione illegale) accanto a quelli positivi.
@@ -395,6 +450,14 @@ forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 | `verifica-crud-assemblee.ps1` | transizioni di stato, ricalcolo millesimi, eliminazione |
 | `verifica-crud-bilanci.ps1` | creazione, duplicata rifiutata, approvazione, revoca, eliminazione |
 | `verifica-millesimi.ps1` | tabella vuota non valida, tabella coerente, revisione squilibrata rifiutata |
+| `verifica-attivita.ps1` | bacheca del team, assegnatari, proprietario contro assegnatario, thread a un livello |
+
+Gli script sono eseguiti da `verifica.ps1` con `powershell` (Windows PowerShell
+5.1). Lanciandone uno direttamente con `pwsh` i controlli che confrontano il
+**codice** di errore falliscono senza che nulla sia cambiato: in PowerShell 7
+`ErrorDetails.Message` non è più il corpo grezzo ma una stringa riformattata,
+quindi `"code":"NOT_FOUND"` non corrisponde più. Per questo il regex accetta
+spazi opzionali (`"code"\s*:\s*"(\w+)"`) e va mantenuto così.
 
 Un condominio creato da una verifica interrotta resta bloccato per sempre: le API
 rifiutano di eliminare un'unità che ha quote in vigore e contano anche le unità

@@ -24,6 +24,7 @@ import PaginaIscritti from '@/pages/PaginaIscritti';
 import PaginaBilanci from '@/pages/PaginaBilanci';
 import PaginaNuovoVersamento from '@/pages/PaginaNuovoVersamento';
 import PaginaTeam from '@/pages/PaginaTeam';
+import PaginaAttivita from '@/pages/PaginaAttivita';
 import PaginaContratti from '@/pages/PaginaContratti';
 import PaginaContrattoDettaglio from '@/pages/PaginaContrattoDettaglio';
 import PaginaAmministratori from '@/pages/PaginaAmministratori';
@@ -109,6 +110,17 @@ export default function App() {
               <RichiediPermesso permesso="amministrazione:leggere">
                 <PaginaTeam />
               </RichiediPermesso>
+            }
+          />
+          {/* La bacheca è del team: anche l'assistente deve arrivarci, quindi non
+              c'è un permesso. `RichiediRuoli` esclude il superadmin, che dal
+              server riceve 403 su queste rotte. */}
+          <Route
+            path="c/attivita"
+            element={
+              <RichiediRuoli ruoli={['admin']}>
+                <PaginaAttivita />
+              </RichiediRuoli>
             }
           />
           <Route
