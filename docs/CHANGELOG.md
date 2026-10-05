@@ -4,6 +4,27 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-05
 
+### La tabella millesimale non promette più uno storico che non c'è
+
+Il messaggio sotto la tabella diceva: "Salvando, la revisione precedente resta
+consultabile nello storico". **Non c'è nessuno storico nell'interfaccia**, e non
+c'è nemmeno una rotta che lo restituisca.
+
+Ora dice che la revisione precedente **resta conservata**, che è la verità:
+`nuovaRevisione` chiude la precedente con `validTo` e inserisce la nuova con
+`revisione + 1`. Conservata e consultabile sono due cose diverse, e il testo ora
+non promette la seconda.
+
+Nello stesso giro ho riletto `TODO.md` e tolto quattro voci con la tua scelta:
+spostare un'unità in un altro condominio, la deliga per condominio e
+l'assistente a un solo condominio (che erano la stessa voce due volte, a due
+priorità diverse), e il selettore degli anni nei bilanci.
+
+Il punto sulla bacheca è stato riaperto per verificare quanto mancasse, e **non
+mancava niente**: la scadenza superata è già derivata da `dataFine` e non
+completata, l'etichetta passa da "Entro il" a "Scaduta il" e il bordo della card
+diventa rosso. Nessun codice cambiato, quindi nessuna modifica da registrare qui.
+
 ### `pila-N` non dava nessuno spazio, in 76 punti del frontend
 
 `.pila-1` fino a `.pila-6` impostavano **solo** `gap`, mentre `display: flex` e

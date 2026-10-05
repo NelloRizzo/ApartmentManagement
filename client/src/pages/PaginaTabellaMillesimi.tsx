@@ -284,12 +284,21 @@ function EditorTabella({ tabella, onSalvato }: { tabella: TabellaMillesimale; on
               onChange={(e) => setDataDelibera(e.target.value)}
             />
           </div>
-          {tabella.dataDelibera && (
-            <p className="testo-faint">
-              Delibera attuale del {fmtData(tabella.dataDelibera)}. Salvando, la revisione precedente resta
-              consultabile nello storico.
-            </p>
-          )}
+{tabella.dataDelibera && (
+          <p className="testo-faint">
+            Delibera attuale del {fmtData(tabella.dataDelibera)}.{' '}
+            {/*
+              Il testo diceva che la revisione precedente resta "consultabile nello
+              storico", e non lo è: non c'è nessuno storico nell'interfaccia. La
+              revisione precedente viene però conservata davvero, perché
+              `nuovaRevisione` chiude la precedente con `validTo` e inserisce la
+              nuova con `revisione + 1`, quindi dire "conservata" è vero e
+              "consultabile" non lo era. Va mostrata solo quando esiste una schermata
+              che la mostra:vedi il punto 4 di `TODO.md`.
+            */}
+            Salvando, la revisione precedente resta conservata.
+          </p>
+        )}
         </div>
       </section>
 
