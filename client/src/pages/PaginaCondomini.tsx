@@ -163,7 +163,13 @@ export default function PaginaCondomini() {
                   {millesimi(c.totaleMillesimi)} millesimi
                 </span>
               </div>
-              <div className="testo-faint">{indirizzoDi(c)}</div>
+              <div className="testo-faint testo-faint-blocco">
+                <a href={urlMappa(c.indirizzo)} target="_blank" rel="noopener noreferrer">
+                  {indirizzoDi(c)}
+                  <span className="visually-hidden"> (si apre in una nuova scheda)</span>
+                  <span aria-hidden="true"> ↗</span>
+                </a>
+              </div>
               {c.deliberaRipartizione && (
                 <div className="testo-faint">
                   Delibera {c.deliberaRipartizione}
@@ -226,6 +232,25 @@ function indirizzoDi(c: Condominio): string {
     .map((x) => x ?? '')
     .filter(Boolean)
     .join(', ');
+}
+
+/**
+ * Link alla ricerca di Google Maps sull'indirizzo del condominio.
+ *
+ * Non si salvano latitudine e longitudine: l'indirizzo è già obbligatorio e
+ * obbligatorio anche in pratica, quindi le coordinate sarebbero un secondo
+ * dato da mantenere allineato a un primo che basta. La ricerca per indirizzo
+ * risolve anche gli indirizzi che Google non conosce, cosa che un pin salvato a
+ * mano farebbe peggio.
+ *
+ * Il parametro `api=1` è il formato previsto da Google per i link avviati da un
+ * sito; `encodeURIComponent` perché via e città contengono spazi e accenti.
+ */
+function urlMappa(indirizzo: Condominio['indirizzo']): string {
+  const ricerca = [indirizzo.via, indirizzo.civico, indirizzo.cap, indirizzo.citta, indirizzo.provincia]
+    .filter(Boolean)
+    .join(' ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ricerca)}`;
 }
 
 /** Dall'elenco al form: l'indirizzo è annidato, il form ha campi piatti. */

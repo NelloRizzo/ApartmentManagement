@@ -312,6 +312,24 @@ controller ne verificano la proprietà (`mittente`, `bozza`).
 condòmino conosce già la propria unità da `GET /auth/me` e non deve poter
 sfogliare lo stabile.
 
+- **La non letta si conta con `lettaDa`, mai con `stato`.** `stato` è un campo
+  unico della comunicazione e `segnaLetta` lo porta a `'letta'` per tutti: usarlo
+  farebbe sparire il pallino di ogni destinatario quando uno solo apre il
+  messaggio. `contaNonLette` parte da `filtroVisibilita` e non da un `$or` fatto a
+  mano, così il conteggio non può divergere dall'elenco.
+- **Le attività senza `dataFine` in bacheca vanno in fondo**, anche in ordine
+  crescente: in MongoDB un campo assente ordina come `null` e verrebbe prima di
+  ogni data. Per questo la lista passa da `listaOrdinata`, che calcola
+  `conScadenza` e restituisce gli id: `populate` non esiste sulle aggregazioni, e
+  `find({ _id: { $in } })` restituisce in ordine arbitrario, quindi i documenti
+  vanno rimessi nell'ordine degli id.
+- **`order` si dichiara nello schema che ne ha bisogno**, non si sposta il default
+  di `paginationQuery`: quel `desc` serve le liste archiviali e le inversioni
+  riusano `listaOrdinata`.
+- **`unita` non ha un indirizzo** e non è pensata per averne: l'unità si intende
+  dentro il condominio, che ha un `indirizzo` obbligatorio. Per la posizione basta
+  il link a Google Maps sull'indirizzo del condominio.
+
 ## Allegati
 
 I file stanno in MongoDB dentro `Allegato`, e **il documento che li ospita tiene
@@ -480,7 +498,7 @@ npm run dev            # in un altro terminale
 npm run verifica       # dalla root: esegue gli script in sequenza
 ```
 
-`npm run verifica` riporta il totale dei controlli (158 al momento) e si ferma al
+`npm run verifica` riporta il totale dei controlli (179 al momento) e si ferma al
 primo script che fallisce. Gli script sono in `scripts/` e hanno tutti la stessa
 forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 409 della transizione illegale) accanto a quelli positivi.
@@ -492,14 +510,14 @@ forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 | `verifica-bilancio.ps1` | voci una alla volta, consuntivo, modelli |
 | `verifica-conferma-email.ps1` | conferma degli indirizzi |
 | `verifica-frontend-condomino.ps1` | che il condòmino conserva i propri dati |
-| `verifica-permesso-comunicazioni.ps1` | il guard delle comunicazioni, lato admin e lato condòmino |
+| `verifica-permesso-comunicazioni.ps1` | il guard delle comunicazioni, lato admin e lato condòmino, e il conteggio delle non lette |
 | `verifica-crud-condomini.ps1` | creazione, modifica, cancellazione, dipendenze bloccanti |
 | `verifica-crud-verbali.ps1` | generazione, modifica, approvazione, revoca, eliminazione |
 | `verifica-crud-versamenti.ps1` | registrazione, campi immutabili, cancellazione |
 | `verifica-crud-assemblee.ps1` | transizioni di stato, ricalcolo millesimi, eliminazione |
 | `verifica-crud-bilanci.ps1` | creazione, duplicata rifiutata, approvazione, revoca, eliminazione |
 | `verifica-millesimi.ps1` | tabella vuota non valida, tabella coerente, revisione squilibrata rifiutata |
-| `verifica-attivita.ps1` | bacheca del team, assegnatari, proprietario contro assegnatario, thread a un livello |
+| `verifica-attivita.ps1` | bacheca del team, assegnatari, proprietario contro assegnatario, thread a un livello, ordine per scadenza con le senza scadenza in fondo |
 | `verifica-allegati.ps1` | caricamento, metadati, firma, rimozione, dominio approvato, allegati per voce e per verbale |
 
 Gli script sono eseguiti da `verifica.ps1` con `powershell` (Windows PowerShell

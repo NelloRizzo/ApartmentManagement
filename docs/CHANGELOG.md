@@ -72,6 +72,71 @@ Quattro bug emersi scrivendo il dominio e le verifiche:
   `strictPopulate` attivo questo **fa fallire la rotta** invece di tornare `[]`
   silenziosamente. Il compilatore era tranquillo.
 
+## 2026-10-05
+
+### Il pallino dei messaggi contava le cose sbagliate
+
+Il pallino su "Messaggi" c'era già, e funzionava: `GET
+/condomini/:id/comunicazioni/non-lette` alimentava il contatore e la barra lo
+disegnava. Contava però **le cose sbagliate**, per tre motivi indipendenti.
+
+**Guardava `stato`, che è un campo unico della comunicazione.** `segnaLetta` lo
+porta a `'letta'` per tutti: bastava che l'amministratore aprisse un avviso perché
+il pallino del condòmino tornasse a zero senza che lui l'avesse mai visto. Il
+campo giusto è `lettaDa`, un array per utente che **esisteva già e non lo usava
+nessuna query**.
+
+**Guardava solo `destinatario` e `destinatari`.** Le comunicazioni indirizzate a
+un'unità immobiliare hanno il destinatario in `unita`, quindi il contatore era più
+basso della lista che l'utente vedeva. Ora parte da `filtroVisibilita`, la stessa
+funzione che filtra l'elenco: i due non possono divergere in futuro.
+
+**Non era legato al condominio.** La rotta riceve il condominio dal percorso e lo
+validava, ma la query non lo usava: un amministratore con dieci stabili vedeva la
+somma di tutti e il pallino non cambiava passando da uno all'altro.
+
+Aggiunto anche l'avviso in Panorama, che è la pagina in cui tutti atterrano dopo
+il login: il pallino dice quante sono, l'avviso dice cosa sono.
+
+### La bacheca mostrava la scadenza più lontana
+
+La bacheca ordinava già per `dataFine`, ma `paginationQuery.order` ha default
+`'desc'`: si partiva dalla scadenza **più lontana**. In bacheca la domanda è "cosa
+scade per primo", quindi `listaAttivitaQuery` ora dichiara il proprio `order: 'asc'`
+invece di spostare il default di tutte le liste.
+
+Invertire l'ordore da solo avrebbe fatto emergere un altro difetto: in MongoDB un
+campo assente ordina come `null`, che in ordine crescente viene **prima di ogni
+data**, e tutte le attività senza scadenza sarebbero salite in cima. La lista ora
+passa da un'aggregazione con un campo calcolato (`conScadenza`) che mette sotto le
+attività datate e ordina solo dentro ciascun gruppo. I documenti tornano a essere
+letti con `find` e `populate`, che non esistono sulle aggregazioni, e vengono
+rimessi nell'ordine della paginazione.
+
+### L'indirizzo del condominio si apre su Google Maps
+
+Il condominio ha già un indirizzo obbligatorio, quindi le coordinate erano un
+secondo dato da mantenere allineato a un primo che basta: quello che serve è un
+link. `PaginaCondomini` manda l'indirizzo a una ricerca di Google Maps in una
+scheda nuova.
+
+Un pin salvato a mano avrebbe avuto un vantaggio solo apparente: la ricerca per
+indirizzo risolve anche gli indirizzi che Google non conosce, mentre un pin
+sbagliato resta sbagliato per sempre e nessuno se ne accorge.
+
+### La verifica della bacheca non ripuliva le proprie attività
+
+`Status` esegue davvero la richiesta e restituisce solo il codice di errore: il
+controllo "senza colore il default è nessuno" creava un'attività e non ne
+recuperava l'id, quindi **ogni esecuzione lasciava una riga in bacheca**. Al momento
+in cui me ne sono accorto erano venticinque, e occupavano la lista come se fossero
+lavoro vero.
+
+Nella stessa verifica, `IndexOf` su un id assente restituisce `-1`, e `-1 < 3` è
+vero: un controllo di ordinamento che non trova le attività che sta cercando passa
+senza controllare niente. L'ho visto succedere per questo motivo, e il controllo
+ora verifica prima che le quattro attività di prova siano in bacheca.
+
 ## 2026-10-04
 
 ### Le card del panorama portano alla sezione indicata

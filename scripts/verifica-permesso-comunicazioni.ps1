@@ -107,6 +107,52 @@ $com = (Invoke-RestMethod -Method Post -Uri "$base/condomini/$mio/comunicazioni"
 $s = Status Post "/condomini/$mio/comunicazioni/$(Id $com)/risposte" (@{ corpo='risposta di prova' }) $co
 Check 'risposta a thread del condòmino' ($s -eq '200') "esito $s"
 
+"== 7. il contatore delle non lette =="
+# Una sola comunicazione inviata resta nel database: non si può cancellare una
+# comunicazione già inviata, quindi il test ne lascia una a ogni esecuzione. È il
+# prezzo di provare il difetto, che riguarda proprio il passaggio da "nessuno lo
+# ha letto" a "qualcuno lo ha letto".
+function NonLette($cid, $token) {
+  (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/comunicazioni/non-lette" -Headers (Auth $token)).data.nonLette
+}
+
+function UtenteDi($cid, $email) {
+  $iscritti = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/condomini?limit=100" -Headers (Auth $sa)).data
+  foreach ($i in $iscritti) {
+    if ($i.utente.email -eq $email) { return Id $i.utente }
+  }
+}
+$suff = [guid]::NewGuid().ToString('N').Substring(0,6)
+$coUtente = UtenteDi $mio 'marco.rossi@example.com'
+if (-not $coUtente) { throw 'marco.rossi non risulta fra gli iscritti con un id utente' }
+
+$co = Login 'marco.rossi@example.com' 'Condomino123!'
+$prima = NonLette $mio $co
+$adPrima = NonLette $mio $ad
+
+# `segnalazione` e non `avviso`: avviso e convocazione partono inviati qualunque
+# cosa dica `salvaComeBozza`, quindi una "bozza" creata con `avviso` sarebbe in
+# realtà già stata recapitata e non si potrebbe nemmeno cancellare.
+$bozza = (Invoke-RestMethod -Method Post -Uri "$base/condomini/$mio/comunicazioni" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{tipo='segnalazione'; oggetto="Bozza $suff"; corpo='prova'; salvaComeBozza=$true}|ConvertTo-Json)).data
+Check 'la bozza è davvero in bozza' ($bozza.stato -eq 'bozza') "stato $($bozza.stato)"
+Check 'una bozza non conta come non letta' ((NonLette $mio $co) -eq $prima) "prima $prima, ora $((NonLette $mio $co))"
+Invoke-RestMethod -Method Delete -Uri "$base/condomini/$mio/comunicazioni/$(Id $bozza)" -Headers (Auth $ad) | Out-Null
+
+$inviata = (Invoke-RestMethod -Method Post -Uri "$base/condomini/$mio/comunicazioni" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{tipo='avviso'; oggetto="Non lette $suff"; corpo='prova'; destinatari=@($coUtente); salvaComeBozza=$false}|ConvertTo-Json -Depth 8)).data
+$dopo = NonLette $mio $co
+Check 'un avviso indirizzato al condomino e non letto' ($dopo -eq ($prima + 1)) "prima $prima dopo $dopo"
+
+# Il difetto: `stato` è un campo unico della comunicazione e `segnaLetta` lo
+# porta a 'letta' per tutti. Se il contaggio guardasse `stato`, bastava che
+# l'amministratore aprisse l'avviso perché il pallino del condòmino sparisse.
+Invoke-RestMethod -Method Post -Uri "$base/condomini/$mio/comunicazioni/$(Id $inviata)/letti" -Headers (Auth $ad) | Out-Null
+Check 'letta dall amministratore, resta non letta per il condomino' ((NonLette $mio $co) -eq $dopo) "atteso $dopo, trovato $((NonLette $mio $co))"
+
+Invoke-RestMethod -Method Post -Uri "$base/condomini/$mio/comunicazioni/$(Id $inviata)/letti" -Headers (Auth $co) | Out-Null
+Check 'letta dal condomino, sparisce dal suo contatore' ((NonLette $mio $co) -eq ($dopo - 1)) "atteso $($dopo - 1), trovato $((NonLette $mio $co))"
+
+Check 'un proprio avviso non è una non letta per chi lo ha scritto' ((NonLette $mio $ad) -eq $adPrima) "prima $adPrima, ora $((NonLette $mio $ad))"
+
 "== ripristino: l'admin torna ad accesso pieno =="
 # `permessi: null` è l'accesso pieno. Il passaggio chiude anche le sessioni
 # aperte, quindi va per ultimo: senza, l'account resterebbe delegato e i

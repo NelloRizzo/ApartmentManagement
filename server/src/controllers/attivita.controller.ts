@@ -131,19 +131,58 @@ export const list = asyncHandler(async (req, res) => {
   }
 
   const [documenti, totale] = await Promise.all([
-    Attivita.find(query)
-      .populate<{ proprietario: UtentePopolato }>('proprietario', campiUtente)
-      .populate<{ assegnatari: UtentePopolato[] }>('assegnatari', campiUtente)
-      .populate<{ fattoDa: UtentePopolato }>('fattoDa', campiUtente)
-      .sort({ [sort]: order === 'asc' ? 1 : -1, createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean<AttivitaPopolata[]>(),
+    listaOrdinata(query, sort, order, page, limit).then((ids) =>
+      Attivita.find({ _id: { $in: ids } })
+        .populate<{ proprietario: UtentePopolato }>('proprietario', campiUtente)
+        .populate<{ assegnatari: UtentePopolato[] }>('assegnatari', campiUtente)
+        .populate<{ fattoDa: UtentePopolato }>('fattoDa', campiUtente)
+        .lean<AttivitaPopolata[]>()
+        // `find({ _id: { $in } })` restituisce in ordine arbitrario: va rimesso
+        // nell'ordine della paginazione, altrimenti la pagina mostra le attività
+        // mescolate e l'ordinamento sembra casuale a ogni caricamento.
+        .then((righe) => {
+          const perId = new Map(righe.map((r) => [String(r._id), r]));
+          return ids.flatMap((id) => {
+            const riga = perId.get(id);
+            return riga ? [riga] : [];
+          });
+        }),
+    ),
     Attivita.countDocuments(query),
   ]);
 
   paginated(res, documenti.map((d) => riepilogo(d, utente.sub)), totale, page, limit);
 });
+
+/**
+ * Id della pagina, nell'ordine richiesto.
+ *
+ * Va fatta con un'aggregazione e non con `find().sort()` perché un'attività senza
+ * `dataFine` deve stare **in fondo** anche in ordine crescente: in MongoDB un
+ * campo assente ordina come `null`, che in `asc` verrebbe prima di tutte le date.
+ * Il campo calcolato `conScadenza` mette le attività con una scadenza davanti a
+ * quelle senza, e l'ordinamento vero agisce solo dentro ciascun gruppo.
+ *
+ * Il risultato sono id e non documenti perché `populate` non esiste sulle
+ * aggregazioni: si ordinano gli id e i documenti si rileggono con `find`.
+ */
+async function listaOrdinata(
+  query: Record<string, unknown>,
+  sort: string,
+  order: 'asc' | 'desc',
+  page: number,
+  limit: number,
+): Promise<string[]> {
+  const righe = await Attivita.aggregate<{ _id: Types.ObjectId }>([
+    { $match: query },
+    { $addFields: { conScadenza: { $cond: [{ $ifNull: ['$dataFine', false] }, 1, 0] } } },
+    { $sort: { conScadenza: -1, [sort]: order === 'asc' ? 1 : -1, createdAt: -1 } },
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+    { $project: { _id: 1 } },
+  ]);
+  return righe.map((r) => String(r._id));
+}
 
 export const getOne = asyncHandler(async (req, res) => {
   const utente = currentUser(req);

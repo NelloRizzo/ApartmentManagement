@@ -48,6 +48,9 @@ export const paginationQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().max(200).optional(),
   sort: z.string().trim().max(40).optional(),
+  // `desc` perché le liste sono archiviali: in alto il più recente. Le liste che
+  // vogliono il contrario (la bacheca, per scadenza) lo dichiarano nel proprio
+  // schema, senza spostare il default di tutte le altre.
   order: z.enum(['asc', 'desc']).default('desc'),
   attivo: flagQuery.optional(),
   attiva: flagQuery.optional(),
@@ -674,5 +677,11 @@ export const listaAttivitaQuery = paginationQuery.extend({
   /** Le attività che mi sono state assegnate, escludendo le mie. */
   soloAssegnate: flagQuery.default(false),
   sort: z.string().trim().max(40).default('dataFine'),
+  /**
+   * `asc`, e non il `desc` di `paginationQuery`: in bacheca la domanda è "cosa
+   * scade per primo", quindi la scadenza più vicina deve stare in cima. Il default
+   * generico serve le liste archiviali, dove il più recente in alto è naturale.
+   */
+  order: z.enum(['asc', 'desc']).default('asc'),
 });
 

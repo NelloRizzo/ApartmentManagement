@@ -28,7 +28,7 @@ const SCORCIATOIE: { a: string; etichetta: string; permesso?: Permesso; ruoli?: 
 ];
 
 export default function PaginaPanorama() {
-  const { condominioId, utente, puo } = useAuth();
+  const { condominioId, utente, puo, nonLette } = useAuth();
   const accessi = SCORCIATOIE.filter(
     (s) => (!s.permesso || puo(s.permesso)) && (!s.ruoli || (utente && s.ruoli.includes(utente.role))),
   );
@@ -115,6 +115,17 @@ export default function PaginaPanorama() {
             tono={riepilogo.dati.morosiMeseCorrente ? 'pericolo' : 'successo'}
             a={puo('versamenti:leggere') ? '/c/quote' : undefined}
           />
+        </div>
+      )}
+
+      {nonLette > 0 && puo('comunicazioni:leggere') && (
+        <div className="avviso avviso-avviso" style={{ marginTop: 'var(--sp-4)' }}>
+          <span>
+            <strong>
+              {nonLette === 1 ? 'Hai una comunicazione non letta.' : `Hai ${nonLette} comunicazioni non lette.`}
+            </strong>{' '}
+            <Link to="/c/comunicazioni">Leggile</Link>.
+          </span>
         </div>
       )}
 

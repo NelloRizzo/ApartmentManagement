@@ -19,3 +19,8 @@ logs/
 # Gli allegati stanno in MongoDB, non piu' su disco.
 server/uploads/
 client/dev-dist/
+
+# Coda di lavoro personale: resta in locale e non entra nel repository.
+# Non e' "docs come gli altri": le idee non ancora decise non servono a chi
+# legge il codice, e committarle finisce per farle sembrare scelte.
+docs/new_tasks.md

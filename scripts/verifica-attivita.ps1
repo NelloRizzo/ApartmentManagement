@@ -53,7 +53,7 @@ function Crea($corpo) {
 
 # Titoli usati da questa verifica: servono a ripulire i residui di una
 # esecuzione interrotta senza toccare le attività vere dell'amministratore.
-$titoliTest = @('Verifica impianto', 'Riservata', 'Sostituire la fune')
+$titoliTest = @('Verifica impianto', 'Riservata', 'Sostituire la fune', 'Senza colore', 'Colore assurdo')
 
 function Elimina($id) {
   if ($null -eq $id) { return }
@@ -90,6 +90,35 @@ Check 'in bacheca all''amministratore' (@(@(Get '/staff/attivita' $ad) | Where-O
 Check 'in bacheca all''assistente assegnatario' (@(@(Get '/staff/attivita' $as) | Where-Object { (Id $_) -eq $aid }).Count -eq 1)
 Check 'gli risponde assegnatoAMe' ((Get "/staff/attivita/$aid" $as).assegnatoAMe -eq $true)
 Check 'gli risponde sonoProprietario falso' ((Get "/staff/attivita/$aid" $as).sonoProprietario -eq $false)
+
+"== 2b. la bacheca mette la scadenza piu' vicina in cima =="
+# Tre attivita' con scadenze sparse piu' una senza scadenza, tutte visibili
+# all'amministratore e tutte dello stesso giorno di creazione: l'ordine dipende
+# solo dalla data finale.
+$vicina = Id (Crea @{ titolo = 'Verifica scadenza vicina'; assegnatari = @($ass1); dataFine = '2026-03-01' }).data
+$media = Id (Crea @{ titolo = 'Verifica scadenza media'; assegnatari = @($ass1); dataFine = '2026-09-01' }).data
+$lontana = Id (Crea @{ titolo = 'Verifica scadenza lontana'; assegnatari = @($ass1); dataFine = '2027-06-01' }).data
+$senza = Id (Crea @{ titolo = 'Verifica senza scadenza'; assegnatari = @($ass1) }).data
+$ordine = @(@(Get '/staff/attivita?limit=100' $ad) | ForEach-Object { Id $_ })
+# Gli id devono essere presenti, altrimenti `IndexOf` restituisce -1 e `-1 < 3`
+# risulta vero: un controllo che passa perché non trova niente non controlla niente.
+foreach ($attesa in @($vicina, $media, $lontana, $senza)) {
+  Check 'le quattro attivita di prova sono in bacheca' ($ordine.Contains($attesa)) "assente $attesa"
+}
+Check 'ordine: scadenza vicina prima di media' ($ordine.IndexOf($vicina) -lt $ordine.IndexOf($media)) "vicina $($ordine.IndexOf($vicina)) media $($ordine.IndexOf($media))"
+Check 'ordine: scadenza media prima di lontana' ($ordine.IndexOf($media) -lt $ordine.IndexOf($lontana)) "media $($ordine.IndexOf($media)) lontana $($ordine.IndexOf($lontana))"
+# Un campo assente in MongoDB ordina come null, che in ordine crescente viene
+# prima di ogni data: senza il campo calcolato l'attivita' senza scadenza
+# salterebbe in cima, e non e' quello che chi guarda la bacheca si aspetta.
+Check 'quella senza scadenza va in fondo' ($ordine.IndexOf($senza) -gt $ordine.IndexOf($lontana)) "senza $($ordine.IndexOf($senza))"
+# La stessa bacheca in ordine decrescente, per non dipendere da un solo verso.
+$ordineDesc = @(@(Get '/staff/attivita?order=desc&limit=100' $ad) | ForEach-Object { Id $_ })
+Check 'in ordine decrescente la lontana viene prima' ($ordineDesc.IndexOf($lontana) -lt $ordineDesc.IndexOf($vicina))
+Check 'in ordine decrescente la senza scadenza resta in fondo' ($ordineDesc.IndexOf($senza) -gt $ordineDesc.IndexOf($vicina))
+Elimina $vicina
+Elimina $media
+Elimina $lontana
+Elimina $senza
 
 "== 3. chi non è coinvolto non vede nulla =="
 # Un'attività senza destinatari resta del solo proprietario: serve a provare la
@@ -157,7 +186,13 @@ Check 'il colore è registrato' ($agg.data.colore -eq 'arancio') "colore $($agg.
 "== 9b. il colore =="
 $sColore = Status Post '/staff/attivita' @{ titolo = 'Colore assurdo'; assegnatari = @(); colore = 'fucsia' } $ad
 Check 'colore fuori elenco rifiutato' ($sColore -eq 'BAD_REQUEST') "esito $sColore"
-Check 'senza colore il default è nessuno' ((Status Post '/staff/attivita' @{ titolo = 'Senza colore'; assegnatari = @() } $ad) -ne 'BAD_REQUEST')
+# `Status` esegue davvero la POST e restituisce solo il codice di errore: senza
+# recuperare l'id, l'attività creata qui restava in bacheca per sempre. Sono
+# ventiquattro righe 'Senza colore' accumulate prima di accorgersene, che
+# occupano la lista e spingono fuori pagina le attività vere.
+$sDefault = Crea @{ titolo = 'Senza colore'; assegnatari = @() }
+Check 'senza colore il default è nessuno' ($null -eq $sDefault.error -and $null -eq $sDefault.data.colore) $sDefault.error.message
+Elimina (Id $sDefault.data)
 $sNullo = Invoke-RestMethod -Method Post -Uri "$base/staff/attivita" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{
   titolo = 'Colore annullato'; assegnatari = @(); colore = $null
 } | ConvertTo-Json)
@@ -169,8 +204,11 @@ Elimina $aid
 Elimina $idRiservata
 Check 'attività eliminate' ((Status Get "/staff/attivita/$aid" $null $ad) -eq 'NOT_FOUND')
 Check 'attività private eliminate' ((Status Get "/staff/attivita/$idRiservata" $null $ad) -eq 'NOT_FOUND')
-$residui = @(Get '/staff/attivita?stato=tutte&limit=100' $ad) | Where-Object { $titoliTest -contains $_.titolo -or $_.titolo.StartsWith('Verifica impianto') }
-Check 'nessun residuo della verifica' ($residui.Count -eq 0) "trovati $($residui.Count)"
+# `StartsWith('Verifica')` copre anche le attività con scadenza e quella senza,
+# che hanno titoli diversi: il prefisso è il denominatore comune dei titoli
+# usati qui.
+$residui = @(Get '/staff/attivita?stato=tutte&limit=100' $ad) | Where-Object { $titoliTest -contains $_.titolo -or $_.titolo.StartsWith('Verifica') }
+Check 'nessun residuo della verifica' ($residui.Count -eq 0) "trovati $($residui.Count): $(($residui | ForEach-Object { $_.titolo }) -join ', ')"
 
 "esito: $ok ok, $ko ko"
 if ($ko -gt 0) { exit 1 }

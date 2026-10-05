@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created, noContent } from '../utils/http.js';
 import { badRequest, forbidden, notFound } from '../utils/errors.js';
-import { paginazioneDa } from '../utils/pagination.js';
+import { getObjectId, paginazioneDa } from '../utils/pagination.js';
 import { AuditLog, Comunicazione, Condomino, Unita, type ComunicazioneDoc } from '../models/index.js';
 import { currentUser } from '../middleware/auth.js';
 import { toAllegati } from '../middleware/upload.js';
@@ -15,6 +15,7 @@ import {
   listComunicazioni,
   preparaComunicazione,
   segnaLetta as marcaLetta,
+  contaNonLette,
 } from '../services/comunicazione.service.js';
 
 const oid = (v: string): Types.ObjectId => new Types.ObjectId(String(v));
@@ -61,13 +62,10 @@ export const list = asyncHandler(async (req, res) => {
 
 export const nonLette = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
-  const id = oid(utente.sub);
-  // Le broadcast hanno l'utente nell'array `destinatari`, quelle mirate nel
-  // campo singolo `destinatario`: vanno contate insieme.
-  const nonLette = await Comunicazione.countDocuments({
-    $and: [{ $or: [{ destinatario: id }, { destinatari: id }] }, { stato: 'inviata' }],
-  });
-  ok(res, { nonLette });
+  // Il condominio viene dal percorso e non dalla query: il pallino conta quello
+  // che l'utente sta guardando, non tutto quello a cui ha accesso.
+  const condominioId = getObjectId(req.params.condominioId ?? '', 'condominioId');
+  ok(res, { nonLette: await contaNonLette(utente.sub, utente.role, condominioId) });
 });
 
 export const getOne = asyncHandler(async (req, res) => {

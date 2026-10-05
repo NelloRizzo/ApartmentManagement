@@ -44,6 +44,44 @@ export async function unitaDiCondomino(utenteId: string): Promise<string[]> {
   return [...new Set(legs.flatMap((l) => l.unita.map(String)))];
 }
 
+/**
+ * Quante comunicazioni indirizzate a me non ho ancora aperto.
+ *
+ * Tre cose che il conteggio deve fare e non faceva:
+ *
+ * - **usare `lettaDa`, non `stato`.** `stato` è un campo unico della
+ *   comunicazione e `segnaLetta` lo porta a `'letta'` per tutti: bastava che
+ *   l'amministratore aprisse un avviso perché il contatore del condòmino
+ *   tornasse a zero senza che lui l'avesse mai visto. `lettaDa` è un array per
+ *   utente ed esiste già, ma nessuna query lo usava.
+ * - **partire da `filtroVisibilita`**, come la lista: le broadcast per
+ *   condominio hanno il destinatario in `unita`, e senza quello il contatore era
+ *   più basso della lista che l'utente vedeva. riusare la stessa funzione evita
+ *   che i due divergano in futuro.
+ * - **trovarsi dentro il condominio selezionato**: senza, un amministratore con
+ *   dieci stabili vedeva la somma di tutti e il pallino non cambiava passando da
+ *   uno all'altro.
+ *
+ * Le bozze sono escluse perché non sono arrivate a nessuno, e le proprie
+ * comunicazioni perché non è una posta in arrivo.
+ */
+export async function contaNonLette(
+  utenteId: string,
+  role: UserRole,
+  condominioId: string,
+): Promise<number> {
+  const id = new Types.ObjectId(String(utenteId));
+  return Comunicazione.countDocuments({
+    $and: [
+      filtroVisibilita(utenteId, role, await unitaDiCondomino(utenteId)),
+      { condominio: new Types.ObjectId(String(condominioId)) },
+      { mittente: { $ne: id } },
+      { stato: { $ne: 'bozza' } },
+      { lettaDa: { $ne: id } },
+    ],
+  });
+}
+
 export async function listComunicazioni(
   utenteId: string,
   role: UserRole,
