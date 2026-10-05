@@ -13,6 +13,13 @@ import { baseSchema, models, type ObjectId } from './base.js';
  * limite di BSON è 16 MB e l'upload è limitato a 10 MB, quindi c'è spazio.
  * Un documento per file, inoltre, si interroga con le stesse regole del resto
  * dei dati invece di richiedere un secondo accesso al database.
+ *
+ * **Chi lo referenzia tiene solo l'id, non una copia dei metadati.** Il documento
+ * che ospita il file (una comunicazione, una voce di bilancio) ha
+ * `allegati: [ObjectId]`, e tutto il resto si legge da qui a ogni richiesta.
+ * Copiare i metadati dentro il documento darebbe due copie che possono divergere,
+ * e l'URL firmato copieriato scadrebbe: la firma vale 24 ore e non si rinnova da
+ * sola.
  */
 const allegatoSchema = baseSchema(
   {
@@ -22,6 +29,21 @@ const allegatoSchema = baseSchema(
     tipo: { type: String, required: true },
     size: { type: Number, required: true, min: 0 },
     dati: { type: Buffer, required: true },
+
+    /**
+     * Di cosa parla il documento, in parole dell'utente.
+     *
+     * Obbligatorio e non derivato da `nome`: il nome del file lo dice il mittente
+     * e non chi legge, e finisce in "documento (1).pdf". È l'unico campo che
+     * distingue due allegati nella stessa lista.
+     */
+    oggetto: { type: String, required: [true, 'Oggetto obbligatorio'], trim: true, maxlength: 300 },
+    /** Chiarimento facoltativo sul contenuto. */
+    descrizione: { type: String, default: '', trim: true, maxlength: 2000 },
+    /** Da dove viene: "fattura", "contratto", "comune", per esempio. */
+    fonte: { type: String, trim: true, maxlength: 200 },
+    /** Riferimento puntuale: numero di protocollo, di fattura, di delibera. */
+    riferimento: { type: String, trim: true, maxlength: 200 },
 
     /** Chi ha caricato il file: serve a sapere a chi appartiene. */
     mittente: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -53,6 +75,10 @@ export interface AllegatoDoc {
   tipo: string;
   size: number;
   dati: Buffer;
+  oggetto: string;
+  descrizione: string;
+  fonte?: string;
+  riferimento?: string;
   mittente: ObjectId;
   condominio: ObjectId;
   scadenza?: Date;
@@ -63,11 +89,3 @@ export interface AllegatoDoc {
 export type AllegatoModel = Model<AllegatoDoc>;
 export const Allegato: AllegatoModel =
   (models.Allegato as AllegatoModel) ?? model<AllegatoDoc>('Allegato', allegatoSchema);
-
-/** Come compare un allegato nelle risposte dell'API e dentro i documenti. */
-export interface AllegatoRiferito {
-  nome: string;
-  url: string;
-  tipo?: string;
-  size?: number;
-}

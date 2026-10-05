@@ -5,6 +5,7 @@ import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
 import { useConferma } from '@/components/Conferma';
+import { AllegatiBottone } from '@/components/Allegati';
 import { EtichettaStato } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { AreaStampa, PulsanteStampa } from '@/components/Stampa';
@@ -46,6 +47,7 @@ const VOCE_VUOTA: VoceBilancio = {
   importo: 0,
   ripartizione: 'diritto',
   voci: [],
+  allegati: [],
 };
 
 /** Differenza tra quanto previsto e quanto realizzato, per voce o per totale. */
@@ -449,6 +451,7 @@ function SezioneBilancio({
                   {ETICHETTE_CATEGORIA[v.categoria] ?? v.categoria} ·{' '}
                   {ETICHETTE_RIPARTIZIONE[v.ripartizione] ?? v.ripartizione}
                   {v.voci.length > 0 ? ` · ${v.voci.length} fatture` : ''}
+                  {v.allegati.length > 0 ? ` · ${v.allegati.length} allegati` : ''}
                 </span>
                 {delta && (
                   <span className={delta.valore > 0 ? 'testo-warning' : 'testo-success'}>
@@ -462,6 +465,16 @@ function SezioneBilancio({
                 <span className="testo-num">{euro(v.importo)}</span>
                 {modificabile && v._id && (
                   <>
+                    {/* Icona invece che testo: la riga ha già l'importo e due
+                        bottoni, e il conteggio degli allegati serve più del nome
+                        del pulsante. Il dettaglio si vede aprendo la finestra. */}
+                    <AllegatiBottone
+                      endpoint={`/condomini/${condominioId}/bilanci/${bilancio._id}/voci/${v._id}/allegati`}
+                      conteggio={v.allegati.length}
+                      titolo={`Allegati a "${v.descrizione}"`}
+                      descrizione={`Allegati di ${v.descrizione}`}
+                      suCambiati={onRicarica}
+                    />
                     <button
                       type="button"
                       className="btn btn-sm btn-fantasma"

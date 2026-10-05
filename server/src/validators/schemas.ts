@@ -30,6 +30,19 @@ export const flagQuery = z
   .union([z.boolean(), z.string()])
   .transform((v) => (typeof v === 'boolean' ? v : !falsi.has(v.trim().toLowerCase())));
 
+/**
+ * Booleano che accetta anche la stringa, per i corpi in `multipart`.
+ *
+ * `flagQuery` serve alle query string, dove tutto arriva come testo. Qui il
+ * problema è lo stesso ma nel corpo: quando una richiesta porta un file, multer
+ * legge **tutti** i campi come stringhe, quindi `salvaComeBozza: 'true'` non
+ * passerebbe un `z.boolean()` e la comunicazione con allegato non potrebbe
+ * nemmeno essere salvata in bozza.
+ */
+export const flagCorpo = z
+  .union([z.boolean(), z.string()])
+  .transform((v) => (typeof v === 'boolean' ? v : !falsi.has(v.trim().toLowerCase())));
+
 export const paginationQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -409,6 +422,33 @@ export const bilancioVoceParams = z.object({
   voceId: objectId,
 });
 
+/** Rimozione di un allegato dalla voce di un bilancio. */
+export const bilancioVoceAllegatoParams = bilancioVoceParams.extend({ allegatoId: objectId });
+
+/**
+ * Punto all'ordine del giorno: identificato dal numero d'ordine, non da un `_id`.
+ *
+ * `puntoOrdineSchema` è dichiarato con `{ _id: false }`, quindi i punti non hanno
+ * identità propria e l'unico modo per addressing uno è il suo `ordine`.
+ */
+export const puntoOrdineParams = z.object({
+  condominioId: objectId,
+  id: objectId,
+  ordine: z.coerce.number().int().min(1).max(200),
+});
+
+/** Rimozione di un allegato: vale per tutti i domini. */
+export const allegatoParams = z.object({
+  condominioId: objectId,
+  id: objectId,
+  allegatoId: objectId,
+});
+
+/** Allegati di un punto all'ordine: stessi parametri della rimozione. */
+export const puntoOrdineAllegatoParams = allegatoParams.extend({
+  ordine: z.coerce.number().int().min(1).max(200),
+});
+
 // ---------- Versamenti ----------
 export const periodoSchema = z.object({
   anno: z.coerce.number().int().min(2000).max(2100),
@@ -442,14 +482,12 @@ export const comunicazioneCreateSchema = z.object({
   unita: z.array(objectId).default([]),
   assemblea: objectId.optional(),
   rispostaA: objectId.optional(),
-  richiedeRisposta: z.boolean().default(false),
-  allegati: z.array(z.object({ nome: z.string(), url: z.string(), tipo: z.string().optional(), size: z.number().optional() })).default([]),
-  salvaComeBozza: z.boolean().default(false),
+  richiedeRisposta: flagCorpo.default(false),
+  salvaComeBozza: flagCorpo.default(false),
 });
 
 export const rispostaSchema = z.object({
   corpo: z.string().trim().min(1).max(50_000),
-  allegati: z.array(z.object({ nome: z.string(), url: z.string(), tipo: z.string().optional(), size: z.number().optional() })).default([]),
 });
 
 // ---------- Amministrazione e ruoli ----------

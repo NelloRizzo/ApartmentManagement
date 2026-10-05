@@ -2,8 +2,16 @@ import { Router } from 'express';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireCondominioAccess, requirePermesso, requirePermessoLettura } from '../middleware/auth.js';
 import { controllaServizio } from '../middleware/servizio.js';
+import { upload, leggiMetaAllegati } from '../middleware/upload.js';
 import * as v from '../controllers/verbale.controller.js';
-import { approvaSchema, condominioParams, entitaParams, verbaleListQuery, verbaleTestoSchema } from '../validators/schemas.js';
+import {
+  allegatoParams,
+  approvaSchema,
+  condominioParams,
+  entitaParams,
+  verbaleListQuery,
+  verbaleTestoSchema,
+} from '../validators/schemas.js';
 
 /** Montato su `/condomini/:condominioId/verbali`. */
 const router = Router({ mergeParams: true });
@@ -27,5 +35,22 @@ router.post(
   v.approva,
 );
 router.delete('/:id', controllaServizio, requirePermesso('verbali:scrivere'), validate(entitaParams, 'params'), v.remove);
+
+// Allegati del verbale: il verbale è un solo documento, quindi qui c'è un solo
+// elenco e non una voce per deliberazione come nei bilanci.
+router.post(
+  '/:id/allegati',
+  upload.array('allegati', 5),
+  leggiMetaAllegati,
+  controllaServizio, requirePermesso('verbali:scrivere'),
+  validate(entitaParams, 'params'),
+  v.allega,
+);
+router.delete(
+  '/:id/allegati/:allegatoId',
+  controllaServizio, requirePermesso('verbali:scrivere'),
+  validate(allegatoParams, 'params'),
+  v.stacca,
+);
 
 export default router;

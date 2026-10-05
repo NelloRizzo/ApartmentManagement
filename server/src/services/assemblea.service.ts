@@ -1,6 +1,6 @@
 import { Assemblea, type AssembleaDoc } from '../models/index.js';
 import { STATI_ASSEMBLEA } from '../types/domain.js';
-import { badRequest, notFound } from '../utils/errors.js';
+import { badRequest, conflict, notFound } from '../utils/errors.js';
 
 /** Testo standard della convocazione, usato per email e PDF. */
 export function testoConvocazione(a: {
@@ -79,6 +79,21 @@ export function transizioniConsentite(
   da: (typeof STATI_ASSEMBLEA)[number],
 ): (typeof STATI_ASSEMBLEA)[number][] {
   return STATI_ASSEMBLEA.filter((a) => a !== da && puoTransizionare(da, a));
+}
+
+/**
+ * Un'assemblea conclusa non si tocca più.
+ *
+ * Come per il bilancio approvato: dopo la chiusura i punti all'ordine del giorno
+ * e i loro allegati sono il documento che l'assemblea ha deliberato, e cambiarli
+ * significherebbe riscrivere la delibera.
+ */
+export function assicuraAssembleaModificabile(assemblea: AssembleaDoc): void {
+  if (assemblea.stato === 'conclusa' || assemblea.stato === 'annullata') {
+    throw conflict(
+      `L'assemblea è ${assemblea.stato}: non è più modificabile. Per correggere i suoi allegati, riportala indietro.`,
+    );
+  }
 }
 
 export async function validaChiusura(assemblea: AssembleaDoc): Promise<void> {

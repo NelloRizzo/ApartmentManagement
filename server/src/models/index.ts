@@ -35,7 +35,7 @@ export { Comunicazione } from './comunicazione.model.js';
 export type { ComunicazioneDoc, ComunicazioneModel } from './comunicazione.model.js';
 
 export { Allegato } from './allegato.model.js';
-export type { AllegatoDoc, AllegatoModel, AllegatoRiferito } from './allegato.model.js';
+export type { AllegatoDoc, AllegatoModel } from './allegato.model.js';
 export { AuditLog } from './auditLog.model.js';
 export type { AuditLogDoc, AuditLogModel } from './auditLog.model.js';
 

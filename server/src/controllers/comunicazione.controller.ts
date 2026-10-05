@@ -5,8 +5,9 @@ import { badRequest, forbidden, notFound } from '../utils/errors.js';
 import { paginazioneDa } from '../utils/pagination.js';
 import { AuditLog, Comunicazione, Condomino, Unita, type ComunicazioneDoc } from '../models/index.js';
 import { currentUser } from '../middleware/auth.js';
+import { toAllegati } from '../middleware/upload.js';
 import { auditLog } from '../services/audit.service.js';
-import { rendiPermanente } from '../services/allegato.service.js';
+import { rendiPermanenti, espandiAllegato, eliminaSvincolati } from '../services/allegato.service.js';
 import {
   amministratoriDiCondominio,
   assicuraAccesso,
@@ -86,7 +87,7 @@ export const getOne = asyncHandler(async (req, res) => {
         .lean()
     : [doc];
 
-  ok(res, { ...doc, thread });
+  ok(res, { ...(await espandiAllegato(doc)), thread });
 });
 
 export const create = asyncHandler(async (req, res) => {
@@ -101,9 +102,13 @@ export const create = asyncHandler(async (req, res) => {
     assemblea?: string;
     rispostaA?: string;
     richiedeRisposta: boolean;
-    allegati: { nome: string; url: string; tipo?: string; size?: number }[];
     salvaComeBozza: boolean;
   };
+
+  // I file arrivano qui solo se il middleware li ha messi in `req.files`: senza
+  // questa riga il caricamento finiva senza errore e senza allegato, perché la
+  // rotta accettava i file ma nessuno li trasformava in documenti.
+  const caricati = await toAllegati(req);
 
 // Il condominio viene dalla rotta, che ha già eseguito `requireCondominioAccess`:
   // dedurlo dall'utenza sbagliava per il superadmin (non è titolare di nessuno
@@ -174,7 +179,7 @@ export const create = asyncHandler(async (req, res) => {
     threadId: base?.threadId ? String(base.threadId) : base ? String(base._id) : undefined,
     rispostaA: body.rispostaA,
     richiedeRisposta: body.richiedeRisposta,
-    allegati: body.allegati,
+    allegati: caricati,
     salvaComeBozza: body.salvaComeBozza,
   });
 
@@ -182,12 +187,12 @@ export const create = asyncHandler(async (req, res) => {
 
   const doc = await Comunicazione.create(preparato as object);
 
-  // Gli allegati appena agganciati smettono di scadere: senza questo
-  // l'indice TTL li cancellerebbe dopo 24 ore e la comunicazione resterebbe con
-  // un file sparito. Solo se la comunicazione è stata inviata: una bozza
-  // abbandonata deve poter perdere i file.
+  // Gli allegati appena agganciati smettono di scadere: senza questo l'indice TTL
+  // li cancellerebbe dopo 24 ore e la comunicazione resterebbe con un file
+  // sparito. Solo se la comunicazione è stata inviata: una bozza abbandonata deve
+  // poter perdere i file.
   if (doc.stato === 'inviata') {
-    for (const a of doc.allegati ?? []) await rendiPermanente(a.url);
+    await rendiPermanenti(doc.allegati as unknown as string[]);
   }
 
   if (base) {
@@ -204,7 +209,7 @@ export const create = asyncHandler(async (req, res) => {
     req,
   });
 
-  created(res, doc);
+  created(res, await espandiAllegato(doc));
 });
 
 export const invia = asyncHandler(async (req, res) => {
@@ -235,7 +240,10 @@ export const rispondi = asyncHandler(async (req, res) => {
   if (!originale) throw notFound('Comunicazione non trovata');
   await assicuraAccesso(originale as unknown as ComunicazioneDoc, utente.sub, utente.role);
 
-  const body = req.body as { corpo: string; allegati: { nome: string; url: string }[] };
+  const body = req.body as { corpo: string };
+  // Una risposta può avere i suoi allegati, e arrivano come file: gli id li
+  // produce `toAllegati`, non il corpo validato.
+  const caricati = await toAllegati(req);
 
   const risposta = await Comunicazione.create({
     condominio: originale.condominio,
@@ -247,27 +255,59 @@ export const rispondi = asyncHandler(async (req, res) => {
     destinatario: originale.mittente,
     oggetto: `Re: ${originale.oggetto.replace(/^Re:\s*/, '')}`,
     corpo: body.corpo,
-    allegati: body.allegati,
+    allegati: caricati.map((a) => new Types.ObjectId(a)),
     threadId: originale.threadId ?? originale._id,
     rispostaA: originale._id,
     richiedeRisposta: false,
   });
 
+  // La risposta parte subito, quindi i suoi file non devono scadere.
+  await rendiPermanenti(caricati);
+
   originale.stato = 'risposta';
   await originale.save();
 
-  created(res, risposta);
+  created(res, await espandiAllegato(risposta));
 });
 
 export const update = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
-  const doc = await Comunicazione.findOneAndUpdate(
+  const esistente = await Comunicazione.findOne({
+    _id: req.params.id,
+    mittente: utente.sub,
+    stato: 'bozza',
+  });
+  if (!esistente) throw notFound('Bozza non trovata o non tua');
+
+  // I file appena caricati e quelli da togliere arrivano qui; il resto del corpo
+  // è già stato validato e ripulito da `validate`, quindi non contiene chiavi in
+  // grado di scrivere campi non previsti.
+  const caricati = await toAllegati(req);
+  const corpo = { ...req.body } as Record<string, unknown>;
+  delete corpo.allegati;
+
+  const rimossi = String(corpo.rimuoviAllegati ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const precedenti = (esistente.allegati as unknown as string[]).map(String);
+  const tenuti = precedenti.filter((id) => !rimossi.includes(id));
+
+  // La cancellazione del file avviene **dopo** la scrittura: cancellando prima, un
+  // salvataggio fallito lascerebbe il documento con un id che non porta più a
+  // nessun file, e il documento non potrebbe più essere recuperato.
+  const aggiornato = await Comunicazione.findOneAndUpdate(
     { _id: req.params.id, mittente: utente.sub, stato: 'bozza' },
-    req.body,
+    { ...corpo, allegati: [...tenuti, ...caricati].map((a) => new Types.ObjectId(a)) },
     { new: true, runValidators: true },
   );
-  if (!doc) throw notFound('Bozza non trovata o non tua');
-  ok(res, doc);
+  if (!aggiornato) throw notFound('Bozza non trovata o non tua');
+
+  await eliminaSvincolati(rimossi);
+  await rendiPermanenti(aggiornato.allegati as unknown as string[]);
+
+  ok(res, await espandiAllegato(aggiornato));
 });
 
 export const remove = asyncHandler(async (req, res) => {

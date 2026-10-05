@@ -38,15 +38,14 @@ const puntoOrdineSchema = new Schema(
      * discordante dal bilancio allegato.
      */
     bilancio: { type: Schema.Types.ObjectId, ref: 'Bilancio' },
-    /** Materiale da allegare alla convocazione. */
-    allegati: [
-      {
-        nome: { type: String, required: true },
-        url: { type: String, required: true },
-        tipo: { type: String, trim: true },
-        size: { type: Number },
-      },
-    ],
+    /**
+     * Materiale del punto: relazione, preventivo, progetto.
+     *
+     * Sta **sul singolo punto** e non sull'assemblea: ogni punto è una
+     * deliberazione a sé, con i propri documenti. Solo l'id: i metadati e l'URL
+     * firmato si leggono da `Allegato` a ogni richiesta.
+     */
+    allegati: [{ type: Schema.Types.ObjectId, ref: 'Allegato' }],
   },
   { _id: false },
 );
@@ -95,14 +94,10 @@ const assembleaSchema = baseSchema(
     millesimiTotali: { type: Number, default: 0 },
     dataConvocazione: { type: Date },
     dataChiusura: { type: Date },
-    allegati: [
-      {
-        nome: { type: String, required: true },
-        url: { type: String, required: true },
-        tipo: { type: String, trim: true },
-        size: { type: Number },
-      },
-    ],
+    // Qui non c'è un elenco di allegati: l'assemblea non è un documento con dei
+    // fogli attaccati, è un elenco di punti all'ordine del giorno, e sono quelli
+    // ad avere il proprio materiale. Un allegato qui non saprebbe a quale punto
+    // appartenere.
     note: { type: String, trim: true, maxlength: 4000 },
   },
   { collection: 'assemblee' },
@@ -126,7 +121,7 @@ export interface PuntoOrdine {
   delibera?: string;
   riservata?: boolean;
   bilancio?: ObjectId;
-  allegati: { nome: string; url: string; tipo?: string; size?: number }[];
+  allegati: ObjectId[];
 }
 
 export interface Votazione {
@@ -160,7 +155,7 @@ export interface AssembleaDoc {
   millesimiTotali: number;
   dataConvocazione?: Date;
   dataChiusura?: Date;
-  allegati: { nome: string; url: string; tipo?: string; size?: number }[];
+  allegati: ObjectId[];
   note?: string;
   createdAt: Date;
   updatedAt: Date;

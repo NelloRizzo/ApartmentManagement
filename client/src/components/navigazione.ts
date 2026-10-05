@@ -85,23 +85,30 @@ const piattaforma: GruppoNavigazione[] = [
       { a: '/p', etichetta: 'Panorama', icona: '◱', primaria: true },
       { a: '/p/contratti', etichetta: 'Contratti', icona: '§' },
       { a: '/p/amministratori', etichetta: 'Amministratori', icona: '⚿' },
-      { a: '/p/messaggi', etichetta: 'Messaggi agli admin', icona: '✉', badge: true },
+      { a: '/p/messaggi', etichetta: 'Messaggi', icona: '✉', badge: true },
     ],
   },
 ];
 
-/** Il profilo esiste per tutti: è l'unica sezione che nessun ruolo deve perdere. */
-const profilo: GruppoNavigazione[] = [
-  { titolo: 'Account', voci: [{ a: '/profilo', etichetta: 'Profilo e posizioni', icona: '⚙' }] },
-];
-
 /**
- * Il contratto riguarda chi amministra. Un condòmino o un portiere non ne hanno
- * uno: offrirgli la voce lo porterebbe a una pagina vuota.
+ * Il gruppo "Account" esiste per tutti: è l'unica sezione che nessun ruolo deve
+ * perdere.
+ *
+ * Il contratto è nella stessa sezione e non in un gruppo separato: al superadmin
+ * comparivano due sezioni intitolate "Account", una delle quali inutile perché il
+ * superadmin non è soggetto a un contratto.
  */
-const contratto: GruppoNavigazione[] = [
-  { titolo: 'Account', voci: [{ a: '/contratto', etichetta: 'Il mio contratto', icona: '§' }] },
-];
+function gruppoAccount(mostraContratto: boolean): GruppoNavigazione[] {
+  return [
+    {
+      titolo: 'Account',
+      voci: [
+        { a: '/profilo', etichetta: 'Profilo e posizioni', icona: '⚙' },
+        ...(mostraContratto ? [{ a: '/contratto', etichetta: 'Il mio contratto', icona: '§' }] : []),
+      ],
+    },
+  ];
+}
 
 export function gruppiNavigazione(
   role: UserRole,
@@ -112,14 +119,14 @@ export function gruppiNavigazione(
   // condominio solo se amministra davvero almeno uno stabile: su un condominio
   // altrui `requireCondominioAccess` risponde 403, quindi mostrargliele
   // offrirebbe strade che il backend rifiuta.
-  const base =
+  const base: GruppoNavigazione[] =
     role === 'superadmin'
-      ? [...(amministra ? amministratore : []), ...piattaforma, ...profilo, ...contratto]
+      ? [...(amministra ? amministratore : []), ...piattaforma, ...gruppoAccount(false)]
       : role === 'condomino'
-        ? [...condomino, ...profilo]
+        ? [...condomino, ...gruppoAccount(false)]
         : role === 'portiere'
-          ? profilo
-          : [...amministratore, ...profilo, ...contratto];
+          ? gruppoAccount(false)
+          : [...amministratore, ...gruppoAccount(true)];
 
   // Le voci senza permesso restano sempre; quelle con permesso sono filtrate.
   return base

@@ -6,6 +6,7 @@ import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
 import { useConferma } from '@/components/Conferma';
+import { AllegatiSezione } from '@/components/Allegati';
 import { etichette } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { euro, data as fmtData, mese, perInputData } from '@/lib/formattazione';
@@ -418,8 +419,21 @@ function ModificaVersamento({
   const [note, setNote] = useState(versamento.note ?? '');
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  // La quietanza ha bisogno di essere ricaricata dal server dopo ogni
+  // aggiunta o rimozione: l'URL è firmato e vale 24 ore, quindi un allegato tenuto
+  // in stato scaderebbe con la pagina aperta.
+  const [quietanza, setQuietanza] = useState(versamento.allegato ?? null);
 
   const valido = Number(importo) > 0 && dataVersamento;
+
+  async function ricaricaQuietanza() {
+    try {
+      const risposta = await api.get<Versamento>(`/condomini/${condominioId}/versamenti/${versamento._id}`);
+      setQuietanza(risposta.data.allegato ?? null);
+    } catch {
+      setQuietanza(null);
+    }
+  }
 
   async function salva() {
     setErrore(null);
@@ -467,10 +481,22 @@ function ModificaVersamento({
             </div>
           )}
 
-          <div className="avviso avviso-info">
-            Unità {versamento.unita?.codice} · periodo {versamento.periodo.mese}/{versamento.periodo.anno}: non
+<div className="avviso avviso-info">
+            Unità {versamento.unita?.codice} e periodo {versamento.periodo.mese}/{versamento.periodo.anno}: non
             modificabili, perché determinano a quale quota il pagamento va attribuito.
           </div>
+
+          <AllegatiSezione
+            endpoint={`/condomini/${condominioId}/versamenti/${versamento._id}/allegato`}
+            allegati={[]}
+            allegatoSingolo={quietanza}
+            onCambiatoSingolo={setQuietanza}
+            suCambiati={ricaricaQuietanza}
+            puoScrivere
+            singolo
+            titolo="Quietanza"
+          />
+
 
           <div className="campo">
             <label className="campo-etichetta" htmlFor="mv-importo">

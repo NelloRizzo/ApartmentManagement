@@ -46,6 +46,16 @@ const voceSchema = new Schema(
         pagato: { type: Boolean, default: false },
       },
     ],
+    /**
+     * Allegati della voce: la quietanza, la fattura, il preventivo del
+     * fornitore.
+     *
+     * Stanno **sulla voce**, non sul bilancio: è la voce che è una spesa con un
+     * fornitore, e un documento allegato al bilancio intero non saprebbe a quale
+     * delle sue righe appartenere. Solo l'id: i metadati e l'URL firmato si
+     * leggono da `Allegato` a ogni richiesta.
+     */
+    allegati: [{ type: Schema.Types.ObjectId, ref: 'Allegato' }],
   },
   { _id: true },
 );

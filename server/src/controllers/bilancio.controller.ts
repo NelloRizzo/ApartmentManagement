@@ -3,11 +3,14 @@ import { ok, created, noContent } from '../utils/http.js';
 import { notFound, conflict } from '../utils/errors.js';
 import { Bilancio, type BilancioDoc } from '../models/index.js';
 import { currentUser } from '../middleware/auth.js';
+import { toAllegati } from '../middleware/upload.js';
 import { auditLog } from '../services/audit.service.js';
+import { allegaA, staccaDa, espandiAnnidati } from '../services/allegato.service.js';
 import {
   aggiungiVoce,
   creaConsuntivo,
   eliminaVoce,
+  getBilancioModificabile,
   getBilancioOrThrow,
   modificaVoce,
   oid,
@@ -21,12 +24,19 @@ export const list = asyncHandler(async (req, res) => {
   if (req.query.tipo) query.tipo = req.query.tipo;
 
   const documenti = await Bilancio.find(query).sort({ anno: -1, tipo: 1 }).lean<BilancioDoc[]>();
-  ok(res, documenti.map((b) => ({ ...b, totale: b.totale || totalizza(b.voci) })));
+  // Gli allegati sono sulla voce: senza la passata sui documenti annidati il
+  // cliente riceverebbe degli id al posto dei file, e non potrebbe mostrarli né
+  // scaricarli.
+  const conAllegati = await espandiAnnidati(documenti, 'voci');
+  ok(res, conAllegati.map((b) => ({ ...b, totale: b.totale || totalizza(b.voci) })));
 });
 
 export const getOne = asyncHandler(async (req, res) => {
   const bilancio = await getBilancioOrThrow(req.params.condominioId!, req.params.id!);
-  ok(res, bilancio);
+  // Gli allegati sono sulla voce, quindi sono annidati: senza questa passata
+  // il cliente riceverebbe degli id invece dei file.
+  const [conAllegati] = await espandiAnnidati([bilancio], 'voci');
+  ok(res, conAllegati);
 });
 
 export const create = asyncHandler(async (req, res) => {
@@ -169,5 +179,49 @@ export const approva = asyncHandler(async (req, res) => {
 export const remove = asyncHandler(async (req, res) => {
   const risultato = await Bilancio.deleteOne({ _id: req.params.id, condominio: req.params.condominioId, approvato: false });
   if (risultato.deletedCount === 0) throw notFound('Bilancio non trovato o già approvato');
+  noContent(res);
+});
+/**
+ * Allega file a una voce.
+ *
+ * Gli allegati stanno sulla **voce**, non sul bilancio: è la voce ad avere una
+ * fattura o una quietanza, e un documento sul bilancio intero non saprebbe a
+ * quale riga appartenere.
+ */
+export const allegaVoce = asyncHandler(async (req, res) => {
+  const condominioId = String(req.params.condominioId);
+  const bilancioId = String(req.params.id);
+  const voceId = String(req.params.voceId);
+
+  await getBilancioModificabile(condominioId, bilancioId);
+
+  const caricati = await toAllegati(req);
+  await allegaA(
+    Bilancio,
+    { _id: bilancioId, condominio: condominioId },
+    'voci.$[v].allegati',
+    caricati,
+    [{ 'v._id': oid(voceId) }],
+  );
+
+  ok(res, { allegati: caricati, aggiunti: caricati.length });
+});
+
+/** Toglie un allegato da una voce e cancella il file. */
+export const staccaVoce = asyncHandler(async (req, res) => {
+  const condominioId = String(req.params.condominioId);
+  const bilancioId = String(req.params.id);
+  const voceId = String(req.params.voceId);
+
+  await getBilancioModificabile(condominioId, bilancioId);
+
+  await staccaDa(
+    Bilancio,
+    { _id: bilancioId, condominio: condominioId },
+    'voci.$[v].allegati',
+    String(req.params.allegatoId),
+    [{ 'v._id': oid(voceId) }],
+  );
+
   noContent(res);
 });

@@ -34,6 +34,22 @@ function assicuraModificabile(bilancio: BilancioDoc): void {
   }
 }
 
+/**
+ * Come `getBilancioOrThrow` ma chiede che il bilancio sia ancora modificabile.
+ *
+ * Vale anche per gli allegati: un documento che l'assemblea ha approvato non è più
+ * modificabile, quindi aggiungerci un file significherebbe cambiarne il contenuto
+ * dopo la ratifica, che è proprio ciò che l'approvazione vuole impedire.
+ */
+export async function getBilancioModificabile(
+  condominioId: string,
+  bilancioId: string,
+): Promise<BilancioDoc> {
+  const bilancio = await getBilancioOrThrow(condominioId, bilancioId);
+  assicuraModificabile(bilancio);
+  return bilancio;
+}
+
 /** Indice della voce dentro l'array, cercata per id del subdocumento. */
 function indiceVoce(bilancio: BilancioDoc, voceId: string): number {
   return bilancio.voci.findIndex((v) => String(v._id) === String(voceId));

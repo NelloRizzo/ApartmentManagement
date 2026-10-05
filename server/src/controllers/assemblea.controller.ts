@@ -9,6 +9,7 @@ import { auditLog } from '../services/audit.service.js';
 import { buildTabella } from '../services/tabellaMillesimale.service.js';
 import { millesimiDiCondomino } from '../services/verbale.service.js';
 import {
+  assicuraAssembleaModificabile,
   nextNumeroAssemblea,
   puoTransizionare,
   transizioniConsentite,
@@ -16,6 +17,8 @@ import {
   validaChiusura,
 } from '../services/assemblea.service.js';
 import { modelliOrdineDelGiorno, puntoDaModello } from '../services/modelliOrdine.service.js';
+import { toAllegati } from '../middleware/upload.js';
+import { allegaA, staccaDa, espandiAnnidati } from '../services/allegato.service.js';
 
 const oid = (v: string): Types.ObjectId => new Types.ObjectId(String(v));
 
@@ -85,7 +88,6 @@ export const getOne = asyncHandler(async (req, res) => {
   const assemblea = await Assemblea.findOne({ _id: req.params.id, condominio: req.params.condominioId })
     .populate('presiedutaDa', 'nome cognome email')
     .populate('segretario', 'nome cognome email')
-    .populate('allegati')
     .lean<AssembleaDoc>();
   if (!assemblea) throw notFound('Assemblea non trovata');
 
@@ -97,8 +99,13 @@ export const getOne = asyncHandler(async (req, res) => {
       .lean(),
   ]);
 
-ok(res, {
-    ...assemblea,
+  // Gli allegati sono sui punti all'ordine del giorno, quindi annidati. Qui prima
+  // c'era un `populate('allegati')` sull'assemblea: con `strictPopulate` attivo
+  // avrebbe fatto fallire la rotta appena tolto quel campo.
+  const [conAllegati] = await espandiAnnidati([assemblea], 'ordineDelGiorno');
+
+  ok(res, {
+    ...conAllegati,
     verbale: verbale ?? null,
     elencoCondomini: condomini,
     transizioniConsentite: transizioniConsentite(assemblea.stato),
@@ -377,4 +384,58 @@ export const modelli = asyncHandler(async (req, res) => {
   const { anno } = req.query as unknown as { anno: number };
   const catalogo = await modelliOrdineDelGiorno(req.params.condominioId!, anno);
   ok(res, catalogo.map((m) => ({ ...m, punto: puntoDaModello(m) })));
+});
+/**
+ * Allega file a un punto all'ordine del giorno.
+ *
+ * Gli allegati stanno sul **punto**, non sull'assemblea: ogni punto è una
+ * deliberazione a sé, con i propri documenti. Un allegato sull'assemblea non
+ * saprebbe a quale punto appartenere.
+ *
+ * I punti non hanno un `_id` proprio (`puntoOrdineSchema` è `{ _id: false }`), quindi
+ * si indicano col numero d'ordine ed è quello che va nell'`arrayFilters`.
+ */
+export const allegaPunto = asyncHandler(async (req, res) => {
+  const condominioId = String(req.params.condominioId);
+  const assembleaId = String(req.params.id);
+  const ordine = Number(req.params.ordine);
+
+  const assemblea = await Assemblea.findById(assembleaId);
+  if (!assemblea || String(assemblea.condominio) !== condominioId) throw notFound('Assemblea non trovata');
+  assicuraAssembleaModificabile(assemblea);
+
+  const punto = (assemblea.ordineDelGiorno ?? []).find((p) => p.ordine === ordine);
+  if (!punto) throw notFound(`Nessun punto n. ${ordine} in quest'ordine del giorno`);
+
+  const caricati = await toAllegati(req);
+  await allegaA(
+    Assemblea,
+    { _id: assembleaId, condominio: condominioId },
+    'ordineDelGiorno.$[p].allegati',
+    caricati,
+    [{ 'p.ordine': ordine }],
+  );
+
+  ok(res, { allegati: caricati, aggiunti: caricati.length });
+});
+
+/** Toglie un allegato da un punto all'ordine del giorno e cancella il file. */
+export const staccaPunto = asyncHandler(async (req, res) => {
+  const condominioId = String(req.params.condominioId);
+  const assembleaId = String(req.params.id);
+  const ordine = Number(req.params.ordine);
+
+  const assemblea = await Assemblea.findById(assembleaId);
+  if (!assemblea || String(assemblea.condominio) !== condominioId) throw notFound('Assemblea non trovata');
+  assicuraAssembleaModificabile(assemblea);
+
+  await staccaDa(
+    Assemblea,
+    { _id: assembleaId, condominio: condominioId },
+    'ordineDelGiorno.$[p].allegati',
+    String(req.params.allegatoId),
+    [{ 'p.ordine': ordine }],
+  );
+
+  noContent(res);
 });

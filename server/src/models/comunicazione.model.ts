@@ -28,14 +28,7 @@ const comunicazioneSchema = baseSchema(
     dataInvio: { type: Date },
     dataLettura: { type: Date },
     lettaDa: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    allegati: [
-      {
-        nome: { type: String, required: true },
-        url: { type: String, required: true },
-        tipo: { type: String, trim: true },
-        size: { type: Number },
-      },
-    ],
+    allegati: [{ type: Schema.Types.ObjectId, ref: 'Allegato' }],
     richiedeRisposta: { type: Boolean, default: false },
     rispostaA: { type: Schema.Types.ObjectId, ref: 'Comunicazione' },
   },
@@ -63,7 +56,7 @@ export interface ComunicazioneDoc {
   dataInvio?: Date;
   dataLettura?: Date;
   lettaDa: UserDoc['_id'][];
-  allegati: { nome: string; url: string; tipo?: string; size?: number }[];
+  allegati: ObjectId[];
   richiedeRisposta: boolean;
   rispostaA?: ObjectId;
   createdAt: Date;

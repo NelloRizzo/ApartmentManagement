@@ -4,6 +4,7 @@ import type { TIPI_COMUNICAZIONE} from '../types/domain.js';
 import { type UserRole } from '../types/domain.js';
 import { forbidden, notFound } from '../utils/errors.js';
 import { regexDaTesto } from '../utils/pagination.js';
+import { espandiAllegati } from './allegato.service.js';
 
 export interface FiltroComunicazione {
   condominio?: string;
@@ -88,7 +89,9 @@ export async function listComunicazioni(
     Comunicazione.countDocuments(query),
   ]);
 
-  return { dati: documenti, totale, page: filtri.page, limit: filtri.limit };
+  // Gli allegati viaggiano come id: qui diventano descrittori con URL firmato
+  // fresco, in una query sola per tutta la pagina.
+  return { dati: await espandiAllegati(documenti), totale, page: filtri.page, limit: filtri.limit };
 }
 
 export async function segnaLetta(id: string, utenteId: string): Promise<ComunicazioneDoc> {
@@ -117,7 +120,7 @@ export function preparaComunicazione(input: {
   threadId?: string;
   rispostaA?: string;
   richiedeRisposta?: boolean;
-  allegati?: { nome: string; url: string; tipo?: string; size?: number }[];
+  allegati?: string[];
   /** `true` se l'autore ha chiesto di fermarsi a una bozza. */
   salvaComeBozza?: boolean;
 }): Partial<ComunicazioneDoc> {
@@ -141,7 +144,9 @@ export function preparaComunicazione(input: {
     threadId: input.threadId ? new Types.ObjectId(String(input.threadId)) : undefined,
     rispostaA: input.rispostaA ? new Types.ObjectId(String(input.rispostaA)) : undefined,
     richiedeRisposta: input.richiedeRisposta ?? false,
-    allegati: input.allegati ?? [],
+    // Solo gli id: i metadati e l'URL firmato si rileggono da `Allegato` a ogni
+    // richiesta, perché l'URL vale 24 ore e nel documento invecchierebbe.
+    allegati: (input.allegati ?? []).map((a) => new Types.ObjectId(a)),
   };
 }
 

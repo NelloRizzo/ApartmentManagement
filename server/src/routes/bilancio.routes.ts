@@ -2,11 +2,13 @@ import { Router } from 'express';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireCondominioAccess, requirePermesso, requirePermessoLettura } from '../middleware/auth.js';
 import { controllaServizio } from '../middleware/servizio.js';
+import { upload, leggiMetaAllegati } from '../middleware/upload.js';
 import * as b from '../controllers/bilancio.controller.js';
 import {
   approvaSchema,
   bilancioCreateSchema,
   bilancioUpdateSchema,
+  bilancioVoceAllegatoParams,
   bilancioVoceParams,
   condominioParams,
   entitaParams,
@@ -52,6 +54,25 @@ router.delete(
   controllaServizio, requirePermesso('bilanci:scrivere'),
   validate(bilancioVoceParams, 'params'),
   b.elimina,
+);
+
+// Allegati della singola voce: la quietanza o la fattura di quella spesa.
+// `leggiMetaAllegati` sta prima di `validate` per lo stesso motivo delle
+// comunicazioni: i metadati degli allegati non fanno parte dello schema del
+// bilancio e verrebbero scartati.
+router.post(
+  '/:id/voci/:voceId/allegati',
+  upload.array('allegati', 5),
+  leggiMetaAllegati,
+  controllaServizio, requirePermesso('bilanci:scrivere'),
+  validate(bilancioVoceParams, 'params'),
+  b.allegaVoce,
+);
+router.delete(
+  '/:id/voci/:voceId/allegati/:allegatoId',
+  controllaServizio, requirePermesso('bilanci:scrivere'),
+  validate(bilancioVoceAllegatoParams, 'params'),
+  b.staccaVoce,
 );
 
 router.post(

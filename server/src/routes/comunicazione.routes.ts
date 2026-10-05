@@ -4,7 +4,7 @@ import { requireAuth, requireCondominioAccess, requirePermesso, requirePermessoL
 import { controllaServizio } from '../middleware/servizio.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { badRequest } from '../utils/errors.js';
-import { upload, toAllegati } from '../middleware/upload.js';
+import { upload, toAllegati, leggiMetaAllegati } from '../middleware/upload.js';
 import * as c from '../controllers/comunicazione.controller.js';
 import {
   comunicazioneCreateSchema,
@@ -13,7 +13,6 @@ import {
   entitaParams,
   rispostaSchema,
 } from '../validators/schemas.js';
-
 /** Montato su `/condomini/:condominioId/comunicazioni`. */
 const router = Router({ mergeParams: true });
 
@@ -28,9 +27,12 @@ router.get('/non-lette', c.nonLette);
 // `/:id/letti` è l'azione del destinatario e resta senza permesso.
 router.post(
   '/',
-  // `upload` va prima di `validate`: con richiesta JSON semplice multer lascia
-  // passare il body invariato, quindi lo schema Zod lo valida correttamente.
+  // L'ordine conta: `upload` mette i file in `req.files`, `leggiMetaAllegati`
+  // mette in salvo i metadati prima che `validate` sostituisca il corpo, e solo
+  // allora Zod può validare il resto. Con richiesta JSON semplice multer lascia
+  // passare il body invariato, quindi lo schema lo vede correttamente.
   upload.array('allegati', 5),
+  leggiMetaAllegati,
   controllaServizio,
   requirePermessoOPartecipante('comunicazioni:scrivere'),
   validate(comunicazioneCreateSchema),
@@ -40,6 +42,7 @@ router.get('/:id', validate(entitaParams, 'params'), c.getOne);
 router.patch(
   '/:id',
   upload.array('allegati', 5),
+  leggiMetaAllegati,
   controllaServizio,
   requirePermessoOPartecipante('comunicazioni:scrivere'),
   validate(comunicazioneCreateSchema.partial()),
@@ -47,7 +50,18 @@ router.patch(
 );
 router.post('/:id/invia', controllaServizio, requirePermessoOPartecipante('comunicazioni:scrivere'), validate(entitaParams, 'params'), c.invia);
 router.post('/:id/letti', validate(entitaParams, 'params'), c.segnaLetta);
-router.post('/:id/risposte', controllaServizio, requirePermessoOPartecipante('comunicazioni:scrivere'), validate(entitaParams, 'params'), validate(rispostaSchema), c.rispondi);
+router.post(
+  '/:id/risposte',
+  // Una risposta può avere allegati: senza `upload` i file non arriverebbero mai
+  // al controller, che li trasformerebbe in documenti.
+  upload.array('allegati', 5),
+  leggiMetaAllegati,
+  controllaServizio,
+  requirePermessoOPartecipante('comunicazioni:scrivere'),
+  validate(entitaParams, 'params'),
+  validate(rispostaSchema),
+  c.rispondi,
+);
 router.delete('/:id', controllaServizio, requirePermessoOPartecipante('comunicazioni:scrivere'), c.remove);
 
 /** Carica un allegato e restituisce il descrittore da usare nelle comunicazioni. */

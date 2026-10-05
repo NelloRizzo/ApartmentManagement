@@ -312,6 +312,50 @@ controller ne verificano la proprietà (`mittente`, `bozza`).
 condòmino conosce già la propria unità da `GET /auth/me` e non deve poter
 sfogliare lo stabile.
 
+## Allegati
+
+I file stanno in MongoDB dentro `Allegato`, e **il documento che li ospita tiene
+solo l'id**. I metadati si leggono dal documento `Allegato` a ogni richiesta. Non è
+una scelta estetica: l'URL è firmato e vale 24 ore, quindi un URL scritto dentro il
+documento che lo referenzia scaderebbe da solo e il file diventerebbe
+irraggiungibile.
+
+**Dove stanno, e perché lì.**
+
+| Documento | Campo | Motivo |
+| --- | --- | --- |
+| Voce di bilancio | `voci.$[].allegati` | la fattura e la quietanza sono di **quella** spesa |
+| Punto all'ordine | `ordineDelGiorno.$[].allegati` | la relazione è di **quella** deliberazione |
+| Verbale | `allegati` | è un documento unico, non ha sotto-elementi |
+| Versamento | `allegato` (singolo) | una quietanza sola, e sostituirla cancella il file vecchio |
+| Comunicazione | `allegati` | vale per create, update e risposte |
+
+Non esiste un allegato a livello di assemblea né di bilancio: non saprebbe a quale
+voce o a quale punto appartenere.
+
+**Regole che non si spostano.**
+
+- **`leggiMetaAllegati` va montata dopo `upload` e prima di `validate`.** `validate`
+  *sostituisce* `req.body` con il risultato di Zod, che scarta le chiavi non
+  dichiarate: i metadati degli allegati, non facendo parte dello schema del
+  documento, arriverebbero vuoti e ogni file prenderebbe per oggetto il titolo del
+  documento padre.
+- **I campi dei metadati hanno il prefisso `allegati`** (`allegatiOggetto`,
+  `allegatiFonte`, …) perché il corpo ha già un `oggetto` proprio.
+- **`flagCorpo`, non `z.boolean()`**, sui campi booleani delle rotte che accettano
+  file: multer legge ogni campo come stringa, quindi `salvaComeBozza: 'true'`
+  fallirebbe la validazione.
+- **La cancellazione non è in cascata.** Il file viene eliminato **dopo** che il
+  documento non lo referenzia più: il contrario lascerebbe un documento con un id che
+  non porta più a nessun file. Sul client, che rimuova le voci del thread una alla
+  volta, è un comportamento da documentare e non un bug.
+- **I documenti ratificati non accettano allegati**: bilancio approvato, verbale
+  approvato, assemblea conclusa. Dopo la delibera aggiungere un documento sarebbe
+  cambiarne il contenuto.
+- **`espandiAnnidati` serve per le voci e i punti**, perché gli allegati sono dentro
+  un array e `espandiAllegati` guarda solo il primo livello. Dimenticarsene non
+  rompe nulla: il cliente riceve degli id al posto dei file e non può scaricarli.
+
 ## Bacheca delle attività
 
 `/staff/attivita` è l'unico dominio che **non** sta sotto
@@ -436,7 +480,7 @@ npm run dev            # in un altro terminale
 npm run verifica       # dalla root: esegue gli script in sequenza
 ```
 
-`npm run verifica` riporta il totale dei controlli (130 al momento) e si ferma al
+`npm run verifica` riporta il totale dei controlli (158 al momento) e si ferma al
 primo script che fallisce. Gli script sono in `scripts/` e hanno tutti la stessa
 forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 409 della transizione illegale) accanto a quelli positivi.
@@ -456,6 +500,7 @@ forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 | `verifica-crud-bilanci.ps1` | creazione, duplicata rifiutata, approvazione, revoca, eliminazione |
 | `verifica-millesimi.ps1` | tabella vuota non valida, tabella coerente, revisione squilibrata rifiutata |
 | `verifica-attivita.ps1` | bacheca del team, assegnatari, proprietario contro assegnatario, thread a un livello |
+| `verifica-allegati.ps1` | caricamento, metadati, firma, rimozione, dominio approvato, allegati per voce e per verbale |
 
 Gli script sono eseguiti da `verifica.ps1` con `powershell` (Windows PowerShell
 5.1). Lanciandone uno direttamente con `pwsh` i controlli che confrontano il
@@ -511,6 +556,8 @@ Controlli minimi dopo una modifica al dominio:
   è temporaneo su Render: i file in `server/uploads` sparisce a ogni deploy.
   `allegato.service.ts` li salva e li serve da `/allegati/:id` con firma a tempo
   (24 ore), perché `<img src>` non può portare il token di accesso.
+- **Il documento che ospita un allegato tiene solo l'id**, non l'URL firmato né una
+  copia dei metadati. Vedi la sezione "Allegati".
 - **Gli URL degli allegati sono assoluti in produzione.** Servono `URL_API` e il
   percorso firmato: senza, un `src="/allegati/x"` finirebbe sul sito statico e
   riceverebbe un 404. In sviluppo restano relativi e passano dal proxy di Vite.

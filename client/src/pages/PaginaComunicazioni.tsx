@@ -4,6 +4,7 @@ import { useApi } from '@/hooks/useApi';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
+import { AllegatiElenco, AllegatiSelettore, allegatiInFormData, allegatiVuoti } from '@/components/Allegati';
 import { EtichettaStato, etichette } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { dataRelativa, dataOra } from '@/lib/formattazione';
@@ -133,6 +134,11 @@ export default function PaginaComunicazioni() {
                 · {dataRelativa(m.createdAt)}
               </div>
               {m.corpo && <p className="testo-faint">{m.corpo.slice(0, 140)}{m.corpo.length > 140 ? '…' : ''}</p>}
+              {m.allegati.length > 0 && (
+                <span className="testo-faint">
+                  {m.allegati.length === 1 ? '1 allegato' : `${m.allegati.length} allegati`}
+                </span>
+              )}
             </div>
           </button>
         ))}
@@ -167,6 +173,7 @@ function ModuloComposizione({
   const [corpo, setCorpo] = useState('');
   const [destinatari, setDestinatari] = useState<string[]>([]);
   const [bozza, setBozza] = useState(false);
+  const [allegati, setAllegati] = useState(allegatiVuoti);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
 
@@ -188,13 +195,28 @@ function ModuloComposizione({
     setErrore(null);
     setInCorso(true);
     try {
-      await api.post(`/condomini/${condominioId}/comunicazioni`, {
+      const daInviare = {
         tipo,
         oggetto: oggetto.trim(),
         corpo,
         unita: destinatari,
         salvaComeBozza: bozza,
-      });
+      };
+
+      // Con i file la richiesta diventa `multipart`: `api.post` con `FormData`
+      // sarebbe rifiutata dal server, che su questa rotta si aspetta JSON.
+      if (allegati.file.length > 0) {
+        const dati = new FormData();
+        dati.set('tipo', daInviare.tipo);
+        dati.set('oggetto', daInviare.oggetto);
+        dati.set('corpo', daInviare.corpo);
+        dati.set('salvaComeBozza', String(daInviare.salvaComeBozza));
+        for (const u of daInviare.unita) dati.append('unita', u);
+        await api.upload(`/condomini/${condominioId}/comunicazioni`, allegatiInFormData(dati, allegati));
+      } else {
+        await api.post(`/condomini/${condominioId}/comunicazioni`, daInviare);
+      }
+
       notifica(bozza ? 'Bozza salvata' : 'Comunicazione inviata');
       onInviato();
     } catch (e) {
@@ -241,14 +263,21 @@ function ModuloComposizione({
           <label className="campo-etichetta" htmlFor="corpo-comm">
             Messaggio
           </label>
-          <textarea
+<textarea
             id="corpo-comm"
             className="area area-testo"
             value={corpo}
             onChange={(e) => setCorpo(e.target.value)}
-            placeholder="Scrivi qui il tuo messaggio…"
+            placeholder="Scrivi qui il tuo messaggio."
           />
         </div>
+
+        <AllegatiSelettore
+          valore={allegati}
+          onCambia={setAllegati}
+          oggettoPredefinito={oggetto}
+        />
+
 
         {amministratore && (unita.dati?.data.length ?? 0) > 0 && (
           <div className="campo">
@@ -380,6 +409,7 @@ function DettaglioComunicazione({
                 <EtichettaStato stato={m.stato} />
               </div>
               <p style={{ whiteSpace: 'pre-wrap' }}>{m.corpo}</p>
+              <AllegatiElenco allegati={m.allegati} />
             </div>
           ))}
 

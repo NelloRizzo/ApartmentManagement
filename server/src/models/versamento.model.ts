@@ -20,13 +20,13 @@ const versamentoSchema = baseSchema(
     metodo: { type: String, enum: METODI_PAGAMENTO, default: 'bonifico' },
     causale: { type: String, trim: true },
     identificativoTransazione: { type: String, trim: true },
-    /** Allegato (quietanza, ricevuta). */
-    allegato: {
-      nome: String,
-      url: String,
-      tipo: String,
-      size: Number,
-    },
+/**
+ * Allegato (quietanza, ricevuta).
+ *
+ * Un versamento ha al massimo un allegato, e comunque si tiene l'id: il file sta
+ * in `Allegato` con i suoi metadati, e l'URL firmato si genera a ogni lettura.
+ */
+allegato: { type: Schema.Types.ObjectId, ref: 'Allegato' },
     note: { type: String, trim: true, maxlength: 2000 },
     registratoDa: { type: Schema.Types.ObjectId, ref: 'User' },
   },
@@ -48,7 +48,7 @@ export interface VersamentoDoc {
   metodo: MetodoPagamento;
   causale?: string;
   identificativoTransazione?: string;
-  allegato?: { nome: string; url: string; tipo?: string; size?: number };
+  allegato?: ObjectId;
   note?: string;
   registratoDa?: UserDoc['_id'];
   createdAt: Date;

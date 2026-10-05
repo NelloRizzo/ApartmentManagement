@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireCondominioAccess, requirePermesso, requirePermessoLettura } from '../middleware/auth.js';
 import { controllaServizio } from '../middleware/servizio.js';
+import { upload, leggiMetaAllegati } from '../middleware/upload.js';
 import * as c from '../controllers/assemblea.controller.js';
 import * as v from '../controllers/verbale.controller.js';
 import {
@@ -15,6 +16,8 @@ import {
   deliberaSchema,
   modelliOrdineQuery,
   presenzeSchema,
+  puntoOrdineAllegatoParams,
+  puntoOrdineParams,
   statoAssembleaSchema,
   votazioniSchema,
 } from '../validators/schemas.js';
@@ -37,6 +40,23 @@ router.patch(
   c.update,
 );
 router.delete('/:id', controllaServizio, requirePermesso('assemblee:scrivere'), validate(assembleaParams, 'params'), c.deleteOne);
+
+// Allegati del singolo punto all'ordine del giorno. I punti non hanno un `_id`
+// proprio, quindi si indicano col numero d'ordine.
+router.post(
+  '/:id/ordine/:ordine/allegati',
+  upload.array('allegati', 5),
+  leggiMetaAllegati,
+  controllaServizio, requirePermesso('assemblee:scrivere'),
+  validate(puntoOrdineParams, 'params'),
+  c.allegaPunto,
+);
+router.delete(
+  '/:id/ordine/:ordine/allegati/:allegatoId',
+  controllaServizio, requirePermesso('assemblee:scrivere'),
+  validate(puntoOrdineAllegatoParams, 'params'),
+  c.staccaPunto,
+);
 
 router.post(
   '/:id/stato',

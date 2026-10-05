@@ -7,6 +7,14 @@ import { Condomino, Unita, Versamento } from '../models/index.js';
 import { currentUser } from '../middleware/auth.js';
 import { auditLog } from '../services/audit.service.js';
 import { calcolaQuoteMensili, quotePerCondomino } from '../services/quoteVersamenti.service.js';
+import { toAllegati } from '../middleware/upload.js';
+import {
+  allegatiDescrittori,
+  allegaSingolo,
+  eliminaSvincolati,
+  espandiSingolo,
+  staccaSingolo,
+} from '../services/allegato.service.js';
 
 const oid = (v: string): Types.ObjectId => new Types.ObjectId(String(v));
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -61,9 +69,13 @@ export const list = asyncHandler(async (req, res) => {
     ]),
   ]);
 
+  // La quietanza viaggia come id: qui diventa il file scaricabile. Senza questa
+  // passata il cliente riceverebbe un identificativo al posto del documento.
+  const conAllegati = await Promise.all(documenti.map((d) => espandiSingolo(d)));
+
   paginated(
     res,
-    { documenti, totaleImporti: round2(aggregato[0]?.totale ?? 0) },
+    { documenti: conAllegati, totaleImporti: round2(aggregato[0]?.totale ?? 0) },
     totale,
     page,
     limit,
@@ -197,5 +209,42 @@ export const remove = asyncHandler(async (req, res) => {
     req,
   });
 
+  noContent(res);
+});
+/**
+ * Allega la quietanza al versamento.
+ *
+ * Un versamento ha **un solo** allegato: qui `allegato` è un campo singolo, non
+ * un elenco. Sostituirlo cancella anche il file precedente, altrimenti resterebbe
+ * in database senza più nessun documento che lo richiamasse.
+ */
+export const allegaQuietanza = asyncHandler(async (req, res) => {
+  const condominioId = String(req.params.condominioId);
+  const id = String(req.params.id);
+
+  const esistente = await Versamento.findOne({ _id: id, condominio: condominioId }).select('_id allegato');
+  if (!esistente) throw notFound('Versamento non trovato');
+
+  const caricati = await toAllegati(req);
+  if (caricati.length === 0) throw badRequest('Nessun file ricevuto');
+
+  // Se il versamento aveva già una quietanza, va rimossa insieme al file.
+  const precedente = esistente.allegato ? [String(esistente.allegato)] : [];
+  await allegaSingolo(Versamento, { _id: id, condominio: condominioId }, 'allegato', String(caricati[0]));
+  if (precedente.length > 0) await eliminaSvincolati(precedente);
+
+  // `caricati[0]` è solo l'id: la risposta deve portare il file con l'URL firmato,
+  // altrimenti il client riceverebbe un identificativo non scaricabile.
+  const [allegato] = await allegatiDescrittori([caricati[0]]);
+  ok(res, { allegato: allegato ?? null });
+});
+
+/** Toglie la quietanza dal versamento e cancella il file. */
+export const togliQuietanza = asyncHandler(async (req, res) => {
+  await staccaSingolo(
+    Versamento,
+    { _id: String(req.params.id), condominio: String(req.params.condominioId) },
+    'allegato',
+  );
   noContent(res);
 });

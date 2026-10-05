@@ -36,7 +36,6 @@ PRIORITA MEDIA
   - l'esportazione dei dati propri non è esposta: `mieDati` in `comunicazione.controller.ts` raccoglie comunicazioni, legami e registro operazioni di un utente ma nessuna rotta la chiama, quindi oggi l'interessato non può scaricarli
 
 PRIORITA BASSA
-- alle diverse voci di bilancio, delle assemblee, dei verbali e ai messaggi deve essere possibile allegare dei documenti: ogni documento ha un "oggetto" (obbligatorio), una "descrizione" (facoltativa), una "fonte" (facoltativa), un riferimento (facoltativo), e ovviamente un contenuto (in byte) oltre che un formato (mimetype). gli allegati saranno salvati nel database (upload in campi blob)
 - Cascata delle proroghe fra attività ⏸ rimandato
   - la proroga di una milestone deve prorogare anche l'attività di livello superiore, in cascata: oggi ogni attività ha le sue date e il padre le vede senza governarle
   - va fatto quando le date sono stabili, e richiede prevenzione dei cicli, ordine delle scritture definito e comportamento deciso quando una voce viene eliminata o spostata sotto un altro padre

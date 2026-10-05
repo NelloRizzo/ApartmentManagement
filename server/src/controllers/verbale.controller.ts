@@ -7,6 +7,8 @@ import { Assemblea, Condomino, Verbale, type AssembleaDoc, type UtenteRiepilogo 
 import { currentUser } from '../middleware/auth.js';
 import { auditLog } from '../services/audit.service.js';
 import { generaDatiVerbale, generaVerbale } from '../services/verbale.service.js';
+import { toAllegati } from '../middleware/upload.js';
+import { allegaA, staccaDa, espandiAllegato } from '../services/allegato.service.js';
 
 export const list = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
@@ -63,7 +65,9 @@ export const getOne = asyncHandler(async (req, res) => {
     .populate<{ generatoDa: UtenteRiepilogo }>('generatoDa', 'nome cognome')
     .lean();
   if (!verbale) throw notFound('Verbale non trovato');
-  ok(res, verbale);
+  // Gli allegati viaggiano come id: qui diventano file scaricabili con firma
+  // rinnovata, altrimenti il verbale mostrerebbe degli identificativi.
+  ok(res, await espandiAllegato(verbale));
 });
 
 /** Anteprima del testo senza persistenza: utile per revisionare prima di salvare. */
@@ -138,5 +142,38 @@ export const approva = asyncHandler(async (req, res) => {
 export const remove = asyncHandler(async (req, res) => {
   const risultato = await Verbale.deleteOne({ _id: req.params.id, condominio: req.params.condominioId });
   if (risultato.deletedCount === 0) throw notFound('Verbale non trovato');
+  noContent(res);
+});
+/**
+ * Allega file al verbale.
+ *
+ * Un verbale approvato non è più modificabile, per lo stesso motivo di un bilancio
+ * approvato: dopo la ratifica dell'assemblea aggiungere un documento significherebbe
+ * cambiarne il contenuto.
+ */
+export const allega = asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
+  const condominioId = String(req.params.condominioId);
+
+  const verbale = await Verbale.findOne({ _id: id, condominio: condominioId });
+  if (!verbale) throw notFound('Verbale non trovato');
+  if (verbale.approvato) {
+    throw conflict('Il verbale è approvato: per aggiungere un allegato, togli prima l\'approvazione.');
+  }
+
+  const caricati = await toAllegati(req);
+  await allegaA(Verbale, { _id: id, condominio: condominioId }, 'allegati', caricati);
+
+  ok(res, { allegati: caricati, aggiunti: caricati.length });
+});
+
+/** Toglie un allegato dal verbale e cancella il file. */
+export const stacca = asyncHandler(async (req, res) => {
+  await staccaDa(
+    Verbale,
+    { _id: String(req.params.id), condominio: String(req.params.condominioId) },
+    'allegati',
+    String(req.params.allegatoId),
+  );
   noContent(res);
 });

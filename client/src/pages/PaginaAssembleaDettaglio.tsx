@@ -6,6 +6,7 @@ import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento } from '@/components/Feedback';
 import { useConferma } from '@/components/Conferma';
+import { AllegatiBottone } from '@/components/Allegati';
 import { EtichettaStato, etichette } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { AreaStampa, PulsanteStampa } from '@/components/Stampa';
@@ -410,13 +411,47 @@ function ContenutoDettaglio({
                 <div key={punto.ordine} className="scheda-corpo pila-3" style={{ borderBottom: '1px solid var(--c-border)' }}>
                   <div>
                     <strong>
-                      {punto.ordine}. {punto.titolo}
+{punto.ordine}. {punto.titolo}
                     </strong>
                     {punto.descrizione && <p className="testo-faint">{punto.descrizione}</p>}
                     {punto.riservata && (
                       <span className="etichetta etichetta-accento">Materia riservata</span>
                     )}
+                    {/* Gli allegati sono del punto, non dell'assemblea: relazione,
+                        preventivo e progetto si riferiscono a quella deliberazione. */}
+                    {punto.allegati.length > 0 && (
+                      <div className="elenco">
+                        {punto.allegati.map((al) => (
+                          <div key={al.id} className="voce">
+                            <span className="cresci pila-1">
+                              <strong>{al.oggetto}</strong>
+                              <span className="testo-faint">
+                                {al.nome}
+                                {al.fonte && ` · da ${al.fonte}`}
+                                {al.riferimento && ` · ${al.riferimento}`}
+                              </span>
+                            </span>
+                            <a className="btn btn-fantasma btn-sm" href={al.url} target="_blank" rel="noreferrer">
+                              Apri
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
+                  {puoScrivere && !readonly && (
+                    <div className="riga-tra">
+                      <span className="testo-faint">Materiale del punto</span>
+                      <AllegatiBottone
+                        endpoint={`/condomini/${condominioId}/assemblee/${a._id}/ordine/${punto.ordine}/allegati`}
+                        conteggio={punto.allegati.length}
+                        titolo={`Allegati al punto ${punto.ordine}`}
+                        descrizione={`Allegati del punto ${punto.ordine}, ${punto.titolo}`}
+                        suCambiati={onCambiato}
+                      />
+                    </div>
+                  )}
 
                   {!readonly && (
                     <div className="riga">

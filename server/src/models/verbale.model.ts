@@ -32,14 +32,7 @@ const verbaleSchema = baseSchema(
     approvato: { type: Boolean, default: false },
     approvatoIl: { type: Date },
     approvatoDa: { type: Schema.Types.ObjectId, ref: 'User' },
-    allegati: [
-      {
-        nome: { type: String, required: true },
-        url: { type: String, required: true },
-        tipo: { type: String, trim: true },
-        size: { type: Number },
-      },
-    ],
+    allegati: [{ type: Schema.Types.ObjectId, ref: 'Allegato' }],
   },
   { collection: 'verbali' },
 );
@@ -66,7 +59,7 @@ export interface VerbaleDoc {
   approvato: boolean;
   approvatoIl?: Date;
   approvatoDa?: UserDoc['_id'];
-  allegati: { nome: string; url: string; tipo?: string; size?: number }[];
+  allegati: ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }

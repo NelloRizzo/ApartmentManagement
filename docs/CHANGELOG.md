@@ -2,6 +2,76 @@
 
 Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
+## 2026-10-05
+
+### In dashboard c'erano due sezioni "Account"
+
+Segnalato in `bugs.md` navigando come superadmin: la barra laterale mostrava **due
+gruppi intitolati "Account"**, uno con il profilo e uno con "Il mio contratto". Il
+secondo era anche inutile, perché il superadmin non è soggetto a un contratto: la
+voce portava a una pagina che non ha nulla di suo.
+
+Ora `gruppoAccount` mette profilo e contratto nella **stessa** sezione e riceve
+`mostraContratto`: per il superadmin la voce non viene aggiunta. Le due sezioni
+non possono più separarsi, perché il titolo è uno solo e basta un parametro.
+
+Nella stessa segnalazione: la voce si chiama "Messaggi" e non "Messaggi agli
+admin", perché nella piattaforma non esiste un mittente con cui contrapporre un
+"agli admin".
+
+### Allegati: finalmente funzionanti, e con i metadati
+
+Gli allegati esistevano da tempo ma **non funzionavano**, su nessun dominio.
+Quattro difetti, tutti verificati prima di scrivere una riga:
+
+- **I file caricati venivano scartati.** Le rotte accettavano `multipart` ma
+  `toAllegati` era chiamata solo dall'endpoint a parte: creare una comunicazione con
+  un file rispondeva `200` con `"allegati": []`, senza errore né avviso.
+- **Il link del file moriva dopo 24 ore.** L'URL firmato veniva scritto dentro il
+  documento che lo referenziava, e la firma non si rinnovava: ogni documento con un
+  allegato più vecchio di un giorno aveva un link morto. `rinnovaUrl` esisteva e non
+  era chiamata da nessuna parte.
+- **Il ciclo del TTL non eseguiva mai un corpo**, perché girava su un elenco
+  sempre vuoto.
+- **Non esisteva caricamento dal client**: `api.upload` era definito e non usato.
+
+Ora il documento che ospita un file tiene **solo l'id**: i metadati si leggono da
+`Allegato` a ogni richiesta e l'URL viene firmato di fresco. È la conseguenza
+diretta del fatto che la firma scade.
+
+Ogni documento ha `oggetto` obbligatorio, e `descrizione`, `fonte` e `riferimento`
+facoltativi. `oggetto` è obbligatorio perché il nome del file lo dice il mittente,
+non chi legge, e finisce in "documento (1).pdf".
+
+**Dove stanno gli allegati**: sulla **voce** di bilancio (la fattura e la quietanza
+di quella spesa), sul **punto all'ordine del giorno** (la relazione di quella
+deliberazione), sul verbale, sul versamento (uno solo: la quietanza) e sulla
+comunicazione. L'elenco a livello di assemblea è stato tolto: dopo questa scelta non
+avrebbe riempito niente.
+
+Come per i bilanci approvati, un verbale approvato e un'assemblea conclusa non
+accettano allegati: dopo la ratifica aggiungere un documento sarebbe cambiarne il
+contenuto.
+
+Quattro bug emersi scrivendo il dominio e le verifiche:
+
+- **I metadati degli allegati venivano scartati dalla validazione.** `validate`
+  *sostituisce* `req.body` con il risultato di Zod, che elimina le chiavi non
+  dichiarate: `allegatiOggetto` spariva prima che il controller lo leggesse e ogni
+  file prendeva per oggetto il titolo della comunicazione. Risolto con
+  `leggiMetaAllegati`, che li raccoglie **prima** della validazione.
+- **Lo spread di un documento Mongoose** funziona con `populate` ma `create()`
+  espone anche `$__` e `activePaths`, finiti in una risposta JSON. Ora si usa
+  `toObject()`.
+- **Con un file non si poteva salvare una comunicazione in bozza**: multer legge
+  tutti i campi come stringhe, quindi `salvaComeBozza: 'true'` non passava un
+  `z.boolean()`. Introdotto `flagCorpo`, che accetta anche la stringa come
+  `flagQuery` per le query.
+- **Togliere il campo `allegati` dall'assemblea ha rotto `GET /assemblee/:id`**: il
+  controller faceva `populate('allegati')` su un percorso inesistente, e con
+  `strictPopulate` attivo questo **fa fallire la rotta** invece di tornare `[]`
+  silenziosamente. Il compilatore era tranquillo.
+
 ## 2026-10-04
 
 ### Le card del panorama portano alla sezione indicata

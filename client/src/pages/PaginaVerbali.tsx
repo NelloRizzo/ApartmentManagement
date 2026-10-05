@@ -6,6 +6,7 @@ import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento, PaginaVuota } from '@/components/Feedback';
 import { useConferma } from '@/components/Conferma';
+import { AllegatiSezione } from '@/components/Allegati';
 import { EtichettaStato, etichette } from '@/components/Elementi';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { AreaStampa, PulsanteStampa } from '@/components/Stampa';
@@ -117,6 +118,19 @@ function DettaglioVerbale({
   const [errore, setErrore] = useState<string | null>(null);
   const puoScrivere = puo('verbali:scrivere');
   const { chiedi, elemento: conferma } = useConferma();
+  // Gli allegati tornano dal server con l'URL firmato: senza ricaricare il
+  // verbale, il file appena caricato non avrebbe un link scaricabile.
+  const [allegati, setAllegati] = useState(verbale.allegati ?? []);
+
+  async function ricaricaAllegati() {
+    try {
+      const risposta = await api.get<Verbale>(`/condomini/${condominioId}/verbali/${verbale._id}`);
+      setAllegati(risposta.data.allegati ?? []);
+      onCambiato();
+    } catch {
+      setAllegati([]);
+    }
+  }
 
   async function salva() {
     setErrore(null);
@@ -210,6 +224,16 @@ function DettaglioVerbale({
               Il testo è stato modificato a mano e non verrà sovrascritto dalla rigenerazione automatica.
             </div>
           )}
+
+          {/* Gli allegati sono un documento approvato che non si tocca: il bottone
+              resta nascosto, non solo disabilitato. */}
+          <AllegatiSezione
+            endpoint={`/condomini/${condominioId}/verbali/${verbale._id}/allegati`}
+            allegati={allegati}
+            suCambiati={ricaricaAllegati}
+            puoScrivere={puoScrivere && !approvato}
+            titolo="Allegati al verbale"
+          />
 
           <textarea
             className="area area-testo verbale-testo"

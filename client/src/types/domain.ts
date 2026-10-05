@@ -418,11 +418,24 @@ export interface Assemblea {
   transizioniConsentite?: StatoAssemblea[];
 }
 
+/**
+ * Allegato come arriva dall'API.
+ *
+ * `url` è firmato e vale 24 ore: è firmato a ogni lettura, quindi non va
+ * memorizzato. Se il client lo tiene in stato e il link scade, il download
+ * risponde "link scaduto" e l'unica rimedio è rileggere il documento.
+ */
 export interface Allegato {
+  id: string;
   nome: string;
+  oggetto: string;
+  descrizione: string;
+  fonte: string | null;
+  riferimento: string | null;
+  tipo: string;
+  size: number;
   url: string;
-  tipo?: string;
-  size?: number;
+  createdAt: string;
 }
 
 export interface Verbale {
@@ -489,6 +502,8 @@ export interface VoceBilancio {
   ripartizione: RipartizioneBilancio;
   valorePerMillesimo?: number;
   voci: DettaglioSpesa[];
+  /** Fatture e quietanze della voce: è la voce ad avere i propri documenti. */
+  allegati: Allegato[];
 }
 
 export interface Bilancio {
@@ -519,7 +534,14 @@ export interface Versamento {
   metodo: MetodoPagamento;
   causale?: string;
   identificativoTransazione?: string;
-  allegato?: Allegato;
+  /**
+ * Quietanza del versamento.
+ *
+ * È `null` e non assente quando non ce n'è: il server lo restituisce sempre come
+ * `allegato`, anche a `null`, per non far capire al client la differenza fra
+ * "nessuna quietanza" e "non ancora caricata".
+ */
+allegato: Allegato | null;
   note?: string;
 }
 
