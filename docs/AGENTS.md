@@ -92,6 +92,31 @@ Le sue difese sono volute e non vanno allentate:
 - `localhost` e `127.0.0.1` vengono rifiutati comunque;
 - `--yes` è obbligatorio, e senza il comando si limita a stampare il piano.
 
+## Non lasciare processi appesi
+
+`npm run dev` **non è un comando che si lancia e si dimentica**: `tsx watch` e
+Vite restano in ascolte e si riavviavano a ogni file salvato. Un agente che lo
+avvia in background senza spegnerlo occupa le porte 4000 e 5173, continua a
+ripartire e costringe chi guida il progetto a killingli a mano.
+
+- **Una sola istanza, e si spegne prima di dichiarare finito.** Prima di
+  riavviarla controllare che le porte siano libere
+  (`Get-NetTCPConnection -State Listen -LocalPort 4000,4001,5173`), poi usare
+  `taskkill /PID <pid> /T /F`: senza `/T` resta vivo il `tsx watch` figlio, che
+  riapre la porta dopo un secondo.
+- **Nessun comando che attende all'infinito.** Un'attesa lunga sembra un
+  blocco: l'attesa dell'avvio è un ciclo con timeout che dice a ogni tentativo
+  cosa sta facendo e termina con `pronto dopo N tentativi`, mai uno `Start-Sleep`
+  fisso seguito da un comando che non finisce.
+- **`Invoke-RestMethod`, mai `Invoke-WebRequest`**, nelle verifiche: in Windows
+  PowerShell 5.1 la seconda va in errore sulle risposte JSON ("IE engine not
+  available"), quindi un'API sana sembra muta e si finisce per riavviarla.
+- **Preferire `node_modules\.bin\tsx.cmd` a `npx`**: `npx` può risolvere o
+  installare qualcosa e questo è un avvio che deve durare pochi secondi.
+- Se una verifica lascia dati (un amministratore di prova), cancellarli: un
+  account creato con una password casuale resta nel database e non è più
+  eliminabile da nessuno, perché nessuno la conosce.
+
 ## Struttura
 
 ```

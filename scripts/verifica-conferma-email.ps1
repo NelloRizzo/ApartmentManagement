@@ -45,6 +45,32 @@ Esito 'admin non puo reinviare a un amministratore' { (Invoke-RestMethod -Method
 Esito 'utente non puo reinviare a un altro' { (Invoke-RestMethod -Method Post -Uri "$base/staff/amministratori/$($a.id)/reinvia-conferma" -Headers (Auth $t)).data }
 
 Write-Output ''
+Write-Output '=== Reset della password ==='
+$meSa = (Invoke-RestMethod -Uri "$base/auth/me" -Headers (Auth $sa)).data
+Esito 'admin non puo reimpostare la password di un amministratore' { (Invoke-RestMethod -Method Post -Uri "$base/staff/amministratori/$($a.id)/reimposta-password" -Headers (Auth $ad)).data }
+Esito 'utente non puo reimpostare la password di un amministratore' { (Invoke-RestMethod -Method Post -Uri "$base/staff/amministratori/$($a.id)/reimposta-password" -Headers (Auth $t)).data }
+Esito 'superadmin non puo reimpostare la propria password' { (Invoke-RestMethod -Method Post -Uri "$base/staff/amministratori/$($meSa.id)/reimposta-password" -Headers (Auth $sa)).data }
+# Il caso positivo si comporta in due modi a seconda che Brevo sia configurato:
+# con la chiave la password cambia e quella vecchia muore, senza la chiave
+# l'API risponde 503 e la password precedente torna valida. Entrambe le cose
+# sono il comportamento voluto, quindi il ramo lo dichiara invece di fallire.
+$inviata = $false
+try {
+  $r = (Invoke-RestMethod -Method Post -Uri "$base/staff/amministratori/$($a.id)/reimposta-password" -Headers (Auth $sa)).data
+  $inviata = $true
+  Write-Output "  superadmin reimposta: nuova password inviata, scadenza=$($r.scadenza)"
+} catch {
+  Write-Output "  superadmin reimposta: invio non riuscito ($($_.Exception.Response.StatusCode.value__)), password precedente ripristinata"
+}
+if ($inviata) {
+  Esito 'la password precedente non vale piu' { (Login 'nuovo.admin@example.com' 'PasswordRobusta1!').Length }
+} else {
+  Esito 'la password precedente vale ancora (ripristino)' { (Login 'nuovo.admin@example.com' 'PasswordRobusta1!').Length }
+  $dopo = (Invoke-RestMethod -Uri "$base/staff/amministratori" -Headers (Auth $sa)).data | Where-Object { $_.id -eq $a.id }
+  Write-Output "  stato dopo il ripristino: emailConfermato=$($dopo.emailConfermato) (come prima del reset)"
+}
+
+Write-Output ''
 Write-Output '=== Assistente: password provvisoria via email ==='
 $as = Login 'assistente@example.com' 'Assistente123!'
 $corpoAss = @{ email='nuovo.assistente@example.com'; nome='Nuovo'; cognome='Assistente'; permessi=@('versamenti:leggere') } | ConvertTo-Json

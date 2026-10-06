@@ -48,6 +48,13 @@ router.post(
   validate(sempliceId, 'params'),
   c.reinviaConfermaAmministratore,
 );
+/** Genera una nuova password e la consegna con l'email di conferma. */
+router.post(
+  '/amministratori/:id/reimposta-password',
+  requireRole('superadmin'),
+  validate(sempliceId, 'params'),
+  c.reimpostaPasswordAmministratore,
+);
 
 /** Deleghe: assistenti con permessi ristretti sui propri condomini. */
 router.get(

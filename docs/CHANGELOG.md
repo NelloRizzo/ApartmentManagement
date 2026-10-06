@@ -2,6 +2,45 @@
 
 Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
+## 2026-10-06
+
+### Il superadmin può modificare un amministratore e reimpostarne la password
+
+L'API aveva già `PATCH /staff/amministratori/:id` e il reinvio della conferma,
+ma **l'interfaccia non li usava**: la pagina Amministratori mostrava le schede e
+un solo modulo, quello di creazione. Un nome sbagliato o un numero di telefono
+sbagliato si correggervano solo dal database.
+
+Ora la scheda è un pulsante che apre il modulo di modifica: nome, cognome,
+telefono e accesso consentito, con l'email mostrata come dato di sola lettura
+perché non è modificabile dall'interfaccia. Il pulsante "Reimposta password" sta
+**dentro il dialog**, non sulla scheda: la scheda è essa stessa un pulsante, e
+annidarne un secondo produrrebbe HTML non valido e un click ambiguo. Per lo
+stesso motivo il reinvio della conferma è passato dal corpo della scheda al
+dialog, dove c'è spazio per spiegare a chi va fatta cosa.
+
+La password non la sceglie il superadmin e non viene mostrata a nessuno:
+`passwordTemporanea` la genera e arriva solo nell'email di conferma, insieme al
+link che riapre il ciclo di verifica dell'indirizzo. Il pulsante non esiste per
+l'account corrente, perché il proprio accesso si cambia dal profilo: qui la
+nuova password tornerebbe per email a chi sta già dentro.
+
+**Se l'email non parte, la password non cambia.** Il controller salva la nuova
+password, invia e, se `inviaEmail` fallisce, rimette a posto password
+precedente, `tokenVersion` e `emailConfermatoIl`, poi risponde 503 spiegando che
+niente è stato toccato. Senza quel ripristino l'amministratore resterebbe con
+una password che non conosce e che nessuno ha ricevuto: un account bloccato
+senza via d'uscita, perché il pulsante si può premere di nuovo ma la email
+continuerebbe a non partire. Il caso è verificato in
+`verifica-conferma-email.ps1`, che prova anche i due casi negativi (l'admin e
+l'utente non possono, il superadmin non può sul proprio account).
+
+Nello stesso giro `AGENTS.md` ha una sezione nuova, "Non lasciare processi
+appesi": `npm run dev` avviato in background e dimenticato occupa le porte,
+`tsx watch` si riavvia a ogni file salvato e chi guida il progetto deve killinglo
+a mano. Più il motivo per cui le verifiche usano `Invoke-RestMethod` e non
+`Invoke-WebRequest`.
+
 ## 2026-10-05
 
 ### La tabella millesimale non promette più uno storico che non c'è

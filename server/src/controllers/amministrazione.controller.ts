@@ -516,6 +516,87 @@ export const reinviaConfermaAmministratore = asyncHandler(async (req, res) => {
   ok(res, { inviato: true, scadenza: risultato.scadenza });
 });
 
+/**
+ * Reimposta la password di un amministratore e reinvia l'email di conferma.
+ *
+ * La nuova password non la sceglie chi preme il pulsante: viene generata e
+ * consegnata solo nell'email, come alla creazione dell'account. Nessuno la
+ * vede e nessuno la trasmette a voce, quindi non può finire in un log né in una
+ * chat.
+ */
+export const reimpostaPasswordAmministratore = asyncHandler(async (req, res) => {
+  const attore = currentUser(req);
+  if (attore.role !== 'superadmin') throw forbidden('Operazione riservata all’amministratore di sistema');
+
+  const id = getObjectId(req.params.id ?? '', 'id');
+  // Il proprio account si cambia dal profilo: qui la nuova password tornerebbe
+  // via email a chi sta già dentro, e le sessioni aperte resterebbero valide
+  // fino al primo logout.
+  if (String(id) === attore.sub) throw badRequest('Non puoi reimpostare la password del tuo stesso account');
+
+  // `+password`: il campo è `select: false` e serve per tornare indietro.
+  const target = await User.findById(id).select('+password');
+  if (!target) throw notFound('Amministratore non trovato');
+  if (target.role !== 'admin' && target.role !== 'superadmin') {
+    throw badRequest('L’utente indicato non è un amministratore');
+  }
+
+  const password = passwordTemporanea('Admin');
+  const precedente = {
+    password: target.password,
+    tokenVersion: target.tokenVersion,
+    emailConfermato: target.emailConfermato,
+    emailConfermatoIl: target.emailConfermatoIl,
+  };
+
+  target.password = await User.hashPassword(password);
+  // Le sessioni già aperte cadono subito: la password è cambiata e chi le aveva
+  // non deve continuare a usare un accesso vecchio.
+  target.tokenVersion += 1;
+  // L'indirizzo torna da verificare: la nuova password è arrivata per email,
+  // quindi la casella va ripercorso come alla creazione dell'account.
+  target.emailConfermato = false;
+  target.emailConfermatoIl = undefined;
+  await target.save();
+
+  const conferma = await inviaConfermaA(target, {
+    passwordProvvisoria: password,
+    organizzazione: 'l’amministratore di sistema',
+  });
+
+  if (!conferma.esito.inviato) {
+    // Si torna indietro: se l'email non parte l'amministratore resterebbe con
+    // una password che non conosce e che nessuno ha ricevuto, cioè fuori
+    // accesso senza via d'uscita. Il reinvio si ripete premendo il pulsante.
+    target.password = precedente.password;
+    target.tokenVersion = precedente.tokenVersion;
+    target.emailConfermato = precedente.emailConfermato;
+    target.emailConfermatoIl = precedente.emailConfermatoIl;
+    await target.save();
+
+    throw new AppError(
+      conferma.motivo === 'non_configurato'
+        ? 'L’invio delle email non è configurato su questo server'
+        : 'Invio non riuscito: la password non è stata cambiata, riprova tra qualche minuto',
+      503,
+      'EMAIL_NON_DISPONIBILE',
+    );
+  }
+
+  await auditLog({
+    attore: attore.sub,
+    azione: 'reset_password_amministratore',
+    entita: 'User',
+    entitaId: String(target._id),
+    // Nessuna password nel log: l'audit è letto da più persone e finisce in
+    // chiaro sul database. La password esiste solo nell'email appena inviata.
+    dettagli: { email: target.email, da: 'superadmin' },
+    req,
+  });
+
+  ok(res, { inviato: true, scadenza: conferma.scadenza });
+});
+
 /** Reinvia la conferma dell'indirizzo a un assistente del proprio team. */
 export const reinviaConfermaAssistente = asyncHandler(async (req, res) => {
   const delegante = currentUser(req);
