@@ -103,6 +103,17 @@ export default function PaginaBacheca() {
   // bacheca e ricevere un errore.
   const sonoAmministratore = utente?.role === 'admin';
 
+  /**
+   * Ha senso filtrare per "affidate a me" solo se posso essere un assegnatario.
+   *
+   * Gli assegnatari sono validati contro il team del proprietario, quindi
+   * un amministratore non può trovarsi fra quelli delle proprie attività: la
+   * casella gli filtrava sempre a vuoto, e con una lista vuota sembrava un
+   * errore. L'unico che può essere assegnatario è un assistente, che è un admin
+   * con permessi ristretti.
+   */
+  const possoEssereAssegnatario = sonoAmministratore && Array.isArray(utente?.permessi);
+
   const elenco = useApi<ApiEnvelope<Attivita[]>>(
     (segnale) =>
       api.get<Attivita[]>(
@@ -200,10 +211,12 @@ export default function PaginaBacheca() {
               </button>
             ))}
           </div>
-          <label className="riga" style={{ gap: 'var(--sp-2)' }}>
-            <input type="checkbox" checked={soloAssegnate} onChange={(e) => setSoloAssegnate(e.target.checked)} />
-            <span className="testo-faint">Solo quelle affidate a me</span>
-          </label>
+          {possoEssereAssegnatario && (
+            <label className="riga" style={{ gap: 'var(--sp-2)' }}>
+              <input type="checkbox" checked={soloAssegnate} onChange={(e) => setSoloAssegnate(e.target.checked)} />
+              <span className="testo-faint">Solo quelle affidate a me</span>
+            </label>
+          )}
         </div>
 
         {elenco.inCorso && <Caricamento />}

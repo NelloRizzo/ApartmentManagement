@@ -10,6 +10,14 @@ PRIORITA MEDIA
   - amministratori di condominio: il titolare è l'amministratore di piattaforma, che tratta i dati del team e degli amministratori
   - da decidere: firma del consenso o presa visione, se serve un registro dei consensi, e dove pubblicarla
   - l'esportazione dei dati propri non è esposta: `mieDati` in `comunicazione.controller.ts` raccoglie comunicazioni, legami e registro operazioni di un utente ma nessuna rotta la chiama, quindi oggi l'interessato non può scaricarli
+- 5. Script di emergenza per la password del superadmin in produzione
+  - oggi l'unica via per rientrare è `npm run reset:produzione`, che **azzera il database**: perdere la password dell'unico superadmin significa perdere condomini, unità, quote, verbali, bilanci, contratti, comunicazioni e anche il registro delle operazioni
+  - il buco resta aperto anche dopo il reset degli amministratori: `POST /staff/amministratori/:id/reimposta-password` è riservato al superadmin e sul proprio account risponde 400, e non esiste un recupero self-service
+  - **cosa deve fare**: cambiare **solo** la password del superadmin indicato, senza toccare il resto, con le stesse difese di `reset-produzione.ts`: `MONGODB_URI_PRODUZIONE` e non `MONGODB_URI`, `localhost` rifiutato, `--yes` obbligatorio
+  - **deciso: la password arriva solo dal primo parametro o da `SUPERADMIN_PASSWORD`**. Non va generata e inviata per email: se la casella è persa l'email non arriva, e il caso che giustifica lo script è proprio quello. `SUPERADMIN_PASSWORD` serve perché su Windows `npm run` tronca gli argomenti con `&`, `|`, `<`, `>`, `^` e `"` passando da `cmd.exe`
+  - **da decidere: quale account**. Con un solo superadmin basta `config.seed.superadminEmail`; se in produzione ce ne fossero più serve `--email` esplicito. Cambiare la password sbagliata è l'errore che questo script non deve permettere, quindi il default silenzioso va valutato con criterio
+  - **da decidere: come verificarlo**, perché rifiuta `localhost` e in locale non si può esercitare. La via che resta è lanciarlo nella rete di compose, dove il Mongo si chiama `mongo`: la guardia passa e il colpo arriva sul database di sviluppo
+  - `tokenVersion` va incrementato, come in `reimpostaPasswordAmministratore`: senza, le sessioni già aperte resterebbero valide e la password vecchia continuerebbe a funzionare fino al logout
 
 PRIORITA BASSA
 - 2. Campi sconosciuti scartati in silenzio

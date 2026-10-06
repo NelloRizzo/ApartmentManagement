@@ -71,6 +71,32 @@ riportarlo dentro.
 Verifiche: 25 controlli su `verifica-permesso-comunicazioni.ps1`, quattro nuovi
 sui due casi, più typecheck, lint e 30 test.
 
+### In bacheca: la casella "affidate a me" non poteva filtrare niente, e il bordo si spegneva al passaggio del puntatore
+
+Due cose dalla coda delle idee, entrambe sulla stessa pagina.
+
+**La casella era uselesse per chi la vedeva.** Gli assegnatari sono validati
+contro il team del proprietario, quindi un amministratore non può trovarsi fra
+quelli delle proprie attività: `soloAssegnate` gli filtrava sempre a vuoto, e con
+una lista vuota sembrava un errore. Ora compare solo a chi può davvero essere un
+assegnatario, cioè un assistente.
+
+**Su hover la linea di colore diventava grigia.** `border-color` è una scorciatoia
+che ridefinisce tutti e quattro i bordi, quindi la regola di `.bacheca-card:hover`
+si mangiava anche il bordo sinistro colorato di `.bacheca-card-colore`, proprio
+nel momento in cui la card è in evidenza. Su hover il bordo prende ora il colore
+scelto per l'attività.
+
+Dal `new_tasks.md` il cambio di email da parte dell'utente è passato in
+`TODO.md` con le domande da decidere prima di scrivere codice: non è un lavoro ma
+una scelta, e finché non si decide chi verifica la nuova casella e che fine fa
+l'indirizzo vecchio nei contratti e nel registro operazioni, la voce è un
+promemoria. Anche lo script di emergenza per la password del superadmin è passato
+in `TODO.md`: l'unica via oggi è `reset:produzione`, che azzera il database, e la
+voce porta con sé le tre decisioni ancora aperte e quella già presa, cioè che la
+password arrivi solo da argv o variabile e non via email. `new_tasks.md` resta
+vuota.
+
 ## 2026-10-05
 
 ### La tabella millesimale non promette più uno storico che non c'è

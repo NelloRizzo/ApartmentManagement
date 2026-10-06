@@ -452,6 +452,14 @@
   border-left: 4px solid var(--colore-attivita, transparent);
 }
 
+// Al passaggio del puntatore il bordo prende il colore dell'attività.
+// `border-color` è una scorciatoia che ridefinisce tutti e quattro i bordi:
+// senza questa riga, applicata dopo `.bacheca-card:hover`, la linea verticale
+// diventava grigia proprio quando la card era in evidenza.
+.bacheca-card-colore:hover {
+  border-color: var(--colore-attivita, var(--c-border-strong));
+}
+
 // ===== Selettore del colore =====
 
 // Il campione è un bottone tondo colorato; quello scelto si distingue dal bordo
