@@ -51,6 +51,13 @@ deve essere vuoto**: quello che resta va comunicato a chi guida il progetto e
 spostato in `TODO.md` sotto `PRIORITA ALTA`, perché è un difetto noto che
 rischia di essere perso.
 
+**Un bug risolto si cancella subito, non si annota.** Appena il difetto è
+corretto la voce sparisce da `bugs.md`: il prima e il dopo sono già nel
+`CHANGELOG.md`, quindi annotarla qui lascerebbe dentro un file la voce di un
+problema che non esiste più, e un file con roba risolta sembra una coda che non si
+chiude. Vale anche quando il difetto si risolve per un motivo che non sta nel
+codice: la voce sparisce ugualmente, e il motivo va in `CHANGELOG.md`.
+
 ## Cosa fa l'applicazione
 
 Gestione condominiale per amministratori che seguono più condomini. Un
