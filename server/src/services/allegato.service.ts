@@ -429,10 +429,20 @@ export async function espandiAnnidati<T extends object>(
     );
   };
 
+  /*
+   * Il ritorno anticipato è il caso più frequente, non una forma da ottimizzare:
+   * quasi nessuna voce ha un allegato. Restituirci i documenti così come sono
+   * lascierebbero **`allegati` assente** invece che vuoto, perché `lean()` non
+   * applica i default dello schema, e il frontend legge `v.allegati.length`.
+   * La normalizzazione va fatta anche senza query: è lei che garantisce la forma
+   * dell'oggetto, non il fatto che siano arrivati dei file.
+   */
   const raccolti = documenti.flatMap(raccogli);
-  if (raccolti.length === 0) return documenti;
 
-  const riepilogati = await Allegato.find({ _id: { $in: [...new Set(raccolti)] } }).lean<AllegatoDoc[]>();
+  const riepilogati =
+    raccolti.length === 0
+      ? []
+      : await Allegato.find({ _id: { $in: [...new Set(raccolti)] } }).lean<AllegatoDoc[]>();
   const perId = new Map(riepilogati.map((d) => [String(d._id), d]));
 
   return documenti.map((d) => {

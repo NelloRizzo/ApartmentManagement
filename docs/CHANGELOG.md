@@ -146,6 +146,35 @@ provato a parte, forzando l'hash di un token noto: la conferma scambia, il login
 col vecchio indirizzo fallisce, il token consumato non si riusa e un link scaduto
 non completa nulla. Più typecheck, lint, build del client e 30 test.
 
+### La pagina dei bilanci andava in crash aprendo un bilancio senza allegati
+
+Segnalato dal `bugs.md` con la console: `TypeError: Cannot read properties of
+undefined (reading 'length')` in `PaginaBilanci`, su una voce di bilancio. Non
+era un problema di produzione: era un difetto che il database di sviluppo non
+mostrava, perché il seed scrive `allegati: []` esplicitamente.
+
+La causa è la combinazione di due cose che sembrano innocue. `lean()` **non applica
+i default dello schema**: una voce che non ha mai avuto un allegato arriva con il
+campo assente, non con un elenco vuoto. E `espandiAnnidati` aveva un ritorno
+anticipato `if (raccolti.length === 0) return documenti`, che è **il caso più
+frequente**, perché quasi nessuna voce ha allegati: proprio lì il campo non veniva
+normalizzato. Il frontend legge `v.allegati.length` e andava in crash.
+
+La normalizzazione avviene ora anche senza query. Il punto è che **è lei che
+garantisce la forma dell'oggetto**, non il fatto che siano arrivati dei file: la
+forma non deve dipendere dal contenuto.
+
+Lo stesso difetto era sull'assemblea, dove i punti all'ordine del giorno leggono
+`punto.allegati.length` nello stesso identico modo e passano dalla stessa
+funzione. Lì i punti avevano già `allegati` perché il seed lo scrive, quindi il
+crash era possibile solo sui dati senza quel campo.
+
+Verifiche: due controlli in `verifica-crud-bilanci.ps1` che leggono il campo sulla
+voce appena creata, che è il caso che non ne ha. Riprodotto **prima** della
+correzione con un bilancio le cui voci non avevano mai avuto allegati: `allegati`
+ASSENTE su tutte e 7, dopo la correzione `presente(0)` su tutte e 7. Suite del
+bilancio a 27 controlli, più typecheck e lint.
+
 ## 2026-10-05
 
 ### La tabella millesimale non promette più uno storico che non c'è

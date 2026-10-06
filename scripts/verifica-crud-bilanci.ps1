@@ -60,6 +60,17 @@ Check 'creazione duplicata rifiutata' ($s -eq 'CONFLICT') "esito $s"
 $riletta = Get "/condomini/$cid/bilanci/$bid" $ad
 Check 'la voce non e stata persa' ($riletta.voci.Count -eq 1) "voci $($riletta.voci.Count)"
 
+"== 2b. ogni voce ha sempre un elenco allegati =="
+# Il difetto: `lean()` non applica i default dello schema, quindi la voce senza
+# allegati arrivava con il campo ASSENTE e non con un elenco vuoto. Il frontend
+# legge `v.allegati.length` e la pagina andava in crash aprendo i bilanci. Il
+# campo si chiama cosi' perche' la pagina mostra anche `v.voci.length`, e lo
+# stesso vale per i punti all'ordine del giorno di un'assemblea.
+$riletta = Get "/condomini/$cid/bilanci/$bid" $ad
+$voce = $riletta.voci[0]
+Check 'la voce ha il campo allegati presente' ($null -ne $voce.allegati) 'campo assente: il frontend farebbe .length su undefined'
+Check 'la voce ha il campo voci presente' ($null -ne $voce.voci) 'campo assente'
+
 "== 3. modifica dei dati del bilancio =="
 $t = Invoke-RestMethod -Method Patch -Uri "$base/condomini/$cid/bilanci/$bid" -Headers $h -ContentType 'application/json' -Body (@{descrizione='Preventivo deliberato';note='nota di prova'} | ConvertTo-Json)
 Check 'descrizione aggiornata' ($t.data.descrizione -eq 'Preventivo deliberato') $t.error.message
