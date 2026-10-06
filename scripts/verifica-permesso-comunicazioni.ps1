@@ -153,6 +153,34 @@ Check 'letta dal condomino, sparisce dal suo contatore' ((NonLette $mio $co) -eq
 
 Check 'un proprio avviso non è una non letta per chi lo ha scritto' ((NonLette $mio $ad) -eq $adPrima) "prima $adPrima, ora $((NonLette $mio $ad))"
 
+# Il difetto segnalato in bugs.md: il pallino restava a 1 anche dopo aver letto e
+# risposto. Aveva due cause, e questa sezione le prende entrambe.
+#
+# La prima: il contatore escludeva solo le bozze, mentre la lista "Posta in arrivo"
+# accetta `inviata` e `letta`. Un avviso a cui il condomino risponde passa a
+# `risposta` ed esce dalla lista, ma restava contato: il pallino puntava a una voce
+# che non si vedeva da nessuna parte.
+$rispostaA = (Invoke-RestMethod -Method Post -Uri "$base/condomini/$mio/comunicazioni" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{tipo='avviso'; oggetto="Risposta $suff"; corpo='prova'; destinatari=@($coUtente); salvaComeBozza=$false}|ConvertTo-Json -Depth 8)).data
+$primaRisposta = NonLette $mio $co
+Invoke-RestMethod -Method Post -Uri "$base/condomini/$mio/comunicazioni/$(Id $rispostaA)/risposte" -Headers (Auth $co) -ContentType 'application/json' -Body (@{corpo='risposta di prova'}|ConvertTo-Json) | Out-Null
+$inLista = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$mio/comunicazioni?bandiera=posta&limit=100" -Headers (Auth $co)).data | Where-Object { (Id $_) -eq (Id $rispostaA) }
+Check 'un avviso risposto esce da Posta in arrivo' (-not $inLista) "stato $($inLista.stato)"
+Check 'e non continua a contare come non letta' ((NonLette $mio $co) -eq ($primaRisposta - 1)) "prima $primaRisposta, ora $((NonLette $mio $co))"
+
+# La seconda: la segnatura di lettura era condizionata a `destinatario` singolo, ma
+# gli avvisi hanno `destinatari`. Il condomino li apriva e il pallino non
+# scendeva mai. Qui non si può provare il clic della UI, quindi si prova che il
+# server accetta la segnatura su un avviso collettivo: senza `destinatario`, con
+# `destinatari` pieni.
+$collettivo = (Invoke-RestMethod -Method Post -Uri "$base/condomini/$mio/comunicazioni" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{tipo='avviso'; oggetto="Collettivo $suff"; corpo='prova'; salvaComeBozza=$false}|ConvertTo-Json)).data
+$primaCollettivo = NonLette $mio $co
+# L'avviso risposto non conta più, quindi il collettivo riporta il contatore al
+# valore di prima della risposta.
+Check 'un avviso collettivo conta come non letta' ($primaCollettivo -eq $primaRisposta) "prima della risposta $primaRisposta, ora $primaCollettivo"
+$s = Status Post "/condomini/$mio/comunicazioni/$(Id $collettivo)/letti" $null $co
+Check 'il condomino segna come letto un avviso collettivo' ($s -eq '200') "esito $s"
+Check 'il pallino scende dopo la segnatura' ((NonLette $mio $co) -eq ($primaCollettivo - 1)) "prima $primaCollettivo, ora $((NonLette $mio $co))"
+
 "== 8. il perimetro è il condominio della rotta =="
 # Il difetto: `condominio` non era dichiarato in `comunicazioneListQuery`, quindi
 # `validate` lo scartava, il controller leggeva un `undefined` e la lista non

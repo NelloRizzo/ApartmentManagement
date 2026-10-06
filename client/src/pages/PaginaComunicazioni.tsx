@@ -113,7 +113,19 @@ export default function PaginaComunicazioni() {
             style={{ marginBottom: 'var(--sp-2)', textAlign: 'left' }}
             onClick={() => {
               setSelezionata(m);
-              if (m.stato === 'inviata' && m.destinatario) {
+              /*
+               * Segna come letto tutto quello che non ho scritto io e che sta
+               * ancora in posta in arrivo, avviso collettivo compreso. La
+               * condizione era `stato === 'inviata' && destinatario`: gli avvisi
+               * dell'amministratore hanno `destinatari` e non `destinatario`,
+               * quindi non venivano mai segnati e il pallino non scendeva per
+               * quelli. Dipendere anche da `stato` era un secondo errore: è un
+               * campo unico della comunicazione, quindi dopo che l'aveva aperta
+               * qualcun altro diceva 'letta' anche per chi non l'aveva ancora
+               * letta. `risposta` resta escluso: quel messaggio è già uscito
+               * dalla posta in arrivo e segnarlo lo riporterebbe dentro.
+               */
+              if (m.stato !== 'bozza' && m.stato !== 'risposta' && String(m.mittente._id) !== String(utente?.id)) {
                 void api.post(`/condomini/${condominioId}/comunicazioni/${m._id}/letti`).then(() => {
                   void aggiornaNonLette();
                   elenco.ricarica();

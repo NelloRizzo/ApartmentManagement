@@ -41,6 +41,36 @@ appesi": `npm run dev` avviato in background e dimenticato occupa le porte,
 a mano. Più il motivo per cui le verifiche usano `Invoke-RestMethod` e non
 `Invoke-WebRequest`.
 
+### Il pallino delle non lette contava anche i messaggi che non si vedevano
+
+Dal `bugs.md`: "come condòmino dopo aver letto un messaggio e inviata anche una
+risposta, il messaggio scompare da Posta in Arrivo ma resta il badge (1)". Non è
+un difetto solo, e non è il fatto che il messaggio esca dalla posta in arrivo:
+quello è voluto, è `risposta` a dichiararlo. Sono due difetti che insieme danno
+il sintomo.
+
+**Il contatore contava cose che la lista non mostrava.** `contaNonLette` escludeva
+solo le bozze, mentre "Posta in arrivo" accetta `inviata` e `letta`: un avviso a cui
+si risponde passa a `risposta` e sparisce dalla lista, ma restava contato. Per
+marco.rossi il badge diceva **61** e la lista ne mostrava 33: 49 delle 61 erano
+messaggi già risposti, visibili da nessuna parte. Ora il contatore ammette gli
+stessi stati della lista, e la divergenza è a zero: badge 7, tutte e 7 in lista.
+
+**La segnatura di lettura non partiva per gli avvisi collettivi.** In
+`PaginaComunicazioni` la chiamata a `/letti` era condizionata a `destinatario`
+presente, ma gli avvisi dell'amministratore hanno `destinatari` e non
+`destinatario`: delle 7 comunicazioni che il badge segnalava e che erano in
+lista, **7 erano broadcast e nessuna aveva un destinatario singolo**. Il
+condòmino le apriva e il pallino non scendeva mai. La condizione guardava anche
+`stato`, che è un campo unico della comunicazione: dopo che l'aveva aperta
+qualcun altro diceva 'letta' anche per chi non l'aveva ancora letta, quindi il
+secondo lettore non partiva ugualmente. Ora si segna tutto quello che non ho
+scritto io e che sta ancora in posta in arrivo, `risposta` escluso per non
+riportarlo dentro.
+
+Verifiche: 25 controlli su `verifica-permesso-comunicazioni.ps1`, quattro nuovi
+sui due casi, più typecheck, lint e 30 test.
+
 ## 2026-10-05
 
 ### La tabella millesimale non promette più uno storico che non c'è

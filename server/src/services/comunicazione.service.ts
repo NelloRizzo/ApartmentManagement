@@ -78,7 +78,10 @@ export async function unitaDiCondomino(utenteId: string): Promise<string[]> {
  *   uno all'altro.
  *
  * Le bozze sono escluse perché non sono arrivate a nessuno, e le proprie
- * comunicazioni perché non è una posta in arrivo.
+ * comunicazioni perché non è una posta in arrivo. Gli stati ammessi sono
+ * **quelli che la lista accetta**: un messaggio a cui si è risposto passa a
+ * `risposta` e sparisce da Posta in arrivo, quindi continuare a contarlo
+ * lasciava il pallino su una voce che non si vedeva da nessuna parte.
  */
 export async function contaNonLette(
   utenteId: string,
@@ -90,7 +93,7 @@ export async function contaNonLette(
     $and: [
       filtroVisibilita(utenteId, role, await unitaDiCondomino(utenteId), condominioId),
       { mittente: { $ne: id } },
-      { stato: { $ne: 'bozza' } },
+      { stato: { $in: ['inviata', 'letta'] } },
       { lettaDa: { $ne: id } },
     ],
   });
