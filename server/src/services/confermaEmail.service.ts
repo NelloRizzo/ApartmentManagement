@@ -47,7 +47,27 @@ export async function inviaConfermaA(
   utente: Confermabile,
   opzioni: { passwordProvvisoria?: string; organizzazione?: string } = {},
 ): Promise<EsitoConferma> {
-  const token = nuovoTokenConferma();
+  return inviaConfermaConToken(
+    utente,
+    nuovoTokenConferma(),
+    opzioni.passwordProvvisoria,
+    opzioni.organizzazione,
+  );
+}
+
+/**
+ * Come `inviaConfermaA`, ma con un token deciso da chi chiama.
+ *
+ * Serve al cambio di indirizzo, che ha bisogno del token per l'avviso all'utente:
+ * il cambio e l'avviso devono parlare dello stesso link, altrimenti la casella
+ * vecchia riceverebbe un token che non è quello appena inviato.
+ */
+export async function inviaConfermaConToken(
+  utente: Confermabile,
+  token: string,
+  passwordProvvisoria?: string,
+  organizzazione?: string,
+): Promise<EsitoConferma> {
   const scadenza = new Date(Date.now() + config.brevo.confermaTtlOre * 3_600_000);
   const hash = hashTokenConferma(token);
 
@@ -56,8 +76,8 @@ export async function inviaConfermaA(
     nome: utente.nome,
     ruolo: utente.role,
     token,
-    passwordProvvisoria: opzioni.passwordProvvisoria,
-    organizzazione: opzioni.organizzazione,
+    passwordProvvisoria,
+    organizzazione,
   });
 
   // Se l'invio è fallito il token non viene conservato: rimarrebbe valido e
@@ -89,6 +109,10 @@ export async function reinviaConferma(utente: Confermabile): Promise<EsitoConfer
  * Il token non viene firmato: è casuale, viene cercato tra gli hash e vale una
  * volta sola. Così non serve una terza coppia di segreti JWT per un token che
  * vive pochi giorni, e la revoca è gratuita.
+ *
+ * Con un cambio di indirizzo in corso il token conferma **il nuovo**: lo scambio
+ * avviene qui, e non in un secondo passaggio, perché il link viaggia per email e
+ * l'utente non deve fare nulla.
  */
 export async function confermaConToken(token: string) {
   if (!token || token.length < 32) throw badRequest('Token di conferma non valido');
@@ -96,10 +120,25 @@ export async function confermaConToken(token: string) {
   const utente = await User.findOne({ confermaEmailHash: hashTokenConferma(token) });
   if (!utente) throw notFound('Token di conferma non valido o già usato');
 
-  if (utente.emailConfermato) throw badRequest('L’indirizzo email è già confermato');
   if (!utente.confermaEmailScadenza || utente.confermaEmailScadenza < new Date()) {
     throw badRequest('Il link di conferma è scaduto: richiedine uno nuovo');
   }
+
+  if (utente.emailInAttesa) {
+    utente.email = utente.emailInAttesa;
+    utente.emailInAttesa = undefined;
+    utente.emailConfermato = true;
+    utente.emailConfermatoIl = new Date();
+    utente.confermaEmailHash = undefined;
+    utente.confermaEmailScadenza = undefined;
+    // Niente `tokenVersion`: l'indirizzo non è una credenziale di sessione e
+    // l'account non ha mai perso validità, quindi non c'è motivo di far uscire
+    // chi ci sta lavorando.
+    await utente.save();
+    return utente;
+  }
+
+  if (utente.emailConfermato) throw badRequest('L’indirizzo email è già confermato');
 
   utente.emailConfermato = true;
   utente.emailConfermatoIl = new Date();

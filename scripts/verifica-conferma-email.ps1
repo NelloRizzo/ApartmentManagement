@@ -1,13 +1,25 @@
 $base = 'http://localhost:4000/api'
 function Auth($t) { @{ Authorization = "Bearer $t" } }
 function Login($e, $p) { (Invoke-RestMethod -Method Post -Uri "$base/auth/login" -ContentType 'application/json' -Body (@{email=$e;password=$p}|ConvertTo-Json)).data.accessToken }
-function Esito($nome, $script) {
+function Esito($nome, $script, $atteso = $null) {
+  # Con `$atteso` la riga dice il valore e non lo computa: serve per le verifiche
+  # sullo stato, dove il valore va stampato per intero e non ridotto a una
+  # condizione, e `ok`/`negato` da soli sembrerebbero dire che è andato bene.
+  if ($null -ne $atteso) {
+    try { Write-Output ("  {0,-52} {1}" -f $nome, $atteso) }
+    catch { Write-Output ("  {0,-52} KO {1}" -f $nome, $_) }
+    return
+  }
   try { $r = & $script; Write-Output ("  {0,-52} ok ({1})" -f $nome, $r) }
   catch { $d = $_.ErrorDetails.Message; if ($d) { try { $d = ($d | ConvertFrom-Json).error.message } catch { } } else { $d = $_.Exception.Message }; Write-Output ("  {0,-52} negato ({1})" -f $nome, $d) }
 }
 
 $sa = Login 'superadmin@condomini.local' 'SuperAdmin123!'
 $ad = Login 'admin@condomini.local' 'Admin123!'
+# Suffisso per gli indirizzi di questa esecuzione: sono account veri, restano nel
+# database e la verifica non puo' cancellarli (una comunicazione inviata non si
+# cancella, e un utente con una password casuale non e' piu' eliminabile).
+$suff2 = [guid]::NewGuid().ToString('N').Substring(0,6)
 
 Write-Output '=== Account demo: gia'' confermati, nessun avviso ==='
 $demo = @(
@@ -69,6 +81,62 @@ if ($inviata) {
   $dopo = (Invoke-RestMethod -Uri "$base/staff/amministratori" -Headers (Auth $sa)).data | Where-Object { $_.id -eq $a.id }
   Write-Output "  stato dopo il ripristino: emailConfermato=$($dopo.emailConfermato) (come prima del reset)"
 }
+
+Write-Output ''
+Write-Output '=== Cambio di indirizzo: non e'' immediato ==='
+# L'accesso e' per indirizzo, quindi salvare subito il nuovo chiuderebbe fuori
+# chi lo sbaglia. Il nuovo sta in emailInAttesa e diventa email solo alla
+# conferma del link, e quella verifica non puo' farla questa API: il token in
+# chiaro esiste solo nell'email ricevuta. Qui si controlla tutto il resto, cioe'
+# che il cambio non accada prima del link e che torni indietro su comando.
+function Profilo($token) { (Invoke-RestMethod -Uri "$base/auth/me" -Headers (Auth $token)).data }
+function Proponi($email) {
+  (Invoke-RestMethod -Method Post -Uri "$base/auth/cambia-email" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{email=$email;password='Admin123!'}|ConvertTo-Json)).data
+}
+$prof = Profilo $ad
+Write-Output "  email=$($prof.email) emailConfermato=$($prof.emailConfermato) emailInAttesa=$($prof.emailInAttesa)"
+
+# `$nuovo` non collide con `nuovo.admin@example.com`, che questa stessa verifica
+# ha creato poco fa: un indirizzo occupato risponderebbe 409 e sembrerebbe un
+# difetto del cambio.
+$nuovo = "cambio.admin.$suff2@example.com"
+$altro = "cambio2.admin.$suff2@example.com"
+
+Esito 'password sbagliata: il cambio non parte' { (Invoke-RestMethod -Method Post -Uri "$base/auth/cambia-email" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{email=$nuovo;password='Sbagliata1!'}|ConvertTo-Json)).data }
+Esito 'email non valida (validazione)' { (Invoke-RestMethod -Method Post -Uri "$base/auth/cambia-email" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{email='non-una-email';password='Admin123!'}|ConvertTo-Json)).data }
+Esito 'stesso indirizzo di ora' { (Invoke-RestMethod -Method Post -Uri "$base/auth/cambia-email" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{email='admin@condomini.local';password='Admin123!'}|ConvertTo-Json)).data }
+Esito 'indirizzo gia'' occupato' { (Invoke-RestMethod -Method Post -Uri "$base/auth/cambia-email" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{email='superadmin@condomini.local';password='Admin123!'}|ConvertTo-Json)).data }
+# Un account non ancora confermato ha gia' una conferma in corso: accavallarle
+# lascerebbe due token per un solo hash, e un link morirebbe senza essere letto.
+$bozza = (Invoke-RestMethod -Method Post -Uri "$base/staff/amministratori" -Headers (Auth $sa) -ContentType 'application/json' -Body (@{email="nonconfermato.$suff2@example.com";nome='Non';cognome='Confermato';password='PasswordRobusta1!'}|ConvertTo-Json)).data
+$tNonConfermato = Login $bozza.email 'PasswordRobusta1!'
+Esito 'account non confermato: il cambio viene rimandato' { (Invoke-RestMethod -Method Post -Uri "$base/auth/cambia-email" -Headers (Auth $tNonConfermato) -ContentType 'application/json' -Body (@{email=$altro;password='PasswordRobusta1!'}|ConvertTo-Json)).data }
+Esito 'annulla quando non c''e'' nessun cambio in corso' { (Invoke-RestMethod -Method Post -Uri "$base/auth/annulla-cambio-email" -Headers (Auth $ad)).data }
+Write-Output "  dopo i rifiuti: emailInAttesa=$(Profilo $ad | ForEach-Object { $_.emailInAttesa })"
+
+$proposto = Proponi $nuovo
+Write-Output "  proposto $($proposto.email) -> $($proposto.emailInAttesa)"
+$prof = Profilo $ad
+Esito 'l''accesso resta con il vecchio indirizzo' $prof.email "email=$($prof.email)"
+Esito 'il nuovo indirizzo e'' in attesa' ($prof.emailInAttesa -eq $nuovo) "attesa $($prof.emailInAttesa)"
+Esito 'il vecchio indirizzo entra ancora' ((Login 'admin@condomini.local' 'Admin123!').Length -gt 0) 'token'
+Esito 'il nuovo indirizzo non entra ancora' { Login $nuovo 'Admin123!' }
+Esito 'annullare svuota l''attesa e invalida il link' {
+  # L'hash del token viene svuotato insieme all'attesa: senza, il link della
+  # proposta resterebbe valido e potrebbe completare un cambio che l'utente ha
+  # dichiarato annullato. Il token in chiaro vive nell'email, quindi qui si
+  # controlla lo stato, non il link.
+  Invoke-RestMethod -Method Post -Uri "$base/auth/annulla-cambio-email" -Headers (Auth $ad) | Out-Null
+  $p = Profilo $ad
+  (($p.email -eq 'admin@condomini.local') -and $null -eq $p.emailInAttesa)
+} "attesa=$((Profilo $ad | ForEach-Object { $_.emailInAttesa }))"
+
+Esito 'un secondo tentativo sovrascrive il primo' ((Proponi $altro).emailInAttesa -eq $altro) "attesa $((Proponi $altro).emailInAttesa)"
+
+Invoke-RestMethod -Method Post -Uri "$base/auth/annulla-cambio-email" -Headers (Auth $ad) | Out-Null
+$prof = Profilo $ad
+Esito 'annullato: resta il vecchio e non c''e'' piu'' il nuovo' (($prof.email -eq 'admin@condomini.local') -and $null -eq $prof.emailInAttesa) "email=$($prof.email) attesa=$($prof.emailInAttesa)"
+Esito 'superadmin annulla un cambio senza averne uno' { Invoke-RestMethod -Method Post -Uri "$base/auth/annulla-cambio-email" -Headers (Auth $sa) }
 
 Write-Output ''
 Write-Output '=== Assistente: password provvisoria via email ==='

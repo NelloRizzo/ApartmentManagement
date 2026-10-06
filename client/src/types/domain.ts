@@ -226,6 +226,13 @@ export interface Profilo {
   permessi: Permesso[] | null;
   /** `false` finché l'indirizzo email non è stato confermato. */
   emailConfermato: boolean;
+  /**
+   * Indirizzo proposto e non ancora confermato.
+   *
+   * Finche c'e', l'accesso e' ancora con `email`: il profilo mostra il cambio in
+   * corso e il pulsante per annullarlo.
+   */
+  emailInAttesa?: string | null;
   isSuperadmin: boolean;
 }
 

@@ -86,10 +86,14 @@ export default function PaginaProfilo() {
       </section>
 
       <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
+        <ModuloEmail />
+      </section>
+
+      <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
         <ModuloPassword />
       </section>
 
-<section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
+      <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
         <div className="scheda-intestazione">
           {/* Il titolo segue il contenuto: un amministratore che non ha unità di
               proprietà non ha "posizioni", ha condomini che amministra. */}
@@ -141,6 +145,155 @@ export default function PaginaProfilo() {
  * Va in un modulo separato dal resto della pagina perché il submit è un'azione
  * diversa dal salvataggio del profilo: cambiano i campi, le regole e l'esito.
  */
+/**
+ * Cambio dell'indirizzo email.
+ *
+ * Va in un modulo separato perché l'esito è diverso dal salvataggio del profilo:
+ * l'indirizzo **non cambia subito**. Resta in attesa e diventa quello dell'account
+ * quando la nuova casella conferma il link, quindi il pulsante non porta a un
+ * profilo con la casella nuova: porta a un avviso con l'indirizzo in attesa e
+ * l'annulla.
+ */
+function ModuloEmail() {
+  const { utente, ricarica } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [inCorso, setInCorso] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+  const [avviso, setAvviso] = useState<string | null>(null);
+
+  const inAttesa = utente?.emailInAttesa ?? null;
+  const completo = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && password !== '';
+
+  async function propone() {
+    setErrore(null);
+    setAvviso(null);
+    setInCorso(true);
+    try {
+      await api.post('/auth/cambia-email', { email: email.trim(), password });
+      setEmail('');
+      setPassword('');
+      await ricarica();
+      setAvviso('Controlla la casella del nuovo indirizzo: il cambio vale solo dopo la conferma.');
+    } catch (e) {
+      setErrore(e instanceof ApiError ? (e.primoErroreValidazione ?? e.message) : 'Cambio non riuscito');
+    } finally {
+      setInCorso(false);
+    }
+  }
+
+  async function annulla() {
+    setErrore(null);
+    setInCorso(true);
+    try {
+      await api.post('/auth/annulla-cambio-email');
+      await ricarica();
+      notifica('Cambio di indirizzo annullato');
+    } catch (e) {
+      setErrore(e instanceof ApiError ? e.message : 'Annullamento non riuscito');
+    } finally {
+      setInCorso(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="scheda-intestazione">
+        <h2>Indirizzo email</h2>
+      </div>
+      <div className="scheda-corpo pila-3">
+        <div className="campo">
+          <span className="campo-etichetta">Indirizzo attuale</span>
+          <p className="testo-muto">{utente?.email}</p>
+        </div>
+
+        {inAttesa && (
+          <div className="avviso avviso-avviso pila-2">
+            <div>
+              <strong>Cambio in corso verso {inAttesa}.</strong> Continui a entrare con{' '}
+              {utente?.email} finché {inAttesa} non conferma il link. Alla casella attuale è
+              arrivato un avviso: se non sei tu, non confermare e annulla.
+            </div>
+            <button type="button" className="btn btn-secondario" onClick={annulla} disabled={inCorso}>
+              Annulla il cambio
+            </button>
+          </div>
+        )}
+
+        {!inAttesa && (
+          <>
+            <p className="testo-muto">
+              L&apos;accesso è con questo indirizzo, quindi il cambio non è immediato: il nuovo
+              diventa quello dell&apos;account solo quando la sua casella conferma il link.
+              Riceverai un avviso anche su questo indirizzo.
+            </p>
+
+            <div className="campo">
+              <label className="campo-etichetta" htmlFor="em-nuovo">
+                Nuovo indirizzo
+              </label>
+              <input
+                id="em-nuovo"
+                className="area"
+                type="email"
+                inputMode="email"
+                autoCapitalize="none"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="campo">
+              <label className="campo-etichetta" htmlFor="em-password">
+                Password attuale
+              </label>
+              <input
+                id="em-password"
+                className="area"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <span className="campo-aiuto">
+                Serve a confermare che sei tu: chi ha una sessione in mano non deve poter
+                dirottare anche il recupero dell&apos;account.
+              </span>
+            </div>
+
+            {errore && (
+              <div className="avviso avviso-pericolo" role="alert">
+                {errore}
+              </div>
+            )}
+            {avviso && (
+              <div className="avviso avviso-info" role="status">
+                {avviso}
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="btn btn-secondario"
+              onClick={propone}
+              disabled={inCorso || !completo}
+            >
+              {inCorso ? 'Proposta in corso…' : 'Proponi il nuovo indirizzo'}
+            </button>
+          </>
+        )}
+
+        {inAttesa && errore && (
+          <div className="avviso avviso-pericolo" role="alert">
+            {errore}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 function ModuloPassword() {
   const { logout } = useAuth();
   const [attuale, setAttuale] = useState('');

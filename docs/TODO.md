@@ -1,7 +1,8 @@
 # Idee da fare
 
 _Le voci di primo livello sono numerate e la numerazione è continua: per parlarne
-basta il numero._
+basta il numero. Una voce realizzata si cancella e la sua ragione va nel
+`CHANGELOG.md`, come per i bug in `bugs.md`._
 
 PRIORITA MEDIA
 - 1. Privacy policy per ruolo ⏸ rimandato

@@ -30,6 +30,15 @@ export interface UserDoc {
    */
   emailConfermato: boolean;
   emailConfermatoIl?: Date;
+  /**
+   * Indirizzo proposto dall'utente, in attesa di conferma.
+   *
+   * `email` resta quella con cui si entra finché il nuovo indirizzo non risponde:
+   * il login è per indirizzo, quindi salvare subito significherebbe che uno
+   * sbaglio nella digitazione blocca l'utente fuori, e oggi nessuno potrebbe
+   * correggerlo al suo posto.
+   */
+  emailInAttesa?: string;
   /** Hash SHA-256 del token di conferma: il token in chiaro non viene conservato. */
   confermaEmailHash?: string;
   confermaEmailScadenza?: Date;
@@ -83,6 +92,7 @@ const userSchema = baseSchema(
     attivo: { type: Boolean, default: true },
     emailConfermato: { type: Boolean, default: false },
     emailConfermatoIl: { type: Date },
+    emailInAttesa: { type: String, trim: true, lowercase: true },
     confermaEmailHash: { type: String, index: true },
     confermaEmailScadenza: { type: Date },
     confermaEmailInviataIl: { type: Date },

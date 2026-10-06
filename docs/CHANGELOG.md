@@ -97,6 +97,55 @@ voce porta con sé le tre decisioni ancora aperte e quella già presa, cioè che
 password arrivi solo da argv o variabile e non via email. `new_tasks.md` resta
 vuota.
 
+### L'utente può cambiare il proprio indirizzo email, e il cambio aspetta la conferma
+
+La voce 5 del `TODO.md`, che era una domanda e non un lavoro.
+
+**Le implicazioni sui dati precedenti si sono rivelate quasi nulle, e la ragione
+era nel codice**: l'unico indirizzo in chiaro è `User.email`. Contratti,
+comunicazioni e attività tengono tutti un `ref` a `User`, quindi le cose già
+scritte non si muovono e continuano a mostrare l'indirizzo attuale. L'altra
+traccia è `AuditLog.dettagli.email`, e quella **non va toccata**: è la prova di
+quale indirizzo era in quel momento.
+
+**Il problema vero era un altro, e non l'avevo scritto nella voce.** Il login è per
+indirizzo email e nessuno poteva cambiarlo: `aggiornaAmministratore` accetta nome,
+cognome, telefono, `attivo` e `permessi`, non `email`, e il superadmin non è
+soggetto a nessuno. Quindi un indirizzo sbagliato non era un disagio ma un blocco,
+e l'unica salita era il database a mano.
+
+Per questo **il cambio non è immediato**: il nuovo indirizzo sta in
+`User.emailInAttesa` e diventa quello dell'account solo quando il token inviato a
+quella casella viene usato. Salvare subito avrebbe significato che una cifra
+sbagliata tiene fuori l'utente e che nessuno può correggerla al posto suo. Il
+vecchio indirizzo resta valido, quindi **uno sbaglio non costa niente** e la strada
+funziona anche per il superadmin, che non ha nessuno sopra di sé.
+
+**L'avviso alla casella precedente è la difesa vera.** Va all'indirizzo che si sta
+perdendo, non a quello nuovo: se il cambio l'ha fatto qualcuno con una sessione in
+mano, l'unica casella che può accorgersene è proprio quella che sta per
+scomparire. È il secondo modello in `email.service.ts`, che ne aveva uno solo; il
+token è creato dal controller e non dentro il servizio, perché il cambio e l'avviso
+devono parlare dello stesso link.
+
+**La password viene richiesta** perché chi ha una sessione in mano non deve poter
+dirottare anche il recupero dell'account. Il cambio è rifiutato a un account non
+confermato: ha già una conferma in corso, e accavallarle lascerebbe due token per
+un solo hash, con un link che muore senza essere letto. C'è anche l'annulla, che
+svuota attesa e hash insieme: senza, chi ha sbagliato a digitare resterebbe davanti
+a un avviso che non può togliere, e il link annullato potrebbe completare il cambio.
+
+Al momento dello scambio **non si tocca `tokenVersion`**: l'indirizzo non è una
+credenziale di sessione e l'account non ha mai perso validità, quindi non c'è
+ragione di far uscire chi ci sta lavorando.
+
+Verifiche: `verifica-conferma-email.ps1` con tredici righe nuove, cinque sui rifiuti
+(password, email malformata, stesso indirizzo, indirizzo occupato, account non
+confermato) e il percorso completo fino all'annulla. Il ramo di scambio è stato
+provato a parte, forzando l'hash di un token noto: la conferma scambia, il login
+col vecchio indirizzo fallisce, il token consumato non si riusa e un link scaduto
+non completa nulla. Più typecheck, lint, build del client e 30 test.
+
 ## 2026-10-05
 
 ### La tabella millesimale non promette più uno storico che non c'è

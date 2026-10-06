@@ -1,6 +1,6 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok } from '../utils/http.js';
-import { unauthorized, badRequest, AppError } from '../utils/errors.js';
+import { unauthorized, badRequest, conflict, AppError } from '../utils/errors.js';
 import { Condomino, Condominio, User } from '../models/index.js';
 import {
   signAccessToken,
@@ -11,9 +11,11 @@ import {
 } from '../middleware/token.js';
 import { currentUser } from '../middleware/auth.js';
 import { config } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 import { auditLog } from '../services/audit.service.js';
 import { allineaUtente, condominiDiRuolo } from '../services/ruolo.service.js';
-import { confermaConToken, reinviaConferma } from '../services/confermaEmail.service.js';
+import { confermaConToken, inviaConfermaConToken, reinviaConferma } from '../services/confermaEmail.service.js';
+import { avvisaCambioIndirizzo, nuovoTokenConferma } from '../services/email.service.js';
 import type { JwtUserPayload, Permesso, UserRole } from '../types/domain.js';
 
 interface UtenteDaProfilare {
@@ -27,6 +29,8 @@ interface UtenteDaProfilare {
   permessi?: Permesso[] | null;
   /** `false` finché l'indirizzo non è stato confermato: il frontend mostra un avviso. */
   emailConfermato?: boolean;
+  /** Indirizzo proposto e ancora da confermare: il frontend lo mostra con l'annulla. */
+  emailInAttesa?: string;
 }
 
 /**
@@ -135,6 +139,7 @@ async function profiloCompleto(u: UtenteDaProfilare) {
     permessi: (u.permessi as Permesso[] | null) ?? null,
     isSuperadmin: u.role === 'superadmin',
     emailConfermato: u.emailConfermato ?? true,
+    emailInAttesa: u.emailInAttesa ?? null,
     condominiIds: condomini.map((p) => p.condominioId),
     condomini,
   };
@@ -289,4 +294,110 @@ export const reinviaConfermaEmail = asyncHandler(async (req, res) => {
   });
 
   ok(res, { inviato: true, scadenza: risultato.scadenza });
+});
+
+/**
+ * Propone un indirizzo email diverso da quello con cui si entra.
+ *
+ * **Il cambio non è immediato**: l'indirizzo nuovo sta in `emailInAttesa` e
+ * diventa quello dell'account solo quando il token inviato a quella casella
+ * viene usato. Il login è per indirizzo, quindi salvare subito significherebbe
+ * che una cifra sbagliata tiene l'utente fuori e che oggi nessuno potrebbe
+ * correggerla al posto suo: non esiste nessun altro modo di cambiare un'email.
+ *
+ * La password viene chiesta perché chi ha una sessione in mano non deve poter
+ * dirottare anche il recupero dell'account.
+ *
+ * Un secondo tentativo sovrascrive il primo: c'è un solo `confermaEmailHash`, e
+ * quindi un solo link valido.
+ */
+export const cambiaEmail = asyncHandler(async (req, res) => {
+  const utente = await User.findById(currentUser(req).sub).select('+password');
+  if (!utente) throw unauthorized();
+
+  const body = req.body as { email: string; password: string };
+  if (!utente.verifyPassword(body.password)) throw badRequest('La password non è corretta');
+  // Un account non ancora confermato ha già una conferma in corso: accavallarle
+  // lascerebbe due token per un solo hash, e uno dei due link morirebbe senza
+  // che nessuno lo legga.
+  if (!utente.emailConfermato) {
+    throw badRequest('Conferma prima l’indirizzo attuale, poi ne potrai scegliere un altro');
+  }
+  if (body.email === utente.email) throw badRequest('È già il tuo indirizzo email');
+
+  const occupato = await User.exists({ email: body.email, _id: { $ne: utente._id } });
+  if (occupato) throw conflict('Esiste già un account con questo indirizzo email');
+
+  // Il token è creato qui e non dentro `inviaConfermaConToken`: l'avviso alla
+  // casella veccita porta il link di conferma e deve essere lo stesso.
+  const token = nuovoTokenConferma();
+  utente.emailInAttesa = body.email;
+  await utente.save();
+
+  const conferma = await inviaConfermaConToken(utente, token);
+
+  // L'avviso alla casella precedente non blocca il cambio: è una difesa, non il
+  // meccanismo. Se non parte resta un warn nel log.
+  const avviso = await avvisaCambioIndirizzo({
+    a: utente.email,
+    nome: utente.nome,
+    nuovo: body.email,
+  });
+  if (!avviso.inviato) {
+    logger.warn(`Avviso di cambio indirizzo non arrivato a ${utente.email}: ${avviso.motivo}`);
+  }
+
+  if (!conferma.esito.inviato) {
+    // La proposta resta, perché è innocua: senza il link non si conferma niente
+    // e il pulsante per riprovare torna nel profilo.
+    throw new AppError(
+      conferma.motivo === 'non_configurato'
+        ? 'L’invio delle email non è configurato su questo server'
+        : 'Invio non riuscito: il cambio non è stato proposto, riprova tra qualche minuto',
+      503,
+      'EMAIL_NON_DISPONIBILE',
+    );
+  }
+
+  await auditLog({
+    attore: String(utente._id),
+    azione: 'cambio_email_richiesto',
+    entita: 'User',
+    entitaId: String(utente._id),
+    // Entrambi gli indirizzi in chiaro: il registro deve dire da dove si è partiti
+    // e dove si voleva andare, ed è la tracciabilità di un cambio di accesso.
+    dettagli: { da: utente.email, a: body.email, avvisoInviato: avviso.inviato },
+    req,
+  });
+
+  ok(res, { email: utente.email, emailInAttesa: body.email, scadenza: conferma.scadenza });
+});
+
+/**
+ * Annulla un cambio di indirizzo in corso.
+ *
+ * Senza questo il cambio si annullerebbe solo da sé, aspettando la scadenza del
+ * token: chi ha sbagliato a digitare resterebbe davanti a un avviso che non può
+ * togliere, e potrebbe pensare che l'indirizzo vecchio non valga più.
+ */
+export const annullaCambioEmail = asyncHandler(async (req, res) => {
+  const utente = await User.findById(currentUser(req).sub);
+  if (!utente) throw unauthorized();
+  if (!utente.emailInAttesa) throw badRequest('Non c’è nessun cambio di indirizzo in corso');
+
+  await User.updateOne(
+    { _id: utente._id },
+    { $unset: { emailInAttesa: '', confermaEmailHash: '', confermaEmailScadenza: '' } },
+  );
+
+  await auditLog({
+    attore: String(utente._id),
+    azione: 'cambio_email_annullato',
+    entita: 'User',
+    entitaId: String(utente._id),
+    dettagli: { annullato: utente.emailInAttesa },
+    req,
+  });
+
+  ok(res, { annullato: true, email: utente.email });
 });

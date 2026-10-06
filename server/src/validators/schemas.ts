@@ -87,6 +87,19 @@ export const updateProfileSchema = z.object({
   telefono: z.string().trim().max(30).optional(),
 });
 
+/**
+ * Cambio di indirizzo email.
+ *
+ * La password è obbligatoria per una scelta precisa: chi ha una sessione in mano
+ * non deve poter dirottare anche il recupero dell'account. L'`email` non è
+ * dichiarata in `updateProfileSchema` di proposito: lì un campo non previsto
+ * verrebbe scartato in silenzio e sembrerebbe un cambio riuscito.
+ */
+export const cambiaEmailSchema = z.object({
+  email: z.string().email('Email non valida').toLowerCase().trim(),
+  password: z.string().min(1, 'La password è obbligatoria'),
+});
+
 // ---------- Condominio ----------
 export const condominioParams = z.object({ condominioId: objectId });
 

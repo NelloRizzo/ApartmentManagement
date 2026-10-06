@@ -188,3 +188,42 @@ export async function inviaConfermaEmail(d: RichiestaConferma): Promise<EsitoInv
     }),
   });
 }
+
+/**
+ * Avvisa l'indirizzo precedente che ne è stato proposto un altro.
+ *
+ * Va a `precedente` e non a quello nuovo: se il cambio l'ha fatto qualcuno con
+ * una sessione in mano, l'unica casella che può accorgersene è proprio quella che
+ * si sta perdendo. Non solleva mai e il chiamante non deve bloccare il cambio su
+ * un invio che fallisce.
+ */
+export async function avvisaCambioIndirizzo(d: {
+  a: string;
+  nome: string;
+  nuovo: string;
+}): Promise<EsitoInvio> {
+  return inviaEmail({
+    a: d.a,
+    oggetto: 'Il tuo indirizzo email su Steward sta per cambiare',
+    html: `<!doctype html>
+<html lang="it">
+  <body style="margin:0;padding:24px;background:#f5f7fa;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#16232e">
+    <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #dde3ea;border-radius:10px;padding:32px">
+      <h1 style="margin:0 0 4px;font-size:20px;color:#1b4965">Cambio di indirizzo email</h1>
+      <p style="margin:0 0 24px;color:#5a6b7c">Steward</p>
+
+      <p>Ciao ${escHtml(d.nome)},</p>
+      <p>qualcuno ha chiesto di portare il tuo account su Steward all'indirizzo
+      <strong>${escHtml(d.nuovo)}</strong>. Finché non confermi, il tuo accesso resta questo
+      e nessuno potrà cambiare la password o ricevere le email dell'applicazione sull'altro
+      indirizzo.</p>
+
+      <p style="font-size:13px;color:#8695a5">
+        Se non sei tu, non fare nulla: il cambio non verrà completato. Puoi annullarlo
+        dalla pagina del tuo profilo.
+      </p>
+    </div>
+  </body>
+</html>`,
+  });
+}
