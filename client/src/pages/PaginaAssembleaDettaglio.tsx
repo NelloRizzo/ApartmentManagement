@@ -442,7 +442,12 @@ function ContenutoDettaglio({
 
                   {puoScrivere && !readonly && (
                     <div className="riga riga-tra">
-                      <span className="testo-faint">Materiale del punto</span>
+                      {/*
+                        Etichetta di campo e non testo grigio: il materiale della
+                        deliberazione si carica prima di votare, quindi sta dove
+                        si legge prima, non in coda alla votazione.
+                      */}
+                      <span className="campo-etichetta">Materiale del punto</span>
                       <AllegatiBottone
                         endpoint={`/condomini/${condominioId}/assemblee/${a._id}/ordine/${punto.ordine}/allegati`}
                         conteggio={punto.allegati.length}

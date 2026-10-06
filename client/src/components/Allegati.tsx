@@ -318,12 +318,19 @@ function FinestraAllegati({
 }
 
 /**
- * Bottone-icona che apre il caricamento in una finestra.
+ * Bottone che apre il caricamento in una finestra, dove non c'è spazio per
+ * l'elenco dei file.
  *
- * Va usato dentro una riga di elenco o di tabella, dove non c'è spazio per
- * l'elenco dei file: mostra solo quante ne ci sono e lascia che la finestra
- * mostri i dettagli. Il numero accanto all'icona serve perché da sola non dice
- * nulla, e un file senza nome è indistinguibile da nessun file.
+ * **Ha il testo, non solo l'icona.** Era un'icona, `btn-fantasma` con un
+ * graffino: il testo più tenue dell'interfaccia, in una riga piena di numeri. Il
+ * pulsante c'era, funzionava, e non si vedeva, quindi il materiale del punto non
+ * si allegava e sembrava che la funzione non esistesse. `AllegatiSezione` ha
+ * sempre usato un bottone con testo, per gli allegati di un documento intero:
+ * qui la differenza è che il bottone sta dentro la riga di un punto, e serve un
+ * corpo minore, non un'etichetta che spieghi che cosa sia.
+ *
+ * Il conteggio resta nel testo, perché il numero accanto dice quanti file ci
+ * sono e un'icona da sola non dice nulla.
  */
 export function AllegatiBottone({
   endpoint,
@@ -336,7 +343,7 @@ export function AllegatiBottone({
   conteggio: number;
   /** Etichetta della finestra: "Allegati alla voce 3". */
   titolo: string;
-  /** Serve all'aria-label del bottone, che non ha testo. */
+  /** Serve all'aria-label e al `title`, che descrivono il punto. */
   descrizione: string;
   suCambiati: () => void;
 }) {
@@ -363,12 +370,12 @@ export function AllegatiBottone({
     <>
       <button
         type="button"
-        className="btn btn-sm btn-fantasma"
+        className="btn btn-sm btn-secondario"
         onClick={() => setAperto(true)}
         aria-label={`${descrizione}: ${conteggio === 0 ? 'nessun allegato' : `${conteggio} allegati`}`}
-        title={conteggio === 0 ? 'Allega un file' : `${conteggio} allegati`}
+        title={descrizione}
       >
-        <span aria-hidden="true">{conteggio > 0 ? `📎 ${conteggio}` : '📎'}</span>
+        {conteggio === 0 ? 'Allega file' : `Allega altro (${conteggio})`}
       </button>
 
       {aperto && (

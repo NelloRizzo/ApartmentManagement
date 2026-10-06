@@ -175,6 +175,41 @@ correzione con un bilancio le cui voci non avevano mai avuto allegati: `allegati
 ASSENTE su tutte e 7, dopo la correzione `presente(0)` su tutte e 7. Suite del
 bilancio a 27 controlli, più typecheck e lint.
 
+### L'allegato del punto all'ordine del giorno c'era, e non si vedeva
+
+Dal `new_tasks.md`: "i punti all'ordine del giorno dovrebbero prevedere la
+possibilità di caricare degli allegati". **La possibilità c'era già**, dal 29
+settembre, e quindi la voce era superata. Ma segnalando che mancava il controllo
+qualcuno ha guardato e non l'ha trovato: la domanda era giusta anche se la risposta
+sulla funzionalità no.
+
+Il pulsante era un graffino `btn-fantasma`, cioè il testo più tenue
+dell'interfaccia, in una riga di un punto all'ordine del giorno piena di numeri e
+campi. Passava in mezzo a quattro input di votazione, sotto l'etichetta grigia
+"Materiale del punto". Chi non lo scorgeva concludeva che la funzione non
+esistesse, e la segnalazione tornava ogni volta.
+
+Ora è un bottone **con testo** — "Allega file", "Allega altro (2)" — come
+`AllegatiSezione` usa per verbale e comunicazione, e l'etichetta è una vera
+etichetta di campo e non testo grigio. L'icona resta solo dentro il bottone
+dell'interfaccia, dove un'icona sola non dice nulla e il numero accanto è il
+conteggio.
+
+**Il punto non ha un `_id` proprio** (`puntoOrdineSchema` è `{ _id: false }`), si
+indica col numero d'ordine: per questo l'allegato si carica dall'assemblea aperta e
+**non** dal form di creazione, dove l'assemblea non ha ancora un id. Non è un
+limite da colmare, è la conseguenza di come sono fatti i punti.
+
+**Nessuna verifica copriva la rotta.** `verifica-allegati.ps1` passava voce di
+bilancio, verbale e comunicazione, mai il punto: la rotta esisteva e nessuno la
+provava, quindi un difetto sarebbe arrivato in produzione senza che niente lo
+notasse. Ora c'è la sezione 13: caricamento, metadati, download con firma, 403
+all'assistente e rimozione. La creazione dell'assemblea di prova è stata scritta
+per non lasciare residui: se non c'è una bozza con un punto e senza verbale, se ne
+crea una e la segna per la pulizia finale.
+
+Verifiche: 33 controlli tutti verdi, più typecheck, lint e build del client.
+
 ## 2026-10-05
 
 ### La tabella millesimale non promette più uno storico che non c'è

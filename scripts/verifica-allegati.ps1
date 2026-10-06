@@ -158,10 +158,32 @@ $orfano = Scarica ("http://localhost:4000" + $url)
 Check 'il file non e'' piu'' scaricabile' ($orfano.Status -eq 404) "HTTP $($orfano.Status)"
 
 "== 12. verbale e comunicazione =="
-$asm = @(Get "/condomini/$cid/assemblee?limit=10" $ad) | Where-Object { $_.stato -ne 'annullata' } | Select-Object -First 1
-$verbaleId = $null
+# Serve un'assemblea modificabile (`assicuraAssembleaModificabile` chiude solo
+# `conclusa` e `annullata`) e che non abbia già un verbale: `deleteOne` la
+# rifiuta se il verbale esiste, e non si elimina un verbale in questa verifica.
+# Se non c'è una che vada bene se ne crea una: è l'unico modo per avere un punto
+# all'ordine del giorno conoscendo l'ordine, che è come lo chiama la rotta.
+$usata = $false
+$asm = @(Get "/condomini/$cid/assemblee?limit=20" $ad) | Where-Object { $_.stato -eq 'bozza' -and $_.ordineDelGiorno.Count -gt 0 } | Select-Object -First 1
+# Una bozza con verbale non si elimina, e questo script non elimina verbali: se
+# l'unica bozza trovata ha già il suo, ne crea una propria e la segna per la
+# pulizia finale.
 if ($asm) {
-  $verb = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee/$($asm._id)/verbale" -Headers $h -ContentType 'application/json' -Body '{}'
+  $verbali = @(Get "/condomini/$cid/verbali?limit=100" $ad) | Where-Object { $_.assemblea -eq $asm._id }
+  if (@($verbali).Count -gt 0) { $asm = $null }
+}
+if (-not $asm) {
+  $nuova = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee" -Headers $h -ContentType 'application/json' -Body (@{ numero = $anno; titolo = "Allegati $suff"; dataInizio = "$anno-01-01"; ordineDelGiorno = @(@{ ordine = 1; titolo = "Punto di prova $suff" }) } | ConvertTo-Json -Depth 6)
+  Check 'assemblea di prova creata' ($nuova.success -and @($nuova.data.ordineDelGiorno).Count -eq 1) $nuova.error.message
+  $asm = $nuova.data
+  $usata = $true
+}
+$asmId = if ($asm) { $asm._id } else { $null }
+$verbaleId = $null
+# Solo il punto dell'ordine del giorno sta su una bozza: il verbale nasce
+# dall'assemblea e non si può creare prima che sia stata tenuta.
+if ($asm -and $asm.stato -ne 'bozza') {
+  $verb = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee/$asmId/verbale" -Headers $h -ContentType 'application/json' -Body '{}'
   $verbaleId = Id $verb.data
   # Si contano solo gli allegati con il nome di questa esecuzione: il verbale
   # dell'assemblea può averne di precedenti e il controllo deve valere anche alla
@@ -172,6 +194,10 @@ if ($asm) {
   $letto = Get "/condomini/$cid/verbali/$verbaleId" $ad
   Check 'il verbale ha il nuovo allegato' (@($letto.allegati | Where-Object { $_.oggetto -eq "Verbale firmato $suff" }).Count -eq 1) "trovati $(@($letto.allegati).Count)"
   Check 'gli allegati precedenti sono rimasti' (@($letto.allegati).Count -eq ($prima + 1)) "prima $prima ora $(@($letto.allegati).Count)"
+} elseif ($asm) {
+  # Non è un errore: questa esecuzione ha creato la bozza per i punti, e su una
+  # bozza il verbale non esiste ancora.
+  Write-Output '  (verbale non provato: l''assemblea di questa esecuzione e'' una bozza)'
 } else {
   Check 'serve un''assemblea per provare il verbale' $false 'nessuna assemblea utilizzabile'
 }
@@ -184,7 +210,42 @@ Check 'allegato su comunicazione in creazione' ($comm.success -and $comm.data.al
 Check 'la bozza non parte subito' ($comm.data.stato -eq 'bozza') $comm.data.stato
 $commId = Id $comm.data
 
-"== 13. pulizia =="
+"== 13. punto all'ordine del giorno =="
+# Fin qui la verifica copriva voce di bilancio, verbale e comunicazione, ma non il
+# punto: la rotta esisteva e nessuna verifica la passava, quindi un eventuale
+# difetto sarebbe arrivato in produzione senza che niente lo notasse.
+#
+# Il punto non ha un id proprio: si indica col numero d'ordine, ed è per questo
+# che l'allegato si carica dall'assemblea aperta e non dal form di creazione.
+$puntoOrdine = if ($asm) { @($asm.ordineDelGiorno)[0].ordine } else { $null }
+Check 'l''assemblea ha un punto all''ordine del giorno su cui provare' ($null -ne $puntoOrdine) 'assemblea senza punti'
+
+$rp = PostFile "/condomini/$cid/assemblee/$asmId/ordine/$puntoOrdine/allegati" $ad $file @{ allegatiOggetto = "Relazione $suff"; allegatiFonte = 'Tecnico'; allegatiRiferimento = "Prot $suff" }
+Check 'allegato su punto all''ordine del giorno' ($rp.success) $rp.error.message
+
+$puntoLetto = @(Get "/condomini/$cid/assemblee/$asmId" $ad).ordineDelGiorno | Where-Object { $_.ordine -eq $puntoOrdine }
+Check 'il punto ha l''allegato' (@($puntoLetto.allegati | Where-Object { $_.oggetto -eq "Relazione $suff" }).Count -eq 1) "trovati $(@($puntoLetto.allegati).Count)"
+Check 'i metadati sono quelli mandati' ($puntoLetto.allegati[0].fonte -eq 'Tecnico' -and $puntoLetto.allegati[0].riferimento -eq "Prot $suff") "fonte $($puntoLetto.allegati[0].fonte)"
+$puntoAid = Id $puntoLetto.allegati[0]
+
+# Il file si scarica con lo stesso percorso degli altri domini: l'allegato vive
+# in `Allegato` e l'URL è firmato allo stesso modo.
+$puntoUrl = $puntoLetto.allegati[0].url
+$scaricaPunto = Scarica ("http://localhost:4000" + $puntoUrl)
+Check 'il file del punto si scarica' ($scaricaPunto.Status -eq 200 -and $scaricaPunto.Corpo -match $suff) "status $($scaricaPunto.Status)"
+
+# L'assistente ha `versamenti:scrivere` e niente su `assemblee`: deve ricevere
+# 403 come sugli altri domini.
+$sPunto = Status Post "/condomini/$cid/assemblee/$asmId/ordine/$puntoOrdine/allegati" $null $as
+Check 'l''assistente non allega al punto' ($sPunto -eq 'FORBIDDEN') "esito $sPunto"
+
+# `noContent` risponde 204: è il codice giusto per una rimozione, non un errore.
+$delPunto = curl.exe -s -o NUL -w "%{http_code}" -X DELETE "$base/condomini/$cid/assemblee/$asmId/ordine/$puntoOrdine/allegati/$puntoAid" -H "Authorization: Bearer $ad"
+Check 'rimozione dell''allegato del punto' ([int]$delPunto -eq 204) "status $delPunto"
+$dopoRimozione = @(Get "/condomini/$cid/assemblee/$asmId" $ad).ordineDelGiorno | Where-Object { $_.ordine -eq $puntoOrdine }
+Check 'l''allegato del punto e sparito' (@($dopoRimozione.allegati).Count -eq 0) "rimasti $(@($dopoRimozione.allegati).Count)"
+
+"== 14. pulizia =="
 # Gli allegati si togliono uno alla volta: la rimozione non è in cascata.
 if ($verbaleId) {
   foreach ($al in @(Get "/condomini/$cid/verbali/$verbaleId" $ad).allegati) {
@@ -202,6 +263,19 @@ if ($commId) {
 PulisciBilanci
 $residui = @(Get "/condomini/$cid/bilanci?anno=$anno" $ad)
 Check 'nessun bilancio di prova rimasto' ($residui.Count -eq 0) "trovati $($residui.Count)"
+# L'assemblea creata qui è una bozza, quindi si elimina. Gli allegati vanno tolti
+# uno a uno, punto per punto: la rimozione non è in cascata e il file
+# sopravvive al documento che lo conteneva. Solo se è di questa esecuzione: un'assemblea
+# bozza preesistente non va toccata, perché non è roba di prova.
+if ($asm -and $usata) {
+  foreach ($p in @(Get "/condomini/$cid/assemblee/$asmId" $ad).ordineDelGiorno) {
+    foreach ($al in @($p.allegati)) {
+      curl.exe -s -o NUL -X DELETE "$base/condomini/$cid/assemblee/$asmId/ordine/$($p.ordine)/allegati/$($al.id)" -H "Authorization: Bearer $ad"
+    }
+  }
+  $sAsm = Status Delete "/condomini/$cid/assemblee/$asmId" $null $ad
+  Check 'l''assemblea di prova è stata eliminata' ($sAsm -eq '200') "esito $sAsm"
+}
 Remove-Item $file, $altroFile -ErrorAction SilentlyContinue
 
 "esito: $ok ok, $ko ko"
