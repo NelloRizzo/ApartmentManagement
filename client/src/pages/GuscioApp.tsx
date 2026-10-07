@@ -20,17 +20,17 @@ export default function GuscioApp() {
   if (!utente) return null;
 
   const selezionata = utente.condomini.find((c) => c.condominioId === condominioId);
-  // Il superadmin amministra solo gli stabili di cui è titolare: negli altri
-  // le rotte di condominio rispondono 403, quindi non gli si propongono.
+  // Vero solo se l'utente ha davvero uno stabile da amministrare. Al superadmin
+  // il profilo non restituisce posizioni, quindi resta `false` e le sezioni di
+  // condominio non gli compaiono: la sua navigazione è la piattaforma.
   const amministra = utente.condomini.some((c) => !c.assistito);
 
   /*
    * Nell'intestazione l'amministratore di condominio e il condòmino leggono su
    * quale stabile stanno lavorando, e il prefisso serve a dirlo: il nome da solo
    * sembrerebbe il titolo della pagina. Al superadmin invece si mostra
-   * "Dashboard", perché la sua casa è la piattaforma e non uno stabile: anche
-   * quando ha selezionato un condominio sta guardando la piattaforma attraverso
-   * quella lente, e il nome del condominio è già nella barra di selezione.
+   * "Dashboard", perché non ha uno stabile su cui lavorare: "Condominio attivo:
+   * —" non gli direbbe nulla.
    */
   const titoloIntestazione = utente.role === 'superadmin' ? 'Dashboard' : `Condominio attivo: ${selezionata?.nome ?? '—'}`;
 
@@ -41,12 +41,10 @@ export default function GuscioApp() {
    * una situazione che nasce da sola perché l'iscrittura per email aggancia
    * l'utente esistente invece di crearne uno nuovo.
    *
-   * Il superadmin che non amministra nessuno resta escluso: i suoi stabili sono
-   * quelli che vede senza amministrarli e le rotte di condominio gli rispondono
-   * 403, quindi mostrarglieli significherebbe promettere pagine vuote.
+   * Al superadmin non serve una clausola di esclusione a parte: il profilo non
+   * gli restituisce posizioni, quindi qui non arriva mai.
    */
-  const selettoreVisible =
-    utente.condomini.length > 1 && (amministra || utente.role !== 'superadmin');
+  const selettoreVisible = utente.condomini.length > 1;
 
   // Le sezioni non delegate non vengono mostrate: il backend le rifiuterebbe.
   const gruppi = gruppiNavigazione(utente.role, puo, amministra);

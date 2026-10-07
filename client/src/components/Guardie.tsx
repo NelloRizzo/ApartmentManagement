@@ -22,9 +22,18 @@ export function RichiediAutenticazione({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** Blocca le pagine riservate ad amministratori e assistenti. */
+/**
+ * Blocca le pagine riservate ad amministratori e assistenti.
+ *
+ * Il condòmino torna alle proprie quote. Il superadmin torna alla piattaforma:
+ * non amministra nessuno stabile e il profilo non gli restituisce posizioni,
+ * quindi da queste pagine vedrebbe stabili non suoi. Le API restano aperte per
+ * lui (è una scelta del backend e i test la coprono): qui si decide solo cosa
+ * l'interfaccia gli mette davanti.
+ */
 export function RichiediAmministratore({ children }: { children: ReactNode }) {
   const { utente } = useAuth();
+  if (utente?.role === 'superadmin') return <Navigate to="/p" replace />;
   if (utente && utente.role === 'condomino') {
     return <Navigate to="/c/versamenti" replace />;
   }
@@ -61,7 +70,7 @@ export function RichiediSuperadmin({ children }: { children: ReactNode }) {
 /**
  * Riserva una sezione ai ruoli indicati.
  *
- * `RichiediAmministratore` esclude solo il condòmino e lascia passare il
+ * `RichiediAmministratore` esclude condòmino e superadmin e lascia passare il
  * portiere: va bene per le pagine di gestione, dove al portiere può servire
  * leggere, ma non per quelle che riguardano il contratto di fornitura, che è di
  * chi amministra davvero.

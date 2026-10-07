@@ -19,6 +19,14 @@ PRIORITA MEDIA
   - **da decidere: quale account**. Con un solo superadmin basta `config.seed.superadminEmail`; se in produzione ce ne fossero più serve `--email` esplicito. Cambiare la password sbagliata è l'errore che questo script non deve permettere, quindi il default silenzioso va valutato con criterio
   - **da decidere: come verificarlo**, perché rifiuta `localhost` e in locale non si può esercitare. La via che resta è lanciarlo nella rete di compose, dove il Mongo si chiama `mongo`: la guardia passa e il colpo arriva sul database di sviluppo
   - `tokenVersion` va incrementato, come in `reimpostaPasswordAmministratore`: senza, le sessioni già aperte resterebbero valide e la password vecchia continuerebbe a funzionare fino al logout
+- 6. I permessi si sistemano uno alla volta
+  - oggi un assistente ha un elenco di permessi unico per tutti i condomìni (`User.permessi`) più l'elenco in `Condominio.assistenti`: non si può dire "su questo stabile tutto, su quello solo i versamenti"
+  - "pieno qui e limitato lì" non è esprimibile: `permessi: null` significa accesso pieno, quindi servono elenchi multipli o togliere il `null` e trattare "tutti i permessi" come elenco completo
+  - `requirePermesso` e `requirePermessoLettura` ricevono già `req.params.condominioId` e possono risolvere l'elenco giusto, ma ogni rotta sotto `/condomini/:condominioId` va controllata una per una
+  - la delega a un assistente è ancora tutto o niente (`creaAssistente` lo aggiunge a tutti gli stabili dell'amministrante): la voce "Delegare un assistente a un solo condominio" è stata tolta dalla coda senza essere realizzata
+  - **permessi e guardie su cui siamo passati**, da aggiornare a ogni intervento che ne tocca uno:
+    - 2026-10-07 — posizioni del superadmin in `profiloCompleto` (`auth.controller.ts`): `/auth/me` non gli restituisce più i condomìni come posizioni, perché il superadmin non amministra nessuno stabile
+    - 2026-10-07 — `RichiediAmministratore` (client): esclude anche il superadmin, che nelle pagine di condominio vedeva stabili non suoi
 
 PRIORITA BASSA
 - 2. Campi sconosciuti scartati in silenzio

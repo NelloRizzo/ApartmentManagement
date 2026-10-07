@@ -326,7 +326,12 @@ già composti.
 I ruoli sono `superadmin`, `admin`, `portiere`, `condomino`.
 
 - `superadmin` amministra la piattaforma: crea amministratori e contratti, incassa
-  le rate, scrive i messaggi. Non è soggetto al proprio contratto.
+  le rate, scrive i messaggi. Non è soggetto al proprio contratto. **Non ha
+  posizioni nei condomini**: `profiloCompleto` non gli restituisce stabili, quindi
+  il profilo non gli mostra "Condomìni amministrati" e `RichiediAmministratore` lo
+  rimanda a `/p`. Alle API dei condomini continua ad avere accesso, perché è
+  `requireCondominioAccess` a deciderlo e i test lo coprono: cambia solo ciò che
+  l'interfaccia gli presenta come suo.
 - `admin` senza elenco di permessi ha accesso pieno a tutti i suoi condomini.
 - `admin` **assistente** è un admin con `permessi` non nulli, collegato al
   delegante con `User.delegatoDa` e ammesso nei condomii da `Condominio.assistenti`.
@@ -400,8 +405,8 @@ sfogliare lo stabile.
   `strict`: mandarlo è un 400 esplicito, non una modifica ignorata in silenzio.
 - **Il selettore del condominio non è riservato a chi amministra**: la condizione è
   averne più di uno, perché un condòmino iscritto a due stabili deve poter
-  scegliere come un amministratore. Unica eccezione il superadmin che non
-  amministra nessuno, perché le sue rotte di condominio rispondono 403.
+  scegliere come un amministratore. Al superadmin non serve un'eccezione a parte:
+  il profilo non gli restituisce posizioni, quindi la condizione non si verifica.
 - **Nell'intestazione il titolo è `Condominio attivo: <nome>`**, o `Dashboard` per
   il superadmin: il nome da solo sembrava il titolo della pagina.
 

@@ -33,6 +33,22 @@ export function RichiediCondominio({ children }: { children: ReactNode }) {
 
   if (condominioId) return <>{children}</>;
 
+  // Il superadmin non ha stabili e non ne deve creare: proporgli "Crea il tuo
+  // primo condominio" lo manderebbe in una pagina che poi gli viene negata.
+  if (utente?.role === 'superadmin') {
+    return (
+      <PaginaVuota
+        titolo="Nessun condominio"
+        descrizione="Non amministri nessun stabile: la tua sezione è la Piattaforma, con contratti e amministratori."
+        azione={
+          <Link className="btn btn-primario" to="/p">
+            Vai alla piattaforma
+          </Link>
+        }
+      />
+    );
+  }
+
   return (
     <PaginaVuota
       titolo="Nessun condominio selezionato"

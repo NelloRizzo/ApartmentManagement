@@ -4,6 +4,55 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-07
 
+### Il superadmin non ha più posizioni nei condomini: spariscono i "Condomìni amministrati"
+
+Dal `bugs.md`: "un superadmin nella propria dashboard vede i condomìni amministrati
+(in realtà tutti i condomìni): questo non ha senso perché l'amministratore di
+piattaforma non amministra condomìni. non basta eliminare la sezione ma controllare
+come mai il superadmin possa vedere i condomìni come propri".
+
+**Il profilo li mandava tutti.** `profiloCompleto` aveva un ramo per il superadmin
+che faceva `Condominio.find()` senza filtri: ogni stabile del database finiva fra le
+sue posizioni con `ruolo: 'osservatore'`, e il client, vedendo posizioni, apriva la
+sezione del profilo intitolandola "Condomìni amministrati". Il difetto non era
+nell'etichetta ma nel dato: al superadmin veniva presentato come suo ciò che non
+era suo, e ogni altra pagina che si affida a `utente.condomini` partiva da lì.
+
+**Ora non riceve posizioni.** È l'amministratore a ricavare i propri stabili da
+`Condominio.find({ amministratore, assistenti })`, il portiere dai propri servizi e
+il condòmino dai legami in `Condomino`: il superadmin non rientra in nessuno dei tre
+perché non amministra nessuno stabile. Resta solo ciò che possiede davvero come
+persona (un'unità comprata arriva da un legame `Condomino`, con il suo regime e la
+sua quota). Con `condomini: []` la sezione del profilo sparisce da sola — un elenco
+vuoto sotto "Condomìni amministrati" sarebbe un altro difetto —, il gruppo
+"Condominio" della navigazione non compare perché `amministra` vale `false`, il
+selettore non serve più ed è stato ridotto alla sua condizione vera
+(`condomini.length > 1`), e l'indice iniziale porta comunque a `/p`.
+
+**Le pagine di condominio gli dicono che non sono sue.** `RichiediAmministratore`
+reindirizza il superadmin a `/p`: altrimenti digitando l'URL avrebbe visto
+"Gli stabili che gestisci" con tutti gli stabili, cioè lo stesso difetto spostato in
+un'altra pagina. `RichiediCondominio`, che per gli altri ruoli propone "Crea il tuo
+primo condominio", per lui spiega che la sua sezione è la Piattaforma: proporgli la
+creazione lo avrebbe mandato in una pagina che poi gli viene negata. Sono scelte di
+interfaccia: **le API restano quelle di prima**, `requireCondominioAccess` lo lascia
+entrare in ogni condominio esistente e i test lo coprono ("lascia entrare il
+superadmin in un condominio esistente"); cambia solo ciò che l'interfaccia gli
+presenta come proprio.
+
+Il ruolo `osservatore` e la sua etichetta "Accesso di piattaforma" sono stati
+rimossi: non li produce più nessuno. Corretti anche i commenti che sostenevano il
+contrario, nel client e in `AGENTS.md` ("le rotte di condominio rispondono 403 al
+superadmin"): è vero per la bacheca, che `/staff/attivita` rifiuta davvero, non per
+i condomini.
+
+Verifiche: typecheck, lint, 30 test. `npm run verifica` a 174 controlli verdi su 7
+script su 9; `verifica-millesimi` e `verifica-allegati` falliscono **anche senza
+questa modifica** (verificato staccando le modifiche): il primo non trova capacità
+contrattuale libera su un seed appena fatto (contratto a 2 e 2 occupati), il secondo
+manda una creazione di assemblea con il campo `dataInizio` in luogo di `data` e
+senza `luogo`. Sono in coda, non dipendono da qui.
+
 ### Il condòmino vede le assemblee convocate, con il badge che le segnala
 
 Dal `new_tasks.md`: "quando un'assemblea viene convocata, i condòmini dovrebbero

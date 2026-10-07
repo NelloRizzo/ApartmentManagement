@@ -240,8 +240,13 @@ export interface CondominioPosizione {
   condominioId: string;
   nome?: string;
   codice?: string;
-  /** Come l'utente sta in quel condominio. */
-  ruolo: 'amministratore' | 'assistente' | 'servito' | 'condomino' | 'osservatore';
+  /**
+   * Come l'utente sta in quel condominio.
+   *
+   * Il superadmin non compare: il profilo non gli restituisce posizioni, perché
+   * amministra la piattaforma e nessuno stabile.
+   */
+  ruolo: 'amministratore' | 'assistente' | 'servito' | 'condomino';
   /**
    * Regime di proprietà, o `null` se la posizione è solo operativa.
    *

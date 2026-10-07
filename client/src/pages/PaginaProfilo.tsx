@@ -93,34 +93,41 @@ export default function PaginaProfilo() {
         <ModuloPassword />
       </section>
 
-      <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
-        <div className="scheda-intestazione">
-          {/* Il titolo segue il contenuto: un amministratore che non ha unità di
-              proprietà non ha "posizioni", ha condomini che amministra. */}
-          <h2>{haPosizioniDiProprieta ? 'Le mie posizioni' : 'Condomìni amministrati'}</h2>
-        </div>
-        <div className="elenco">
-          {utente.condomini.map((c) => (
-            <div key={c.condominioId} className="voce">
-              <span className="cresci pila-1">
-                <strong>
-                  {c.nome} ({c.codice})
-                </strong>
-                <span className="testo-faint">
-                  {/* `regime` è `null` per una posizione solo operativa: mostrare
-                      "Proprietario" e un elenco unità vuoto raccontava il
-                      contrario di quello che è. */}
-                  {c.regime
-                    ? `${etichette.regime(c.regime)} · unità ${c.unita.join(', ')}${
-                        c.quota < 100 ? ` · quota ${c.quota}%` : ''
-                      }`
-                    : etichette.posizione(c.ruolo)}
+      {/*
+        Senza posizioni non c'è nemmeno la sezione: il superadmin non amministra
+        nessuno stabile, e fargli un elenco "Condomìni amministrati" era il
+        difetto. Un elenco vuoto è un difetto anch'esso, qui non racconta niente.
+      */}
+      {utente.condomini.length > 0 && (
+        <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
+          <div className="scheda-intestazione">
+            {/* Il titolo segue il contenuto: un amministratore che non ha unità di
+                proprietà non ha "posizioni", ha condomini che amministra. */}
+            <h2>{haPosizioniDiProprieta ? 'Le mie posizioni' : 'Condomìni amministrati'}</h2>
+          </div>
+          <div className="elenco">
+            {utente.condomini.map((c) => (
+              <div key={c.condominioId} className="voce">
+                <span className="cresci pila-1">
+                  <strong>
+                    {c.nome} ({c.codice})
+                  </strong>
+                  <span className="testo-faint">
+                    {/* `regime` è `null` per una posizione solo operativa: mostrare
+                        "Proprietario" e un elenco unità vuoto raccontava il
+                        contrario di quello che è. */}
+                    {c.regime
+                      ? `${etichette.regime(c.regime)} · unità ${c.unita.join(', ')}${
+                          c.quota < 100 ? ` · quota ${c.quota}%` : ''
+                        }`
+                      : etichette.posizione(c.ruolo)}
+                  </span>
                 </span>
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
         <div className="scheda-intestazione">

@@ -124,9 +124,9 @@ export function gruppiNavigazione(
   amministra: boolean = true,
 ): GruppoNavigazione[] {
   // Il superadmin vede l'area di piattaforma sempre, ma le sezioni di
-  // condominio solo se amministra davvero almeno uno stabile: su un condominio
-  // altrui `requireCondominioAccess` risponde 403, quindi mostrargliele
-  // offrirebbe strade che il backend rifiuta.
+  // condominio solo se il profilo gli restituisce uno stabile che amministra
+  // davvero. Di norma non ne ha nessuno, e la navigazione deve proporre solo la
+  // piattaforma: è la posizione che arriva dal server, non un filtro qui.
   const base: GruppoNavigazione[] =
     role === 'superadmin'
       ? [...(amministra ? amministratore : []), ...piattaforma, ...gruppoAccount(false)]

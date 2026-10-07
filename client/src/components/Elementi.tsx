@@ -188,7 +188,6 @@ const etichettePosizione: Record<string, string> = {
   assistente: 'Assistente, per delega',
   servito: 'Servizio',
   condomino: 'Condòmino',
-  osservatore: 'Accesso di piattaforma',
 };
 
 /** Etichette leggibili per ogni enumerazione del dominio. */

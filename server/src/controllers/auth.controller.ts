@@ -39,6 +39,12 @@ interface UtenteDaProfilare {
  * Login, refresh e `/auth/me` restituiscono tutti questa stessa struttura: il
  * frontend ne ha bisogno subito per sapere quali condomini può selezionare,
  * senza dover fare una seconda richiesta.
+ *
+ * Il superadmin non riceve posizioni: amministra la piattaforma e nessuno
+ * stabile, quindi non ha condomìni da selezionare. Resta vero che le sue
+ * richieste alle API dei condomini passano (`requireCondominioAccess` lo
+ * lascia entrare per scelta e i test lo coprono): cambia solo ciò che il
+ * profilo gli presenta come suo.
  */
 async function profiloCompleto(u: UtenteDaProfilare) {
   const [legami, amministrati, servito] = await Promise.all([
@@ -47,14 +53,15 @@ async function profiloCompleto(u: UtenteDaProfilare) {
       .populate('unita', 'codice piano')
       .lean(),
     // L'amministratore e il suo assistente non compaiono in `Condomino`: i
-    // condomini si ricavano dal condominio stesso.
-    u.role === 'superadmin'
-      ? Condominio.find().select('nome codice amministratore').lean()
-      : u.role === 'admin'
-        ? Condominio.find({ $or: [{ amministratore: u._id }, { assistenti: u._id }] })
-            .select('nome codice amministratore')
-            .lean()
-        : Promise.resolve([]),
+    // condomini si ricavano dal condominio stesso. Il superadmin resta fuori
+    // per la ragione scritta sopra, non perché gli manchi un permesso: dargli
+    // qui l'elenco completo li avrebbe presentati come posizioni sue, ed è
+    // esattamente il difetto che doveva sparire.
+    u.role === 'admin'
+      ? Condominio.find({ $or: [{ amministratore: u._id }, { assistenti: u._id }] })
+          .select('nome codice amministratore')
+          .lean()
+      : Promise.resolve([]),
     u.role === 'portiere'
       ? Condominio.find({ condominiServito: u._id }).select('nome codice amministratore').lean()
       : Promise.resolve([]),
@@ -80,11 +87,11 @@ async function profiloCompleto(u: UtenteDaProfilare) {
       quota: l.quota,
       unita: (l.unita as unknown as { codice: string }[]).map((x) => x.codice),
       /**
-       * `true` quando l'utente non è il titolare: per l'assistente è il
-       * condominio in cui opera per delega, per il superadmin uno dei tanti
-       * stabili che vede ma non amministra. Il confronto non guarda il ruolo,
-       * altrimenti il superadmin avrebbe `assistito: false` ovunque e le
-       * sezioni di condominio gli offrirebbero strade che rispondono 403.
+       * `true` quando l'utente non è l'amministratore dello stabile: per
+       * l'assistente è il condominio in cui opera per delega. Il confronto
+       * guarda il solo campo `amministratore` e non il ruolo dell'utente, così
+       * un amministratore che ha comprato un'altra unità resta comunque il
+       * titolare di quell'unità.
        */
       assistito: String((c as { amministratore?: unknown }).amministratore ?? '') !== String(u._id),
     };
@@ -103,20 +110,12 @@ async function profiloCompleto(u: UtenteDaProfilare) {
     .filter(({ c }) => !giaPresenti.has(String(c._id)))
     .map(({ c, servito: faServito }) => {
       const amministra = String(c.amministratore ?? '') === String(u._id);
-      // Il superadmin vede ogni stabile senza amministrarlo: senza questo caso
-      // cadrebbe in "assistente", che è una delega che non gli è mai stata data.
-      const ruolo = u.role === 'superadmin'
-        ? 'osservatore'
-        : amministra
-          ? 'amministratore'
-          : faServito
-            ? 'servito'
-            : 'assistente';
+      const ruolo = amministra ? 'amministratore' : faServito ? 'servito' : 'assistente';
       return {
         condominioId: String(c._id),
         nome: c.nome,
         codice: c.codice,
-        ruolo: ruolo as 'osservatore' | 'amministratore' | 'servito' | 'assistente',
+        ruolo: ruolo as 'amministratore' | 'servito' | 'assistente',
         regime: null as null,
         quota: 0,
         unita: [] as string[],
