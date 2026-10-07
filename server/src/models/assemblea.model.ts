@@ -94,6 +94,15 @@ const assembleaSchema = baseSchema(
     millesimiTotali: { type: Number, default: 0 },
     dataConvocazione: { type: Date },
     dataChiusura: { type: Date },
+    /**
+     * Condòmini che hanno aperto l'ordine del giorno.
+     *
+     * È un array per utente e non uno stato, per la stessa ragione di `lettaDa`
+     * sulle comunicazioni: lo stato dell'assemblea è unico e vale per tutti,
+     * mentre "l'ho letto" è una cosa che riguarda chi legge. Serve al badge della
+     * sezione Assemblee, che indica le convocazioni non ancora aperte.
+     */
+    odgVistoDa: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     // Qui non c'è un elenco di allegati: l'assemblea non è un documento con dei
     // fogli attaccati, è un elenco di punti all'ordine del giorno, e sono quelli
     // ad avere il proprio materiale. Un allegato qui non saprebbe a quale punto
@@ -155,6 +164,8 @@ export interface AssembleaDoc {
   millesimiTotali: number;
   dataConvocazione?: Date;
   dataChiusura?: Date;
+  /** Utenti che hanno aperto l'ordine del giorno: vedi il campo nello schema. */
+  odgVistoDa: ObjectId[];
   allegati: ObjectId[];
   note?: string;
   createdAt: Date;

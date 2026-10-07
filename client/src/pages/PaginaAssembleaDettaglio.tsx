@@ -31,19 +31,45 @@ interface DettaglioVerbale {
 
 export default function PaginaAssembleaDettaglio() {
   const { id } = useParams<{ id: string }>();
-  const { condominioId } = useAuth();
+  const { condominioId, utente, aggiornaDaVedere } = useAuth();
   const naviga = useNavigate();
+  const sonoCondomino = utente?.role === 'condomino';
 
   const dettaglio = useApi<DettaglioVerbale>(
     (segnale) =>
-      api
-        .get<DettaglioVerbale>(`/condomini/${condominioId}/assemblee/${id}/dettaglio-verbale`, undefined, {
-          signal: segnale,
-        })
-        .then((r) => r.data),
-    [condominioId, id],
+      // Il condòmino non ha accesso a `dettaglio-verbale` (è una scrittura):
+      // riceve l'assemblea dalla rotta di lettura, con presenze, votazioni ed
+      // elenco condòmini già tolti dal server.
+      (sonoCondomino
+        ? api
+            .get<Assemblea>(`/condomini/${condominioId}/assemblee/${id}`, undefined, { signal: segnale })
+            .then((r) => ({ assemblea: r.data, condomini: [] }))
+        : api
+            .get<DettaglioVerbale>(`/condomini/${condominioId}/assemblee/${id}/dettaglio-verbale`, undefined, {
+              signal: segnale,
+            })
+            .then((r) => r.data)),
+    [condominioId, id, sonoCondomino],
     { attivo: Boolean(condominioId && id) },
   );
+
+  /*
+   * Aprire la convocazione è ciò che spegne il badge della sezione Assemblee.
+   * La segnatura tiene l'id dell'assemblea vista: senza, il passaggio da una
+   * convocazione all'altra riassegnerebbe la stessa promessa e il contatore
+   * delle altre resterebbe indietro.
+   */
+  const [visto, setVisto] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sonoCondomino || !condominioId || !id || !dettaglio.dati || visto === id) return;
+    setVisto(id);
+    void api
+      .post(`/condomini/${condominioId}/assemblee/${id}/odg-visto`)
+      .then(() => aggiornaDaVedere())
+      .catch(() => {
+        // Il badge non è critico: l'ordine del giorno è aperto lo stesso.
+      });
+  }, [sonoCondomino, condominioId, id, dettaglio.dati, visto, aggiornaDaVedere]);
 
   if (!condominioId) return null;
 
@@ -82,6 +108,12 @@ function ContenutoDettaglio({
   const [statoScelto, setStatoScelto] = useState('');
   const [inStato, setInStato] = useState(false);
   const puoScrivere = puo('assemblee:scrivere');
+  /**
+   * Il server ha risposto togliendo presenze, votazioni ed elenco condòmini:
+   * la pagina non deve nemmeno proporre i controlli che quei dati servirebbero
+   * a compilare.
+   */
+  const solaLettura = Boolean(a.solaLettura);
   const transizioni = a.transizioniConsentite ?? [];
   const { chiedi, elemento: conferma } = useConferma();
 
@@ -220,7 +252,12 @@ function ContenutoDettaglio({
     setVotazioni((precedenti) => precedenti.map((v) => (v.ordine === ordine ? { ...v, ...campi } : v)));
   }
 
-  const readonly = a.stato === 'conclusa';
+  /**
+   * L'assemblea è conclusa, oppure è arrivata in sola lettura (è il condòmino
+   * che riceve il materiale della convocazione): in entrambi i casi qui non si
+   * scrive, e `readonly` spegne ogni controllo insieme.
+   */
+  const readonly = a.stato === 'conclusa' || solaLettura;
 
   return (
     <>
@@ -231,28 +268,35 @@ function ContenutoDettaglio({
         azioni={<EtichettaStato stato={a.stato} />}
       />
 
-      <div className="statistiche" style={{ marginBottom: 'var(--sp-4)' }}>
-        <div className="statistica">
-          <div className="statistica-valore">
-            {presenti.length}/{dati.condomini.length}
+      {/*
+        Il foglio delle presenze non è un dato del condòmino: senza elenco non
+        c'è un rapporto presenti/totali da mostrare, e presentarglielo come
+        0/0 sembrerebbe un errore di caricamento.
+      */}
+      {!solaLettura && (
+        <div className="statistiche" style={{ marginBottom: 'var(--sp-4)' }}>
+          <div className="statistica">
+            <div className="statistica-valore">
+              {presenti.length}/{dati.condomini.length}
+            </div>
+            <div className="statistica-etichetta">Condomini presenti</div>
           </div>
-          <div className="statistica-etichetta">Condomini presenti</div>
-        </div>
-        <div className="statistica">
-          <div className="statistica-valore">{numero(millesimiPresenti)}</div>
-          <div className="statistica-etichetta">
-            Millesimi presenti ({percentuale((millesimiPresenti / (millesimiTotali || 1)) * 100)})
+          <div className="statistica">
+            <div className="statistica-valore">{numero(millesimiPresenti)}</div>
+            <div className="statistica-etichetta">
+              Millesimi presenti ({percentuale((millesimiPresenti / (millesimiTotali || 1)) * 100)})
+            </div>
+          </div>
+          <div className="statistica">
+            <div className="statistica-valore">{deleghe.size}</div>
+            <div className="statistica-etichetta">Deleghe</div>
+          </div>
+          <div className="statistica">
+            <div className="statistica-valore">{a.ordineDelGiorno.length}</div>
+            <div className="statistica-etichetta">Punti in discussione</div>
           </div>
         </div>
-        <div className="statistica">
-          <div className="statistica-valore">{deleghe.size}</div>
-          <div className="statistica-etichetta">Deleghe</div>
-        </div>
-        <div className="statistica">
-          <div className="statistica-valore">{a.ordineDelGiorno.length}</div>
-          <div className="statistica-etichetta">Punti in discussione</div>
-        </div>
-      </div>
+      )}
 
       {errore && (
         <div className="avviso avviso-pericolo" style={{ marginBottom: 'var(--sp-3)' }} role="alert">
@@ -346,52 +390,57 @@ function ContenutoDettaglio({
         />
       )}
 
-      <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
-        <div className="scheda-intestazione">
-          <h2>Presenze</h2>
-          {!readonly && (
-            <button type="button" className="btn btn-secondario btn-sm" onClick={salvaPresenze} disabled={inSalvataggio}>
-              Salva
-            </button>
-          )}
-        </div>
-        <div className="elenco">
-          {dati.condomini.map((c) => (
-            <div key={c.id} className="voce">
-              <span className="cresci pila-1">
-                <strong>{c.nome}</strong>
-                <span className="testo-faint">
-                  {c.unita.join(', ')} · {etichette.regime(c.regime)} · {numero(c.millesimi)} millesimi
-                  {c.quota < 100 ? ` · quota ${c.quota}%` : ''}
+      {/* Il foglio presenze non esiste per il condòmino: vederlo vuoto con la
+          casella di chi è presente sarebbe invitarlo a modificare dati che non
+          gli appartengono. */}
+      {!solaLettura && (
+        <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
+          <div className="scheda-intestazione">
+            <h2>Presenze</h2>
+            {!readonly && puoScrivere && (
+              <button type="button" className="btn btn-secondario btn-sm" onClick={salvaPresenze} disabled={inSalvataggio}>
+                Salva
+              </button>
+            )}
+          </div>
+          <div className="elenco">
+            {dati.condomini.map((c) => (
+              <div key={c.id} className="voce">
+                <span className="cresci pila-1">
+                  <strong>{c.nome}</strong>
+                  <span className="testo-faint">
+                    {c.unita.join(', ')} · {etichette.regime(c.regime)} · {numero(c.millesimi)} millesimi
+                    {c.quota < 100 ? ` · quota ${c.quota}%` : ''}
+                  </span>
                 </span>
-              </span>
-              <CasellaPresenza
-                id={c.id}
-                presente={c.presente}
-                readonly={readonly}
-                opzioni={dati.condomini.map((x) => ({ id: x.id, nome: x.nome }))}
-                onCambia={(presente, delegaA) => {
-                  void api
-                    .put(`/condomini/${condominioId}/assemblee/${a._id}/presenze`, {
-                      presenze: dati.condomini.map((x) => ({
-                        condomino: x.id,
-                        presente: x.id === c.id ? presente : x.presente,
-                        delegaA: x.id === c.id ? delegaA : x.delegaA,
-                      })),
-                    })
-                    .then(() => onCambiato())
-                    .catch(() => setErrore('Aggiornamento presenze non riuscito'));
-                }}
-              />
-            </div>
-          ))}
-        </div>
-      </section>
+                <CasellaPresenza
+                  id={c.id}
+                  presente={c.presente}
+                  readonly={readonly || !puoScrivere}
+                  opzioni={dati.condomini.map((x) => ({ id: x.id, nome: x.nome }))}
+                  onCambia={(presente, delegaA) => {
+                    void api
+                      .put(`/condomini/${condominioId}/assemblee/${a._id}/presenze`, {
+                        presenze: dati.condomini.map((x) => ({
+                          condomino: x.id,
+                          presente: x.id === c.id ? presente : x.presente,
+                          delegaA: x.id === c.id ? delegaA : x.delegaA,
+                        })),
+                      })
+                      .then(() => onCambiato())
+                      .catch(() => setErrore('Aggiornamento presenze non riuscito'));
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="scheda" style={{ marginBottom: 'var(--sp-4)' }}>
         <div className="scheda-intestazione">
           <h2>Ordine del giorno e votazioni</h2>
-          {!readonly && (
+          {!readonly && puoScrivere && (
             <button type="button" className="btn btn-secondario btn-sm" onClick={salvaVotazioni} disabled={inSalvataggio}>
               Salva
             </button>
@@ -458,7 +507,7 @@ function ContenutoDettaglio({
                     </div>
                   )}
 
-                  {!readonly && (
+                  {!readonly && puoScrivere && (
                     <div className="riga">
                       <div className="campo cresci">
                         <label className="campo-etichetta" htmlFor={`f-${punto.ordine}`}>
@@ -514,7 +563,7 @@ function ContenutoDettaglio({
                         id={`e-${punto.ordine}`}
                         className="area"
                         value={vot.esito ?? ''}
-                        disabled={readonly}
+                        disabled={readonly || !puoScrivere}
                         onChange={(e) =>
                           aggiornaVoto(punto.ordine, {
                             esito: (e.target.value || null) as Votazione['esito'],
@@ -552,7 +601,7 @@ function ContenutoDettaglio({
                       id={`d-${punto.ordine}`}
                       className="area area-testo"
                       style={{ minHeight: '5rem' }}
-                      readOnly={readonly}
+                      readOnly={readonly || !puoScrivere}
                       value={delibere[punto.ordine] ?? punto.delibera ?? ''}
                       onChange={(e) => setDelibere((p) => ({ ...p, [punto.ordine]: e.target.value }))}
                       placeholder="Scrivi il testo della delibera approvata…"
@@ -807,7 +856,10 @@ interface VerbalePieno {
 }
 
 function SezioneVerbale({ assemblea, onEsci }: { assemblea: Assemblea; onEsci: () => void }) {
-  const { condominioId } = useAuth();
+  const { condominioId, puo } = useAuth();
+  // Generare o rigenerare il verbale è una scrittura: a chi legge (il
+  // condòmino) la sezione mostra soltanto il testo, quando c'è.
+  const puoScrivere = puo('assemblee:scrivere');
   const [anteprima, setAnteprima] = useState<string | null>(null);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -880,18 +932,24 @@ function SezioneVerbale({ assemblea, onEsci }: { assemblea: Assemblea; onEsci: (
 
         {!verbale.inCorso && !v && (
           <>
-            <p className="testo-muto">
-              Il verbale viene redatto automaticamente a partire da presenze, votazioni e delibere. Prima di salvarlo
-              puoi controllarne l’anteprima.
-            </p>
-            <div className="riga">
-              <button type="button" className="btn btn-secondario cresci" onClick={anteprimaTesto} disabled={inCorso}>
-                Anteprima
-              </button>
-              <button type="button" className="btn btn-primario cresci" onClick={genera} disabled={inCorso}>
-                {inCorso ? 'Generazione…' : 'Genera verbale'}
-              </button>
-            </div>
+            {puoScrivere ? (
+              <>
+                <p className="testo-muto">
+                  Il verbale viene redatto automaticamente a partire da presenze, votazioni e delibere. Prima di salvarlo
+                  puoi controllarne l’anteprima.
+                </p>
+                <div className="riga">
+                  <button type="button" className="btn btn-secondario cresci" onClick={anteprimaTesto} disabled={inCorso}>
+                    Anteprima
+                  </button>
+                  <button type="button" className="btn btn-primario cresci" onClick={genera} disabled={inCorso}>
+                    {inCorso ? 'Generazione…' : 'Genera verbale'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="testo-muto">Il verbale di questa assemblea non è ancora stato redatto.</p>
+            )}
           </>
         )}
 

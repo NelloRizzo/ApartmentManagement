@@ -423,6 +423,13 @@ export interface Assemblea {
    * replicare la regola nel client la farebbe divergere.
    */
   transizioniConsentite?: StatoAssemblea[];
+  /**
+   * Il server ha risposto togliendo i dati di gestione: presenze, votazioni ed
+   * elenco dei condòmini arrivano vuoti e nessuna scrittura è consentita.
+   * Non è un semplice filtro sul client, perché i campi mancanti restano
+   * mancanti e la pagina deve poter dire perché.
+   */
+  solaLettura?: boolean;
 }
 
 /**

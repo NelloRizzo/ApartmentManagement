@@ -2,6 +2,74 @@
 
 Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
+## 2026-10-07
+
+### Il condòmino vede le assemblee convocate, con il badge che le segnala
+
+Dal `new_tasks.md`: "quando un'assemblea viene convocata, i condòmini dovrebbero
+vedere in un'apposita sezione Assemblee l'odg e poter visionare gli allegati. un
+badge nella sezione Assemblea indica che è stata convocata un'assemblea".
+
+**La sezione esisteva ma era vietata al condòmino.** Le rotte `c/assemblee` e
+`c/assemblee/:id` stavano sotto `RichiediAmministratore` e la voce di
+navigazione aveva `permesso: 'assemblee:leggere'`, che per un condòmino vale
+`false` in `puo()` — cioè la voce non sarebbe **mai** comparsa, non perché il
+server la rifiutasse ma perché il client la filtrava prima. Le guardie di
+lettura, al contrario, lasciano passare chi non è admin: il confine era già nel
+controller, e la guardia di rotta lo duplicava in modo sbagliato. Ora le due
+rotte non hanno guardia di ruolo, la voce non ha `permesso` (come "Le mie quote"
+e "Verbali") e il server continua a decidere cosa arriva.
+
+**Il dettaglio arrivava spezzettato.** Il condòmino apriva la pagina con
+`GET /dettaglio-verbale`, rotta di scrittura (`requirePermesso`) che quindi gli
+rispondeva 403: la pagina restava vuota. Ora chi non scrive legge da `GET
+/:id`, che per il condòmino toglie presenze, votazioni, elenco condòmini e
+transizioni e risponde `solaLettura: true`. Il campo non è un filtro sul
+client: i campi mancanti restano mancanti e la pagina deve poter dire perché,
+nascondendo il foglio presenze (che altrimenti apparirebbe come "0/0" e come un
+invito a modificare), le statistiche che di quel foglio dipendono e ogni
+pulsante di salvataggio. Stessa logica in elenco, dove `list` toglie presenze e
+votazioni ma lascia `numeroPresenti` e millesimi, che sono il riepilogo che
+l'assemblea pubblica. Il verbale, se esiste, resta leggibile: è il documento che
+il condòmino va a cercare.
+
+**Il badge conta una cosa sola, per utente.** `GET /assemblee/da-vedere` conta
+le assemblee `convocata`/`in_corso` in cui il condòmino ha una riga di presenza
+e che non ha ancora aperto, con `odgVistoDa` (array per utente, come `lettaDa`
+sulle comunicazioni: se guardasse `stato`, la prima lettura lo azzererebbe per
+tutti). `conclusa` non conta: dopo l'assemblea il documento che conta è il
+verbale. La stessa regola della lista, non un secondo calcolo: due filtri che
+partono da domande diverse divergono, e il badge deve contare le stesse cose che
+l'elenco mostra. `POST /odg-visto` segna la lettura aprendo la convocazione, e
+il contatore non è critico: se la chiamata fallisce l'ODG si è aperto lo stesso.
+Il tipo del badge in `VoceNavigazione` è passato da `boolean` a
+`'nonLette' | 'daVedere'`, perché una voce dichiara quale dei due contatori
+legge invece di leggere sempre quello delle comunicazioni.
+
+**La convocazione ora scrive i convocati.** Punto che ho fatto decidere, perché
+cambia il dominio: `presenze` non veniva popolata alla convocazione, e sia la
+lista sia il badge cercano il condòmino dentro quelle righe
+(`presenze elemMatch`). Senza righe la convocazione sarebbe restata invisibile
+a chi doveva vederla **finché l'amministratore non salvava il foglio
+presenze**, che di norma succede durante l'assemblea: il badge non sarebbe mai
+partito nella situazione normale. `completaConvocati` aggiunge una riga
+`presente: false` per ogni iscritto attivo mancante quando lo stato diventa
+visibile (`convocata`, `in_corso`, `conclusa`), per `changeState` e per la
+`PATCH` che cambia stato. Aggiunge solo i mancanti: un foglio già compilato in
+bozza resta com'è, e per l'amministratore non cambia nulla, perché il foglio di
+presenze l'interfaccia lo costruisce comunque dall'elenco dei condòmini.
+
+La lista del condòmino, `getOne` e `assicuraVisibileAlCondomino` usano adesso la
+costante `STATI_VISIBILI` del service: visibilità ed elenco dei convocati devono
+dire la stessa cosa, e divergerebbero al primo stato aggiunto.
+
+Verifiche: sezione 9 di `verifica-crud-assemblee.ps1` (sedici controlli: i
+convocati scritti alla convocata, il badge che sale e che scende dopo
+`odg-visto`, la ripetizione che non muove il conteggio, zero per
+l'amministratore, e la risposta al condòmino tutta in sola lettura con
+`dettaglio-verbale` che risponde 403). Suite a 34 controlli, totale
+`npm run verifica` a 219, più typecheck, lint e 30 test.
+
 ## 2026-10-06
 
 ### Il superadmin può modificare un amministratore e reimpostarne la password

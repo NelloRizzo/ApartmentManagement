@@ -16,6 +16,9 @@ interface AuthState {
   selezionaCondominio: (id: string) => void;
   nonLette: number;
   aggiornaNonLette: () => Promise<void>;
+  /** Convocazioni la cui ordine del giorno il condòmino non ha ancora aperto. */
+  daVedere: number;
+  aggiornaDaVedere: () => Promise<void>;
   /** L'utente ha il permesso indicato (la scrittura implica la lettura). */
   puo: (permesso: Permesso) => boolean;
   isSuperadmin: boolean;
@@ -32,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem(CHIAVE_CONDOMINIO),
   );
   const [nonLette, setNonLette] = useState(0);
+  const [daVedere, setDaVedere] = useState(0);
 
   const applicaUtente = useCallback((profilo: ProfiloCompleto) => {
     // I campi arrivano dal server: si normalizza comunque, perché un valore
@@ -79,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUtente(null);
       setAccessToken(null);
       setNonLette(0);
+      setDaVedere(0);
     });
   }, []);
 
@@ -95,6 +100,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void aggiornaNonLette();
   }, [aggiornaNonLette]);
+
+  /**
+   * Convocazioni non ancora aperte dal condòmino.
+   *
+   * Come `nonLette` è un contatore non critico: l'errore si ignora e il badge
+   * resta dov'era. La chiamata parte solo per il condòmino perché per gli altri
+   * ruoli il server risponderebbe sempre zero.
+   */
+  const aggiornaDaVedere = useCallback(async () => {
+    if (!utente || !condominioId) return;
+    if (utente.role !== 'condomino') {
+      setDaVedere(0);
+      return;
+    }
+    try {
+      const risposta = await api.get<{ daVedere: number }>(`/condomini/${condominioId}/assemblee/da-vedere`);
+      setDaVedere(risposta.data.daVedere);
+    } catch {
+      // Il contatore non è critico: si ignora l'errore.
+    }
+  }, [utente, condominioId]);
+
+  useEffect(() => {
+    void aggiornaDaVedere();
+  }, [aggiornaDaVedere]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -118,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(null);
     setUtente(null);
     setNonLette(0);
+    setDaVedere(0);
     localStorage.removeItem(CHIAVE_CONDOMINIO);
   }, []);
 
@@ -184,10 +215,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       selezionaCondominio,
       nonLette,
       aggiornaNonLette,
+      daVedere,
+      aggiornaDaVedere,
       puo,
       isSuperadmin,
     }),
-    [utente, inCaricamento, login, logout, ricarica, reinviaConferma, condominioId, selezionaCondominio, nonLette, aggiornaNonLette, puo, isSuperadmin],
+    [utente, inCaricamento, login, logout, ricarica, reinviaConferma, condominioId, selezionaCondominio, nonLette, aggiornaNonLette, daVedere, aggiornaDaVedere, puo, isSuperadmin],
   );
 
   return <AuthContext.Provider value={valore}>{children}</AuthContext.Provider>;

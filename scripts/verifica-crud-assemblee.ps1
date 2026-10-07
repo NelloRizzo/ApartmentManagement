@@ -90,6 +90,45 @@ Check 'condomino non cambia stato' ((Status Post "/condomini/$cid/assemblee/$bid
 Check 'condomino non elimina' ((Status Delete "/condomini/$cid/assemblee/$bid" $null $co) -eq 'FORBIDDEN')
 Invoke-RestMethod -Method Delete -Uri "$base/condomini/$cid/assemblee/$bid" -Headers $h | Out-Null
 
+"== 9. il badge delle convocazioni, lato condòmino =="
+function DaVedere($token) {
+  (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/da-vedere" -Headers (Auth $token)).data.daVedere
+}
+
+$prima = DaVedere $co
+$z = NuovaAssemblea "Badge $([guid]::NewGuid().ToString('N').Substring(0,4))"
+$zid = Id $z
+Check 'assemblea del test badge creata' ($null -ne $zid)
+$t = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee/$zid/stato" -Headers $h -ContentType 'application/json' -Body (@{stato='convocata'}|ConvertTo-Json)
+Check 'convocazione riuscita' ($t.data.stato -eq 'convocata') $t.error.message
+
+# Il badge conta le assemblee in cui il condòmino ha una riga di presenza: se la
+# convocazione non scrive i convocati, non la vedrà mai.
+$convocati = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$zid" -Headers $h).data.presenze
+Check 'convocati scritti appena convocata' ($convocati.Count -gt 0) "righe $($convocati.Count)"
+
+$dopo = DaVedere $co
+Check 'la convocazione entra nel badge' ($dopo -eq ($prima + 1)) "daVedere $prima -> $dopo"
+
+$p = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$zid" -Headers (Auth $co)).data
+Check 'condomino: arriva in sola lettura' ($p.solaLettura -eq $true)
+Check 'condomino: presenze non esposte' ($p.presenze.Count -eq 0) "righe $($p.presenze.Count)"
+Check 'condomino: votazioni non esposte' ($p.votazioni.Count -eq 0)
+Check 'condomino: elenco condomini non esposto' ($p.elencoCondomini.Count -eq 0)
+Check 'condomino: nessuna transizione di stato' ($p.transizioniConsentite.Count -eq 0)
+Check 'condomino: verbale non esposto' ($null -eq $p.verbale)
+Check 'condomino: ordine del giorno completo' ($p.ordineDelGiorno.Count -eq 1) "punti $($p.ordineDelGiorno.Count)"
+Check 'dettaglio-verbale vietato al condomino' ((Status Get "/condomini/$cid/assemblee/$zid/dettaglio-verbale" $null $co) -eq 'FORBIDDEN')
+
+$aperto = (Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee/$zid/odg-visto" -Headers (Auth $co) -ContentType 'application/json' -Body '{}').data.visto
+Check 'segnatura odg-visto accettata' ($aperto -eq $true)
+$letto = DaVedere $co
+Check 'aperto l ordine del giorno il badge scende' ($letto -eq ($dopo - 1)) "daVedere $dopo -> $letto"
+Check 'ripetere la segnatura non cambia il conteggio' ((DaVedere $co) -eq $letto)
+Check 'per lamministratore il badge resta zero' ((DaVedere $ad) -eq 0)
+
+Invoke-RestMethod -Method Delete -Uri "$base/condomini/$cid/assemblee/$zid" -Headers $h | Out-Null
+
 ""
 "esito: $ok ok, $ko ko"
 if ($ko -gt 0) { exit 1 }

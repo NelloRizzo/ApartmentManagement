@@ -1,4 +1,4 @@
-import { Assemblea, type AssembleaDoc } from '../models/index.js';
+import { Assemblea, Condomino, type AssembleaDoc } from '../models/index.js';
 import { STATI_ASSEMBLEA } from '../types/domain.js';
 import { badRequest, conflict, notFound } from '../utils/errors.js';
 
@@ -79,6 +79,44 @@ export function transizioniConsentite(
   da: (typeof STATI_ASSEMBLEA)[number],
 ): (typeof STATI_ASSEMBLEA)[number][] {
   return STATI_ASSEMBLEA.filter((a) => a !== da && puoTransizionare(da, a));
+}
+
+/**
+ * Stati in cui l'assemblea è visibile a chi non amministra.
+ *
+ * È la lista che `list` e `getOne` usano per il condòmino: qui sta in un posto
+ * solo perché visibilità e elenco dei convocati devono dire la stessa cosa, e
+ * divergerebbero al primo stato aggiunto. Il badge (`contaDaVedere`) ne usa una
+ * parte: `conclusa` non conta più, perché dopo l'assemblea il documento che
+ * conta è il verbale.
+ */
+export const STATI_VISIBILI = ['convocata', 'in_corso', 'conclusa'] as const;
+
+export function visibileAlCondomino(stato: string): boolean {
+  return (STATI_VISIBILI as readonly string[]).includes(stato);
+}
+
+/**
+ * L'elenco dei convocati nasce con la convocazione.
+ *
+ * Una riga di `presenze` indica **chi è convocato**, non solo chi è presente:
+ * è il filtro con cui la lista e il badge riconoscono le assemblee in cui il
+ * condòmino ha una riga. Senza queste righe la convocazione resterebbe invisibile
+ * a chi deve vederla, perché il foglio delle presenze viene compilato di norma
+ * durante l'assemblea, non prima.
+ *
+ * Aggiunge solo i membri mancanti: un foglio già compilato in bozza resta com'è.
+ */
+export async function completaConvocati(assemblea: AssembleaDoc): Promise<void> {
+  const iscritti = await Condomino.find({ condominio: assemblea.condominio, attivo: true })
+    .select('_id')
+    .lean();
+  const giaConvocati = new Set(assemblea.presenze.map((p) => String(p.condomino)));
+  for (const iscritto of iscritti) {
+    if (!giaConvocati.has(String(iscritto._id))) {
+      assemblea.presenze.push({ condomino: iscritto._id, presente: false });
+    }
+  }
 }
 
 /**

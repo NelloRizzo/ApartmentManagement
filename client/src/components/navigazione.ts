@@ -17,8 +17,12 @@ export interface VoceNavigazione {
   primaria?: boolean;
   /** Permesso richiesto per vedere la voce. */
   permesso?: Permesso;
-  /** Mostra il contatore delle comunicazioni non lette. */
-  badge?: boolean;
+  /**
+   * Contatore mostrato sulla voce: le comunicazioni non lette oppure le
+   * convocazioni il cui ordine del giorno non è stato ancora aperto. Il valore
+   * viene da `useAuth`, quindi ogni voce dichiara quale dei due legge.
+   */
+  badge?: 'nonLette' | 'daVedere';
 }
 
 export interface GruppoNavigazione {
@@ -61,7 +65,7 @@ const amministratore: GruppoNavigazione[] = [
   },
   {
     titolo: 'Comunicazione',
-    voci: [{ a: '/c/comunicazioni', etichetta: 'Messaggi', icona: '✉', primaria: true, permesso: 'comunicazioni:leggere', badge: true }],
+    voci: [{ a: '/c/comunicazioni', etichetta: 'Messaggi', icona: '✉', primaria: true, permesso: 'comunicazioni:leggere', badge: 'nonLette' }],
   },
 ];
 
@@ -71,8 +75,12 @@ const condomino: GruppoNavigazione[] = [
     titolo: 'Il mio condominio',
     voci: [
       { a: '/c/versamenti', etichetta: 'Le mie quote', icona: '€', primaria: true },
+      // Nessun `permesso`: i condòmini non ne hanno, quindi una voce con
+      // `permesso: 'assemblee:leggere'` verrebbe filtrata e non comparirebbe
+      // mai. Il confine è nel controller, come per la lista.
+      { a: '/c/assemblee', etichetta: 'Assemblee', icona: '⚑', primaria: true, badge: 'daVedere' },
       { a: '/c/verbali', etichetta: 'Verbali', icona: '✎', primaria: true },
-      { a: '/c/comunicazioni', etichetta: 'Messaggi', icona: '✉', primaria: true, badge: true },
+      { a: '/c/comunicazioni', etichetta: 'Messaggi', icona: '✉', primaria: true, badge: 'nonLette' },
     ],
   },
 ];
@@ -85,7 +93,7 @@ const piattaforma: GruppoNavigazione[] = [
       { a: '/p', etichetta: 'Panorama', icona: '◱', primaria: true },
       { a: '/p/contratti', etichetta: 'Contratti', icona: '§' },
       { a: '/p/amministratori', etichetta: 'Amministratori', icona: '⚿' },
-      { a: '/p/messaggi', etichetta: 'Messaggi', icona: '✉', badge: true },
+      { a: '/p/messaggi', etichetta: 'Messaggi', icona: '✉', badge: 'nonLette' },
     ],
   },
 ];

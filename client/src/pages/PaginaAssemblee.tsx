@@ -33,9 +33,12 @@ interface ModelloOrdine {
 }
 
 export default function PaginaAssemblee() {
-  const { condominioId } = useAuth();
+  const { condominioId, puo } = useAuth();
   const [filtroStato, setFiltroStato] = useState('');
   const [creazioneAperta, setCreazioneAperta] = useState(false);
+  // Il condòmino non scrive assemblee: nasconde la creazione e gli stati che
+  // il server non gli restituirebbe mai.
+  const puoScrivere = puo('assemblee:scrivere');
 
   const elenco = useApi<ApiEnvelope<Assemblea[]>>(
     (segnale) =>
@@ -57,19 +60,27 @@ export default function PaginaAssemblee() {
     <RichiediCondominio>
       <TitoloPagina
         titolo="Assemblee"
-        descrizione="Convocazioni, ordine del giorno e verbalizzazione."
+        descrizione={
+          puoScrivere
+            ? 'Convocazioni, ordine del giorno e verbalizzazione.'
+            : 'Le assemblee convocate nel tuo condominio, con l’ordine del giorno e il materiale di ogni punto.'
+        }
         azioni={
-          <button
-            type="button"
-            className="btn btn-primario"
-            onClick={() => setCreazioneAperta((v) => !v)}
-          >
-            {creazioneAperta ? 'Annulla' : '+ Nuova assemblea'}
-          </button>
+          puoScrivere ? (
+            <button
+              type="button"
+              className="btn btn-primario"
+              onClick={() => setCreazioneAperta((v) => !v)}
+            >
+              {creazioneAperta ? 'Annulla' : '+ Nuova assemblea'}
+            </button>
+          ) : undefined
         }
       />
 
-      {creazioneAperta && <ModuloAssemblea onCreatata={elenco.ricarica} onAnnulla={() => setCreazioneAperta(false)} />}
+      {creazioneAperta && puoScrivere && (
+        <ModuloAssemblea onCreatata={elenco.ricarica} onAnnulla={() => setCreazioneAperta(false)} />
+      )}
 
       <div className="campo" style={{ marginBottom: 'var(--sp-3)' }}>
         <label className="campo-etichetta" htmlFor="filtro-stato">
@@ -77,11 +88,13 @@ export default function PaginaAssemblee() {
         </label>
         <select id="filtro-stato" className="area" value={filtroStato} onChange={(e) => setFiltroStato(e.target.value)}>
           <option value="">Tutti gli stati</option>
-          <option value="bozza">Bozza</option>
+          {/* Bozza e annullata non arrivano mai a chi non amministra: filtrare
+              su quegli stati mostrerebbe un elenco vuoto che sembra un errore. */}
+          {puoScrivere && <option value="bozza">Bozza</option>}
           <option value="convocata">Convocata</option>
           <option value="in_corso">In corso</option>
           <option value="conclusa">Conclusa</option>
-          <option value="annullata">Annullata</option>
+          {puoScrivere && <option value="annullata">Annullata</option>}
         </select>
       </div>
 
@@ -91,7 +104,11 @@ export default function PaginaAssemblee() {
       {elenco.dati && assemblee.length === 0 && (
         <PaginaVuota
           titolo="Nessuna assemblea"
-          descrizione="Crea la prima assemblea per convocare i condòmini e verbalizzare le delibere."
+          descrizione={
+            puoScrivere
+              ? 'Crea la prima assemblea per convocare i condòmini e verbalizzare le delibere.'
+              : 'Non ci sono ancora assemblee convocate nel tuo condominio.'
+          }
         />
       )}
 

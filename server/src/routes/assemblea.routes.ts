@@ -31,7 +31,19 @@ router.get('/', requirePermessoLettura('assemblee:leggere'), validate(assembleaL
 // Prima di `/:id`: dichiarata dopo, la parola "modelli" verrebbe letta come id.
 router.get('/modelli', requirePermessoLettura('assemblee:leggere'), validate(modelliOrdineQuery, 'query'), c.modelli);
 router.post('/', controllaServizio, requirePermesso('assemblee:scrivere'), validate(assembleaCreateSchema), c.create);
+/*
+ * Badge della sezione Assemblee e segnatura di lettura.
+ *
+ * `da-vedere` sta **prima** di `/:id` per lo stesso motivo per cui `modelli` sta
+ * prima: dichiarata dopo, la parola verrebbe letta come un id e risponderebbe
+ * 400 su una rotta che non ha niente a che fare con le assemblee.
+ *
+ * Non c'è `requirePermesso`: il badge e la segnatura riguardano anche il
+ * condòmino, per cui il confine è dentro il controller, come per `list`.
+ */
+router.get('/da-vedere', c.contaDaVedere);
 router.get('/:id', requirePermessoLettura('assemblee:leggere'), validate(assembleaParams, 'params'), c.getOne);
+router.post('/:id/odg-visto', validate(assembleaParams, 'params'), c.segnaVisto);
 router.patch(
   '/:id',
   controllaServizio, requirePermesso('assemblee:scrivere'),

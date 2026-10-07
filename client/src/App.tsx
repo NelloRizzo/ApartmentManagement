@@ -123,22 +123,14 @@ export default function App() {
               </RichiediRuoli>
             }
           />
-          <Route
-            path="c/assemblee"
-            element={
-              <RichiediAmministratore>
-                <PaginaAssemblee />
-              </RichiediAmministratore>
-            }
-          />
-          <Route
-            path="c/assemblee/:id"
-            element={
-              <RichiediAmministratore>
-                <PaginaAssembleaDettaglio />
-              </RichiediAmministratore>
-            }
-          />
+          {/*
+            Aperto anche al condòmino: è la sezione in cui legge l'ordine del
+            giorno delle assemblee convocate. Il server gli restituisce solo
+            quelle in cui è iscritto e senza i dati di gestione, quindi non
+            serve una guardia di ruolo qui.
+          */}
+          <Route path="c/assemblee" element={<PaginaAssemblee />} />
+          <Route path="c/assemblee/:id" element={<PaginaAssembleaDettaglio />} />
           <Route
             path="c/quote"
             element={

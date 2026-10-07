@@ -6,7 +6,7 @@ import { etichette } from '@/components/Elementi';
 import { gruppiNavigazione, vociPrimarie, type VoceNavigazione } from '@/components/navigazione';
 
 export default function GuscioApp() {
-  const { utente, logout, condominioId, selezionaCondominio, nonLette, puo } = useAuth();
+  const { utente, logout, condominioId, selezionaCondominio, nonLette, daVedere, puo } = useAuth();
   const naviga = useNavigate();
   const posizione = useLocation();
   const [pannelloAperto, setPannelloAperto] = useState(false);
@@ -51,6 +51,10 @@ export default function GuscioApp() {
   // Le sezioni non delegate non vengono mostrate: il backend le rifiuterebbe.
   const gruppi = gruppiNavigazione(utente.role, puo, amministra);
   const primarie = vociPrimarie(utente.role, puo, amministra);
+
+  /** Quale dei due contatori legge questa voce: vedi `VoceNavigazione.badge`. */
+  const conteggio = (voce: VoceNavigazione): number =>
+    voce.badge === 'nonLette' ? nonLette : voce.badge === 'daVedere' ? daVedere : 0;
 
   async function esci() {
     await logout();
@@ -102,7 +106,7 @@ export default function GuscioApp() {
               <VoceBarra
                 key={voce.a}
                 voce={voce}
-                nonLette={voce.badge ? nonLette : 0}
+                conteggio={conteggio(voce)}
                 attivo={posizione.pathname === voce.a}
               />
             ))}
@@ -157,19 +161,22 @@ export default function GuscioApp() {
 
         {/* Barra inferiore: solo su schermi stretti (il CSS la nasconde da 48rem). */}
         <nav className="nav-inferiore" aria-label="Sezioni principali">
-          {primarie.map((voce) => (
-            <NavLink
-              key={voce.a}
-              to={voce.a}
-              className={({ isActive }) => `nav-voce${isActive ? ' attiva' : ''}`}
-            >
-              <span className="nav-icona" aria-hidden="true">
-                {voce.icona}
-              </span>
-              <span>{voce.etichetta}</span>
-              {voce.badge && nonLette > 0 && <span className="nav-badge">{nonLette > 9 ? '9+' : nonLette}</span>}
-            </NavLink>
-          ))}
+          {primarie.map((voce) => {
+            const n = conteggio(voce);
+            return (
+              <NavLink
+                key={voce.a}
+                to={voce.a}
+                className={({ isActive }) => `nav-voce${isActive ? ' attiva' : ''}`}
+              >
+                <span className="nav-icona" aria-hidden="true">
+                  {voce.icona}
+                </span>
+                <span>{voce.etichetta}</span>
+                {n > 0 && <span className="nav-badge">{n > 9 ? '9+' : n}</span>}
+              </NavLink>
+            );
+          })}
           <button
             type="button"
             className="nav-voce"
@@ -217,7 +224,7 @@ export default function GuscioApp() {
                       <VoceBarra
                         key={voce.a}
                         voce={voce}
-                        nonLette={voce.badge ? nonLette : 0}
+                        conteggio={conteggio(voce)}
                         attivo={posizione.pathname === voce.a}
                       />
                     ))}
@@ -238,11 +245,12 @@ export default function GuscioApp() {
 
 function VoceBarra({
   voce,
-  nonLette,
+  conteggio,
   attivo,
 }: {
   voce: VoceNavigazione;
-  nonLette: number;
+  /** Valore già risolto sul tipo di badge della voce. */
+  conteggio: number;
   attivo: boolean;
 }) {
   return (
@@ -251,7 +259,7 @@ function VoceBarra({
         {voce.icona}
       </span>
       <span className="cresci">{voce.etichetta}</span>
-      {voce.badge && nonLette > 0 && <span className="nav-badge">{nonLette > 9 ? '9+' : nonLette}</span>}
+      {conteggio > 0 && <span className="nav-badge">{conteggio > 9 ? '9+' : conteggio}</span>}
     </NavLink>
   );
 }

@@ -10,11 +10,14 @@ import { buildTabella } from '../services/tabellaMillesimale.service.js';
 import { millesimiDiCondomino } from '../services/verbale.service.js';
 import {
   assicuraAssembleaModificabile,
+  completaConvocati,
   nextNumeroAssemblea,
   puoTransizionare,
+  STATI_VISIBILI,
   transizioniConsentite,
   testoConvocazione,
   validaChiusura,
+  visibileAlCondomino,
 } from '../services/assemblea.service.js';
 import { modelliOrdineDelGiorno, puntoDaModello } from '../services/modelliOrdine.service.js';
 import { toAllegati } from '../middleware/upload.js';
@@ -48,8 +51,8 @@ export const list = asyncHandler(async (req, res) => {
       .lean();
     // Un condòmino vede solo le assemblee convocate o già svolte in cui è iscritto.
     query.stato = q.stato
-      ? { $in: ['convocata', 'in_corso', 'conclusa'].filter((s) => s === q.stato) }
-      : { $in: ['convocata', 'in_corso', 'conclusa'] };
+      ? { $in: STATI_VISIBILI.filter((s) => s === q.stato) }
+      : { $in: [...STATI_VISIBILI] };
     query.$and = [{ presenze: { $elemMatch: { condomino: { $in: legs.map((l) => l._id) } } } }];
   }
 
@@ -77,6 +80,11 @@ export const list = asyncHandler(async (req, res) => {
       // solo non dice quante persone sono in sala, e a frazionee diverse.
       numeroPresenti: d.presenze.filter((p) => p.presente).length,
       verbale: verbalePerAssemblea.get(String(d._id)) ?? null,
+      // Foglio delle presenze ed esito delle votazioni non sono dati del
+      // condòmino, che qui riceveva per intero un documento che `getOne` gli
+      // restituiva già privato. I totali restano: sono il riepilogo che
+      // l'assemblea stessa pubblica.
+      ...(utente.role === 'condomino' ? { presenze: [], votazioni: [] } : {}),
     })),
     totale,
     page,
@@ -84,19 +92,45 @@ export const list = asyncHandler(async (req, res) => {
   );
 });
 
+/**
+ * Le assemblee che un condòmino è tenuto a vedere.
+ *
+ * Come nella lista: solo quelle già convocate, mai bozze e annullate, e solo
+ * quelle in cui ha una riga di presenza. `getOne` non aveva nessun controllo e
+ * restituiva a chiunque qualunque assemblea dello stabile per id.
+ */
+async function assicuraVisibileAlCondomino(
+  assemblea: AssembleaDoc,
+  condominioId: string,
+  utenteId: string,
+): Promise<void> {
+  const visibile =
+    visibileAlCondomino(assemblea.stato) &&
+    (await Condomino.exists({ condominio: condominioId, utente: utenteId, attivo: true })) !== null;
+  if (!visibile) throw notFound('Assemblea non trovata');
+}
+
 export const getOne = asyncHandler(async (req, res) => {
+  const utente = currentUser(req);
   const assemblea = await Assemblea.findOne({ _id: req.params.id, condominio: req.params.condominioId })
     .populate('presiedutaDa', 'nome cognome email')
     .populate('segretario', 'nome cognome email')
     .lean<AssembleaDoc>();
   if (!assemblea) throw notFound('Assemblea non trovata');
 
+  const condominio = utente.role === 'condomino';
+  if (condominio) await assicuraVisibileAlCondomino(assemblea, req.params.condominioId!, utente.sub);
+
   const [verbale, condomini] = await Promise.all([
     Verbale.findOne({ assemblea: assemblea._id }).select('-testo').lean(),
-    Condomino.find({ condominio: assemblea.condominio, attivo: true })
-      .populate('utente', 'nome cognome')
-      .populate('unita', 'codice')
-      .lean(),
+    // L'elenco dei condòmini serve a chi presiede: è il foglio delle presenze.
+    // Per un condòmino è un documento dello stabio, quindi non lo riceve.
+    condominio
+      ? Promise.resolve([])
+      : Condomino.find({ condominio: assemblea.condominio, attivo: true })
+          .populate('utente', 'nome cognome')
+          .populate('unita', 'codice')
+          .lean(),
   ]);
 
   // Gli allegati sono sui punti all'ordine del giorno, quindi annidati. Qui prima
@@ -104,11 +138,33 @@ export const getOne = asyncHandler(async (req, res) => {
   // avrebbe fatto fallire la rotta appena tolto quel campo.
   const [conAllegati] = await espandiAnnidati([assemblea], 'ordineDelGiorno');
 
+  if (!condominio) {
+    ok(res, {
+      ...conAllegati,
+      verbale: verbale ?? null,
+      elencoCondomini: condomini,
+      transizioniConsentite: transizioniConsentite(assemblea.stato),
+    });
+    return;
+  }
+
+  /*
+   * Il condòmino vede il materiale della convocazione e nient'altro: le
+   * presenze dicono chi c'era e chi no, le votazioni dicono come ha votato
+   * ciascuno, e le transizioni sono un comando dell'amministratore. Nessuno dei
+   * tre è un dato suo.
+   */
   ok(res, {
     ...conAllegati,
-    verbale: verbale ?? null,
-    elencoCondomini: condomini,
-    transizioniConsentite: transizioniConsentite(assemblea.stato),
+    presenze: [],
+    votazioni: [],
+    presiedutaDa: assemblea.presiedutaDa ?? null,
+    segretario: assemblea.segretario ?? null,
+    verbale: null,
+    elencoCondomini: [],
+    transizioniConsentite: [],
+    /** Non è un semplice filtro: i campi mancanti restano, e il frontend deve poter dire perché. */
+    solaLettura: true,
   });
 });
 
@@ -145,6 +201,68 @@ export const create = asyncHandler(async (req, res) => {
   created(res, assemblea);
 });
 
+/**
+ * Conta le assemblee che il chiamante deve ancora vedere.
+ *
+ * Stessa regola di `list`, e come `contaNonLette` parte dallo stesso filtro
+ * invece di contare tutto e togliere: due calcoli che partono da domande diverse
+ * divergono, e il badge deve contare le stesse cose che l'elenco mostra.
+ *
+ * `odgVistoDa` è un array per utente, non uno stato: l'assemblea è un documento
+ * unico e "l'ho letto" riguarda chi legge. Se il badge guardasse `stato`, la
+ * prima lettura lo azzererebbe per tutti.
+ */
+export const contaDaVedere = asyncHandler(async (req, res) => {
+  const utente = currentUser(req);
+  const condominioId = req.params.condominioId!;
+
+  if (utente.role !== 'condomino') {
+    ok(res, { daVedere: 0 });
+    return;
+  }
+
+  const id = new Types.ObjectId(String(utente.sub));
+  const legs = await Condomino.find({ condominio: condominioId, utente: utente.sub, attivo: true })
+    .select('_id')
+    .lean();
+
+  const daVedere = await Assemblea.countDocuments({
+    $and: [
+      { condominio: oid(condominioId) },
+      // Conclusa non conta più: l'ODG si legge prima, e dopo l'assemblea è il
+      // verbale il documento che conta.
+      { stato: { $in: ['convocata', 'in_corso'] } },
+      { presenze: { $elemMatch: { condomino: { $in: legs.map((l) => l._id) } } } },
+      { odgVistoDa: { $ne: id } },
+    ],
+  });
+
+  ok(res, { daVedere });
+});
+
+/**
+ * Segna l'ordine del giorno come visto.
+ *
+ * Serve al badge, non al permesso: anche un condòmino che non amministra ha un
+ * diritto di lettura su questo documento, perché `requirePermessoLettura` lascia
+ * passare chi non è admin e il confine è dentro il controller.
+ */
+export const segnaVisto = asyncHandler(async (req, res) => {
+  const utente = currentUser(req);
+  const assemblea = await Assemblea.findOne({ _id: req.params.id, condominio: req.params.condominioId }).lean<AssembleaDoc>();
+  if (!assemblea) throw notFound('Assemblea non trovata');
+  if (utente.role === 'condomino') {
+    await assicuraVisibileAlCondomino(assemblea, req.params.condominioId!, utente.sub);
+  }
+
+  await Assemblea.updateOne(
+    { _id: assemblea._id },
+    { $addToSet: { odgVistoDa: new Types.ObjectId(String(utente.sub)) } },
+  );
+
+  ok(res, { visto: true });
+});
+
 export const update = asyncHandler(async (req, res) => {
   const assemblea = await Assemblea.findOne({ _id: req.params.id, condominio: req.params.condominioId });
   if (!assemblea) throw notFound('Assemblea non trovata');
@@ -158,6 +276,14 @@ const aggiornata = await Assemblea.findOneAndUpdate(
   // Il filtro è lo stesso della `findOne` qui sopra: se il doc esisteva, esiste
   // ancora. Il controllo serve a non passare `null` al resto della risposta.
   if (!aggiornata) throw notFound('Assemblea non trovata');
+
+  // Stessa ragione di `changeState`: se il PATCH ha portato l'assemblea fra gli
+  // stati visibili, i convocati vanno scritti adesso o il condòmino non la
+  // vedrebbe.
+  if (visibileAlCondomino(aggiornata.stato)) {
+    await completaConvocati(aggiornata);
+    await aggiornata.save();
+  }
 
   await auditLog({
     condominio: String(assemblea.condominio),
@@ -188,6 +314,10 @@ export const changeState = asyncHandler(async (req, res) => {
 assemblea.stato = stato;
   if (stato === 'convocata' && !assemblea.dataConvocazione) assemblea.dataConvocazione = new Date();
   if (stato === 'conclusa') assemblea.dataChiusura = new Date();
+  // L'elenco dei convocati nasce con la convocazione: è la riga che la lista e
+  // il badge del condòmino cercano, e aspettare il foglio presenze (che si
+  // compila durante l'assemblea) lascerebbe la convocazione invisibile.
+  if (visibileAlCondomino(stato)) await completaConvocati(assemblea);
   await assemblea.save();
 
   await auditLog({
