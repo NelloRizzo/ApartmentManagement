@@ -265,6 +265,13 @@ In `quoteVersamenti.service.ts`:
   comparire mai fra i condòmini: senza quel campo il selettore non potrebbe
   proporre chi sta gestendo l'assemblea. `utenteId` dei condòmini va letto da
   `utente._id` (il campo è popolato).
+- **La delega in verbale si risolve su `Condomino`, non su `User`.**
+  `Presenza.delegaA` è un riferimento a `Condomino` (così lo dichiara il modello,
+  così lo manda il selettore del foglio presenze, così lo scrive il seed):
+  cercando quell'id in `User` la ricerca non trovava nessuno e la riga
+  "presente tramite delega a …" non compariva mai, pur contando le deleghe in
+  apertura. Il nome arriva dal `utente` popolato del legame, e senza filtro su
+  `attivo` perché il delegatario resta tale anche se oggi non è più iscritto.
 - Le delibere dei modelli contengono i segnaposto `{totale}` e `{totaleMensile}`:
   vengono risolti in `deliberaRisolta` con le cifre del bilancio collegato al
   punto, cioè quando i numeri sono quelli che l'assemblea approva davvero.
@@ -587,7 +594,7 @@ npm run dev            # in un altro terminale
 npm run verifica       # dalla root: esegue gli script in sequenza
 ```
 
-`npm run verifica` riporta il totale dei controlli (233 al momento) e si ferma al
+`npm run verifica` riporta il totale dei controlli (239 al momento) e si ferma al
 primo script che fallisce. Gli script sono in `scripts/` e hanno tutti la stessa
 forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 409 della transizione illegale) accanto a quelli positivi.
@@ -603,7 +610,7 @@ forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 | `verifica-crud-condomini.ps1` | creazione, codice autogenerato e non modificabile, modifica, cancellazione, dipendenze bloccanti |
 | `verifica-crud-verbali.ps1` | generazione, modifica, approvazione, revoca, eliminazione |
 | `verifica-crud-versamenti.ps1` | registrazione, campi immutabili, cancellazione |
-| `verifica-crud-assemblee.ps1` | transizioni di stato, ricalcolo millesimi, eliminazione, il badge delle convocazioni, la risposta al condòmino e il segretario indicato durante lo svolgimento |
+| `verifica-crud-assemblee.ps1` | transizioni di stato, ricalcolo millesimi, eliminazione, il badge delle convocazioni, la risposta al condòmino, il segretario indicato durante lo svolgimento e la delega riportata nel verbale |
 | `verifica-crud-bilanci.ps1` | creazione, duplicata rifiutata, approvazione, revoca, eliminazione |
 | `verifica-millesimi.ps1` | tabella vuota non valida, tabella coerente, revisione squilibrata rifiutata |
 | `verifica-attivita.ps1` | bacheca del team, assegnatari, proprietario contro assegnatario, thread a un livello, ordine per scadenza con le senza scadenza in fondo |

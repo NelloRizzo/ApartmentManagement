@@ -1,4 +1,4 @@
-import { Assemblea, Condominio, Condomino, Unita, User, Verbale, type AssembleaDoc, type CondominioDoc, type VerbaleDoc } from '../models/index.js';
+import { Assemblea, Condominio, Condomino, Unita, Verbale, type AssembleaDoc, type CondominioDoc, type VerbaleDoc } from '../models/index.js';
 import { buildTabella } from './tabellaMillesimale.service.js';
 import { conflict, notFound } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
@@ -118,10 +118,17 @@ export async function generaDatiVerbale(assembleaId: string): Promise<VerbaleDat
   const deleganti = condomini.filter((c) => presenze.some((p) => String(p.condomino) === String(c._id) && p.delegaA));
   if (deleganti.length > 0) {
     const targets = [...new Set(deleganti.map((c) => String(presenze.find((p) => String(p.condomino) === String(c._id))?.delegaA)))];
-    const users = await User.find({ _id: { $in: targets } }).select('nome cognome').lean();
+    // `delegaA` è un riferimento a `Condomino`, come dichiara il modello: cercando
+    // in `User` l'id non trovava nessuno e la riga "presente tramite delega a …"
+    // saltava, pur essendo le deleghe contate in apertura. Il filtro per `attivo`
+    // non c'è apposta: il delegatario resta tale anche se oggi non è più iscritto.
+    const delegatari = await Condomino.find({ _id: { $in: targets } })
+      .populate('utente', 'nome cognome')
+      .lean();
     for (const c of deleganti) {
       const p = presenze.find((x) => String(x.condomino) === String(c._id));
-      const u = users.find((x) => String(x._id) === String(p?.delegaA));
+      const d = delegatari.find((x) => String(x._id) === String(p?.delegaA));
+      const u = d?.utente as unknown as { nome: string; cognome: string } | undefined;
       if (u) delegaPerId.set(String(c._id), `${u.nome} ${u.cognome}`);
     }
   }

@@ -167,6 +167,38 @@ Check 'verbale senza segretario: formula generica' ($ap -like '*Funge da segreta
 
 Invoke-RestMethod -Method Delete -Uri "$base/condomini/$cid/assemblee/$sgid" -Headers $h | Out-Null
 
+"== 11. la delega compare nel verbale =="
+$dg = NuovaAssemblea "Delega $([guid]::NewGuid().ToString('N').Substring(0,4))"
+$dgid = Id $dg
+Check 'assemblea del test delega creata' ($null -ne $dgid)
+$d = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$dgid/dettaglio-verbale" -Headers $h).data
+$delegante = $d.condomini[0]
+$delegatario = $d.condomini[1]
+Check 'due condomini a disposizione' ([bool]$delegante.id -and [bool]$delegatario.id) "condomini: $($d.condomini.Count)"
+
+# `delegaA` e' un riferimento a Condomino: il servizio cercava quell'id in User,
+# la ricerca non trovava nessuno e la riga saltava, pur contando le deleghe.
+$s = Status Put "/condomini/$cid/assemblee/$dgid/presenze" @{presenze=@(
+  @{condomino=$delegante.id; presente=$true; delegaA=$delegatario.id},
+  @{condomino=$delegatario.id; presente=$true}
+)} $ad
+Check 'presenze con delega salvate' ($s -eq '200') "esito $s"
+
+$ap = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$dgid/verbale/anteprima" -Headers $h).data.testo
+Check 'la delega conta nel riepilogo' ($ap.Contains('di cui 1 per delega'))
+Check 'la riga riporta il nome del delegatario' ($ap.Contains("presente tramite delega a $($delegatario.nome)")) "atteso: $($delegatario.nome)"
+
+$s = Status Put "/condomini/$cid/assemblee/$dgid/presenze" @{presenze=@(
+  @{condomino=$delegante.id; presente=$true},
+  @{condomino=$delegatario.id; presente=$true}
+)} $ad
+Check 'presenze riscritte senza delega' ($s -eq '200') "esito $s"
+$ap = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$dgid/verbale/anteprima" -Headers $h).data.testo
+Check 'tolta la delega la riga sparisce' (-not $ap.Contains('presente tramite delega a'))
+Check 'nessuno per delega in apertura' ($ap.Contains('nessuno per delega'))
+
+Invoke-RestMethod -Method Delete -Uri "$base/condomini/$cid/assemblee/$dgid" -Headers $h | Out-Null
+
 ""
 "esito: $ok ok, $ko ko"
 if ($ko -gt 0) { exit 1 }

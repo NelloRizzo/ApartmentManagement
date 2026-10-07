@@ -4,6 +4,36 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-07
 
+### Nel verbale non compariva mai "presente tramite delega a …"
+
+Dal `bugs.md`: "nel verbale non compare mai la riga 'presente tramite delega a …':
+`verbale.service.ts` cerca chi è stato delegato con `User.find`, ma `delegaA` punta
+a un `Condomino`".
+
+**Un riferimento letto sulla collezione sbagliata.** `Presenza.delegaA` è un
+`ref: 'Condomino'`: lo dichiara il modello, così lo manda il selettore del foglio
+presenze ("Delega a …" fra i condòmini), così lo scrive il seed quando compila le
+presenze dell'assemblea dimostrativa. Il servizio costruiva la mappa dei
+delegatari con `User.find({ _id: { $in: targets } })`: gli id dei legami non
+trovavano nessuno in `User`, `u` restava `undefined` e la riga veniva saltata. Le
+deleghe invece apparivano, perché `numeroDeleghe` conta semplicemente le presenze
+con `delegaA` e la riga in apertura ("di cui 1 per delega") dipende solo da quel
+conteggio: per questo il testo sembrava coerente, il numero c'era e il nome no.
+
+**Ora si cerca in `Condomino`** e il nome arriva dal suo `utente` popolato, senza
+filtro su `attivo`: il delegatario resta tale anche se oggi non è più iscritto allo
+stabile, e perderne il nome significherebbe di nuovo saltare la riga.
+
+Le cinque voci restanti di `bugs.md` sono finite in `TODO.md` sotto PRIORITA ALTA
+(7-11), con conferma: nessuna dipende da questa modifica.
+
+Verifiche: sezione 11 di `verifica-crud-assemblee.ps1`, otto controlli — presenze
+con delega salvate, il conteggio in apertura, il nome del delegatario nella riga,
+e la riga che sparisce quando la delega viene tolta. Suite a 196 controlli verdi su
+7 script su 9, 239 se i due script fermi tornassero a passare: `verifica-millesimi`
+e `verifica-allegati` falliscono per i difetti 10 e 11 di `TODO.md`, che non
+dipendono da qui. Typecheck, lint e 30 test.
+
 ### Il superadmin non ha più posizioni nei condomini: spariscono i "Condomìni amministrati"
 
 Dal `bugs.md`: "un superadmin nella propria dashboard vede i condomìni amministrati
@@ -94,7 +124,7 @@ compare, e la formula generica quando la designazione viene tolta. Il verbale si
 legge in anteprima, che non persiste nulla: concludere l'assemblea per
 generarlo l'avrebbe lasciata nel database, dove non si può più eliminare. Suite a
 188 controlli verdi su 7 script su 9: `verifica-millesimi` e `verifica-allegati`
-continuano a fallire per i due difetti già in coda in `bugs.md`.
+continuano a fallire per i due difetti passati a `TODO.md` (voci 10 e 11).
 
 ### Il condòmino vede le assemblee convocate, con il badge che le segnala
 

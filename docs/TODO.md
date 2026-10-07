@@ -4,6 +4,25 @@ _Le voci di primo livello sono numerate e la numerazione è continua: per parlar
 basta il numero. Una voce realizzata si cancella e la sua ragione va nel
 `CHANGELOG.md`, come per i bug in `bugs.md`._
 
+PRIORITA ALTA
+_(voci spostate da `bugs.md`, la coda dei difetti trovati navigando: qui non si
+più persa, ma non le abbiamo ancora risolte)_
+- 7. In convocazione i condòmini vedono il testo della delibera
+  - un'assemblea convocata non dovrebbe mostrare ai condòmini il testo di una delibera, visto che la delibera non è stata ancora approvata in stato "Convocazione"
+  - in uno stato diverso, "In corso" o "Conclusa" la delibera può essere presentata
+- 8. Caratteri strani prima del titolo degli allegati
+  - controllare i titoli degli allegati, perché in un caso compaiono caratteri strani prima del titolo
+  - non è stato determinato in quale pagina né su quale file
+- 9. Etichetta del punto collegato a un bilancio da rivedere
+  - verificare se ha senso l'etichetta "Punto collegato a un bilancio: gli importi indicati con «€ …» saranno sostituiti dalle cifre definitive del documento quando il verbale viene generato."
+  - il funzionamento è quello: `{totale}` e `{totaleMensile}` vengono risolti in `deliberaRisolta` alla generazione, quindi è la formulazione a essere da valutare
+- 10. `verifica-millesimi` non parte da un seed appena fatto
+  - lo script crea un condominio di prova, ma il contratto del seed è già a 2 su 2 ("Capacità contrattuale superata: il contratto prevede 2 condomìni e ne sono in carico 2") e si ferma al primo passo
+  - da decidere se il seed deve lasciare un posteggio libero o se lo script deve procurarsi uno stabile senza tabella in un altro modo
+- 11. `verifica-allegati` sezione 12 manda i campi sbagliati
+  - quando non trova una bozza con un punto all'ordine del giorno e ne crea una, manda `dataInizio` invece di `data` e non manda `luogo`, quindi il server risponde 400 con "Invalid date" e "Required"
+  - fallisce solo subito dopo un seed, quando l'unica assemblea esistente è conclusa
+
 PRIORITA MEDIA
 - 1. Privacy policy per ruolo ⏸ rimandato
   - serve un'informativa distinta per chi usa l'applicazione, perché il titolare del trattamento cambia
