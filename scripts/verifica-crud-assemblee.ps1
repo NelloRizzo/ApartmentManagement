@@ -129,6 +129,44 @@ Check 'per lamministratore il badge resta zero' ((DaVedere $ad) -eq 0)
 
 Invoke-RestMethod -Method Delete -Uri "$base/condomini/$cid/assemblee/$zid" -Headers $h | Out-Null
 
+"== 10. il segretario si indica mentre l'assemblea e in corso =="
+$sg = NuovaAssemblea "Segretario $([guid]::NewGuid().ToString('N').Substring(0,4))"
+$sgid = Id $sg
+Check 'assemblea del test segretario creata' ($null -ne $sgid)
+$t = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee/$sgid/stato" -Headers $h -ContentType 'application/json' -Body (@{stato='convocata'}|ConvertTo-Json)
+Check 'convocazione riuscita' ($t.data.stato -eq 'convocata') $t.error.message
+$t = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee/$sgid/stato" -Headers $h -ContentType 'application/json' -Body (@{stato='in_corso'}|ConvertTo-Json)
+Check 'assemblea in corso' ($t.data.stato -eq 'in_corso') $t.error.message
+
+$d = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$sgid/dettaglio-verbale" -Headers $h).data
+Check 'dettaglio: amministratore esposto fra i candidati' ([bool]$d.amministratore.id) "amministratore: $($d.amministratore | ConvertTo-Json -Compress)"
+$candidato = $d.condomini[0]
+Check 'dettaglio: candidati condòmini presenti' ([bool]$candidato.utenteId)
+
+$s = Status Patch "/condomini/$cid/assemblee/$sgid" (@{segretario=$candidato.utenteId}) $ad
+Check 'segretario salvato con un PATCH durante lo svolgimento' ($s -eq '200') "esito $s"
+Check 'il condòmino non designa il segretario' ((Status Patch "/condomini/$cid/assemblee/$sgid" (@{segretario=$candidato.utenteId}) $co) -eq 'FORBIDDEN')
+
+$d = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$sgid/dettaglio-verbale" -Headers $h).data
+Check 'segretario restituito popolato con il suo id' ($d.assemblea.segretario._id -eq $candidato.utenteId) "segretario: $($d.assemblea.segretario | ConvertTo-Json -Compress)"
+Check 'segretario con nome e cognome' ([bool]$d.assemblea.segretario.nome -and [bool]$d.assemblea.segretario.cognome)
+
+# Il verbale è l'atto in cui il segretario conta: l'anteprima lo compone senza
+# persistere nulla, quindi si legge qui senza dover concludere l'assemblea
+# (che poi non si potrebbe più eliminare).
+$ap = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$sgid/verbale/anteprima" -Headers $h).data.testo
+Check 'verbale: il nome in apertura' ($ap -like "*Funge da segretario*$($candidato.nome)*")
+Check 'verbale: il nome nella firma' ($ap -like "*redatto da $($candidato.nome)*")
+
+$s = Status Patch "/condomini/$cid/assemblee/$sgid" (@{segretario=$null}) $ad
+Check 'segretario tolto' ($s -eq '200') "esito $s"
+$d = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$sgid/dettaglio-verbale" -Headers $h).data
+Check 'senza designazione il campo e vuoto' ($null -eq $d.assemblea.segretario) "segretario: $($d.assemblea.segretario | ConvertTo-Json -Compress)"
+$ap = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$sgid/verbale/anteprima" -Headers $h).data.testo
+Check 'verbale senza segretario: formula generica' ($ap -like '*Funge da segretario il condomino designato*')
+
+Invoke-RestMethod -Method Delete -Uri "$base/condomini/$cid/assemblee/$sgid" -Headers $h | Out-Null
+
 ""
 "esito: $ok ok, $ko ko"
 if ($ko -gt 0) { exit 1 }

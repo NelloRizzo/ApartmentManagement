@@ -15,6 +15,12 @@ import type { Assemblea, StatoAssemblea, TipoAssemblea, Votazione } from '@/type
 
 interface DettaglioVerbale {
   assemblea: Assemblea;
+  /**
+   * L'amministratore dello stabile, che non compare mai fra i condòmini: serve
+   * al selettore del segretario, che altrimenti non lo potrebbe indicare.
+   * Il condòmino riceve la convocazione senza questo campo.
+   */
+  amministratore?: { id: string; nome: string; cognome: string } | null;
   condomini: {
     id: string;
     utenteId: string;
@@ -98,7 +104,7 @@ function ContenutoDettaglio({
   onCambiato: () => void;
   onEsci: () => void;
 }) {
-  const { condominioId, puo } = useAuth();
+  const { condominioId, puo, utente } = useAuth();
   const a = dati.assemblea;
   const [votazioni, setVotazioni] = useState<Votazione[]>([]);
   const [delibere, setDelibere] = useState<Record<number, string>>({});
@@ -107,6 +113,13 @@ function ContenutoDettaglio({
   const [inModifica, setInModifica] = useState(false);
   const [statoScelto, setStatoScelto] = useState('');
   const [inStato, setInStato] = useState(false);
+  /**
+   * Scelta non ancora confermata dal server: `null` significa "vale ciò che ha
+   * risposto l'API", così un salvataggio fallito fa tornare il selettore al
+   * valore vero invece di lasciarlo su una designazione che non esiste.
+   */
+  const [segretarioScelto, setSegretarioScelto] = useState<string | null>(null);
+  const [inSegretario, setInSegretario] = useState(false);
   const puoScrivere = puo('assemblee:scrivere');
   /**
    * Il server ha risposto togliendo presenze, votazioni ed elenco condòmini:
@@ -136,6 +149,10 @@ function ContenutoDettaglio({
     setDelibere(
       Object.fromEntries(a.ordineDelGiorno.map((p) => [p.ordine, p.delibera ?? ''])),
     );
+    // Ogni risposta nuova è la verità sul segretario: azzerando la scelta
+    // locale qui, e non appena il PATCH risponde, il selettore non torna un
+    // attimo al valore vecchio mentre il caricamento è ancora in corso.
+    setSegretarioScelto(null);
   }, [a]);
 
   const presenti = dati.condomini.filter((c) => c.presente);
@@ -259,12 +276,73 @@ function ContenutoDettaglio({
    */
   const readonly = a.stato === 'conclusa' || solaLettura;
 
+  const segretarioAttuale = a.segretario?._id ?? '';
+  const segretarioValore = segretarioScelto ?? segretarioAttuale;
+
+  /**
+   * Chi può essere designato segretario.
+   *
+   * L'amministratore presiede ma non compare mai fra i condòmini, quindi senza
+   * il suo campo dal dettaglio chi sta gestendo l'assemblea non potrebbe
+   * indicare se stesso; l'utente corrente copre il caso dell'assistente. Il
+   * `Map` tiene il primo nome che trova per id, così un amministratore che è
+   * anche condòmino non compare due volte.
+   */
+  const candidatiSegretario = (() => {
+    const elenco = new Map<string, string>();
+    const aggiungi = (id?: string, nome?: string) => {
+      if (id && nome && !elenco.has(id)) elenco.set(id, nome);
+    };
+    if (dati.amministratore) {
+      aggiungi(dati.amministratore.id, `${dati.amministratore.nome} ${dati.amministratore.cognome}`);
+    }
+    aggiungi(utente?.id, utente?.nomeCompleto);
+    for (const c of dati.condomini) aggiungi(c.utenteId, c.nome);
+    // Un segretario già designato che oggi non compare più nello stabile
+    // resterebbe fuori dalle opzioni e il selettore mostrerebbe un valore che
+    // non esiste: resta nell'elenco con il nome che ha in anagrafica.
+    if (segretarioAttuale && !elenco.has(segretarioAttuale) && a.segretario) {
+      aggiungi(segretarioAttuale, `${a.segretario.nome} ${a.segretario.cognome}`);
+    }
+    return [...elenco.entries()];
+  })();
+
+  /**
+   * Il segretario si indica mentre l'assemblea si sta svolgendo: è in quel
+   * momento che si decide chi redige il verbale, e il server accetta il campo
+   * finché l'assemblea non è conclusa. È un solo valore, quindi si salva alla
+   * scelta come una presenza, non con un salvataggio collettivo.
+   */
+  async function salvaSegretario(valore: string) {
+    setErrore(null);
+    setSegretarioScelto(valore);
+    setInSegretario(true);
+    try {
+      await api.patch(`/condomini/${condominioId}/assemblee/${a._id}`, { segretario: valore || null });
+      // La scelta resta finché non arriva il caricamento nuovo, che la azzera:
+      // azzerarla adesso il selettore tornerebbe al valore vecchio per un attimo.
+      notifica(valore ? 'Segretario indicato' : 'Segretario tolto');
+      onCambiato();
+    } catch (e) {
+      // Tornando a `null` il selettore riprende il valore del server: lasciarlo
+      // sulla scelta rifiutata mostrerebbe un segretario che non è stato salvato.
+      setSegretarioScelto(null);
+      setErrore(
+        e instanceof ApiError ? (e.primoErroreValidazione ?? e.message) : 'Salvataggio del segretario non riuscito',
+      );
+    } finally {
+      setInSegretario(false);
+    }
+  }
+
   return (
     <>
       {conferma}
       <TitoloPagina
         titolo={`Assemblea ${etichette.tipoAssemblea(a.tipo)} n. ${a.numero}`}
-        descrizione={`${fmtData(a.data)}${a.oraInizio ? ` ore ${a.oraInizio}` : ''} · ${a.luogo}`}
+        descrizione={`${fmtData(a.data)}${a.oraInizio ? ` ore ${a.oraInizio}` : ''} · ${a.luogo}${
+          a.segretario ? ` · Segretario: ${a.segretario.nome} ${a.segretario.cognome}` : ''
+        }`}
         azioni={<EtichettaStato stato={a.stato} />}
       />
 
@@ -351,6 +429,37 @@ function ContenutoDettaglio({
                     Da questo stato non ci sono altre transizioni consentite.
                   </div>
                 )}
+
+                {/*
+                  Il segretario non si conosce prima dell'assemblea: si decide in
+                  sede, e da lì in poi è il nome che compare nel verbale. Per
+                  questo lo si indica qui e non nella convocazione.
+                */}
+                <div className="riga">
+                  <div className="campo cresci">
+                    <label className="campo-etichetta" htmlFor="segretario-assemblea">
+                      Segretario
+                    </label>
+                    <select
+                      id="segretario-assemblea"
+                      className="area"
+                      value={segretarioValore}
+                      disabled={inSegretario}
+                      onChange={(e) => void salvaSegretario(e.target.value)}
+                    >
+                      <option value="">Nessuno indicato</option>
+                      {candidatiSegretario.map(([id, nome]) => (
+                        <option key={id} value={id}>
+                          {nome}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="campo-aiuto">
+                      Il nome finisce nel verbale, in apertura e nella firma: se nessuno è indicato il
+                      testo parla del condomino designato dall&apos;assemblea.
+                    </p>
+                  </div>
+                </div>
 
                 <div className="riga">
                   <button

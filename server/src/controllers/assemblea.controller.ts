@@ -455,13 +455,20 @@ export const dettaglioVerbale = asyncHandler(async (req, res) => {
     .lean<AssembleaDoc>();
   if (!assemblea) throw notFound('Assemblea non trovata');
 
-  const [tabella, condomini, unita] = await Promise.all([
+  const [tabella, condomini, unita, stabile] = await Promise.all([
     buildTabella(String(assemblea.condominio)),
     Condomino.find({ condominio: assemblea.condominio, attivo: true })
       .populate('utente', 'nome cognome email')
       .lean(),
     Unita.find({ condominio: assemblea.condominio }).select('codice').lean(),
+    // Chi presiede è l'amministratore, che però non compare mai fra i condòmini:
+    // senza questo populate l'elenco dei candidati a segretario non lo conterrebbe
+    // nemmeno, e chi sta gestendo l'assemblea non potrebbe indicare se stesso.
+    Condominio.findById(assemblea.condominio).populate('amministratore', 'nome cognome').lean(),
   ]);
+  const amministratore = stabile?.amministratore as unknown as
+    | { _id: unknown; nome: string; cognome: string }
+    | null;
 
   const quotaPerUnita = new Map(tabella.righe.map((r) => [r.unitaId, r.quote.diritto]));
   const codiceUnita = new Map(unita.map((u) => [String(u._id), u.codice]));
@@ -473,12 +480,17 @@ ok(res, {
       ...assemblea,
       transizioniConsentite: transizioniConsentite(assemblea.stato),
     },
+    amministratore: amministratore
+      ? { id: String(amministratore._id), nome: amministratore.nome, cognome: amministratore.cognome }
+      : null,
     condomini: condomini.map((c) => {
       const presenza = assemblea.presenze.find((p) => String(p.condomino) === String(c._id));
-      const utente = c.utente as unknown as { nome: string; cognome: string; email: string };
+      const utente = c.utente as unknown as { _id: unknown; nome: string; cognome: string; email: string };
       return {
         id: String(c._id),
-        utenteId: String(c.utente),
+        // `utente` è popolato: `String(c.utente)` scriverebbe "[object Object]",
+        // e l'id serve al selettore del segretario per designare quella persona.
+        utenteId: String(utente._id),
         nome: `${utente.nome} ${utente.cognome}`,
         email: utente.email,
         regime: c.regime,

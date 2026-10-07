@@ -53,6 +53,49 @@ contrattuale libera su un seed appena fatto (contratto a 2 e 2 occupati), il sec
 manda una creazione di assemblea con il campo `dataInizio` in luogo di `data` e
 senza `luogo`. Sono in coda, non dipendono da qui.
 
+### Il segretario si indica mentre l'assemblea si sta svolgendo
+
+Dal `new_tasks.md`: "in un'assemblea, al momento, non posso indicare il nome del
+segretario".
+
+**Il server lo sa già, mancava il modo di dirglielo.** `Assemblea.segretario` è un
+riferimento a `User` dal primo commit, `assembleaUpdateSchema` lo accetta e
+`verbale.service.ts` lo riporta due volte nel testo: "Funge da segretario …" in
+apertura e il nome nella riga di firma. L'unica cosa che non esisteva era la riga
+in cui scriverlo: da nessuna parte dell'interfaccia si poteva toccare quel campo,
+e il verbale cadeva sempre nella formula generica, "il condomino designato
+dall'assemblea".
+
+**Si indica in sede, non alla convocazione.** Chi redige l'atto si decide mentre
+l'assemblea sta svolgendosi, quindi il selettore sta nella sezione Gestione
+assemblea ed è attivo finché `readonly` è falso, cioè fino a `conclusa`: il
+server rifiuta ogni `PATCH` su un'assemblea conclusa e la UI non propone nemmeno
+il controllo. Il valore si salva alla scelta, come una presenza, perché è una sola
+informazione e non un elenco da rimettere a posto insieme; un salvataggio che
+fallisce riporta il selettore sul valore del server invece di lasciarlo su una
+designazione mai avvenuta.
+
+**I candidati sono chi può davvero esserlo.** L'amministratore — che presiede ma
+non compare mai fra i condòmini, e senza il suo campo nel dettaglio
+`dettaglio-verbale` non avrebbe potuto indicare se stesso —, l'utente che sta
+scrivendo, e i condòmini dello stabile. Un segretario già designato che oggi non
+sta più nello stabile resta nell'elenco con il nome in anagrafica, perché un
+selettore con un valore fuori dalle opzioni mostra una scelta che non esiste.
+
+**Corretto per strada `utenteId`.** `dettaglio-verbale` scrisceva
+`String(c.utente)` su un campo popolato: il client riceveva la stringa
+"[object Object]". Nessuno lo leggeva prima, quindi il difetto era invisibile; il
+selettore ne ha bisogno per designare quella persona.
+
+Verifiche: sezione 10 di `verifica-crud-assemblee.ps1`, quattordici controlli —
+il PATCH durante lo svolgimento, il 403 del condòmino, il campo restituito
+popolato con id e nome, il nome nei due punti del testo in cui il segretario
+compare, e la formula generica quando la designazione viene tolta. Il verbale si
+legge in anteprima, che non persiste nulla: concludere l'assemblea per
+generarlo l'avrebbe lasciata nel database, dove non si può più eliminare. Suite a
+188 controlli verdi su 7 script su 9: `verifica-millesimi` e `verifica-allegati`
+continuano a fallire per i due difetti già in coda in `bugs.md`.
+
 ### Il condòmino vede le assemblee convocate, con il badge che le segnala
 
 Dal `new_tasks.md`: "quando un'assemblea viene convocata, i condòmini dovrebbero

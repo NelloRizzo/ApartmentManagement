@@ -410,7 +410,12 @@ export interface Assemblea {
   secondaConvocazione: boolean;
   quattordiciGgiorni: boolean;
   presiedutaDa?: { nome: string; cognome: string };
-  segretario?: { nome: string; cognome: string };
+  /**
+   * Popolato dal server con nome e cognome. `_id` è l'id dell'utente designato:
+   * è il valore che il selettore del segretario rimanda nel PATCH, mentre nome e
+   * cognome servono a mostrarlo e a metterlo nel verbale.
+   */
+  segretario?: { _id?: string; nome: string; cognome: string };
   ordineDelGiorno: PuntoOrdine[];
   presenze: Presenza[];
   votazioni: Votazione[];
