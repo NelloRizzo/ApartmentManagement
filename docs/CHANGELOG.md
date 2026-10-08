@@ -28,6 +28,26 @@ consecutive.
 Verifiche: `verifica-millesimi` a 12 controlli verdi da un seed appena fatto, suite
 completa a 249 controlli verdi su 9 script, typecheck, lint e 30 test.
 
+### `verifica-allegati` creava l'assemblea di prova con campi che il server non accetta
+
+Dal `TODO.md`: "manda `dataInizio` invece di `data` e non manda `luogo`, quindi il
+server risponde 400 con 'Invalid date' e 'Required'".
+
+Lo script crea un'assemblea di prova quando non ne trova una bozza con un punto
+all'ordine del giorno su cui caricare gli allegati, e succede solo subito dopo un
+seed, quando l'unica assemblea esistente è conclusa. Il corpo che mandava non era
+quello che `assembleaCreateSchema` si aspetta: `dataInizio` non è un campo
+dichiarato e Zod lo scarta, `data` manca e il coerce ci legge `undefined` ("Invalid
+date"), `luogo` obbligatorio manca ("Required"), e c'era anche un `titolo` che
+nessuno schema conosce.
+
+Ora manda `numero`, `tipo`, `data`, `luogo` e l'ordine del giorno, gli stessi campi
+che `NuovaAssemblea` usa già in `verifica-crud-assemblee`.
+
+Verifiche: la creazione dell'assemblea di prova nella sezione 12 di
+`verifica-allegati` e 35 controlli verdi su quello script; suite completa a 249
+controlli verdi su 9 script.
+
 ## 2026-10-07
 
 ### Nel verbale non compariva mai "presente tramite delega a …"

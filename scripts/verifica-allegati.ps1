@@ -173,7 +173,7 @@ if ($asm) {
   if (@($verbali).Count -gt 0) { $asm = $null }
 }
 if (-not $asm) {
-  $nuova = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee" -Headers $h -ContentType 'application/json' -Body (@{ numero = $anno; titolo = "Allegati $suff"; dataInizio = "$anno-01-01"; ordineDelGiorno = @(@{ ordine = 1; titolo = "Punto di prova $suff" }) } | ConvertTo-Json -Depth 6)
+  $nuova = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee" -Headers $h -ContentType 'application/json' -Body (@{ numero = $anno; tipo = 'straordinaria'; data = "$anno-01-01"; luogo = 'Sala prova'; ordineDelGiorno = @(@{ ordine = 1; titolo = "Punto di prova $suff" }) } | ConvertTo-Json -Depth 6)
   Check 'assemblea di prova creata' ($nuova.success -and @($nuova.data.ordineDelGiorno).Count -eq 1) $nuova.error.message
   $asm = $nuova.data
   $usata = $true

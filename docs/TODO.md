@@ -16,10 +16,6 @@ più persa, ma non le abbiamo ancora risolte)_
 - 9. Etichetta del punto collegato a un bilancio da rivedere
   - verificare se ha senso l'etichetta "Punto collegato a un bilancio: gli importi indicati con «€ …» saranno sostituiti dalle cifre definitive del documento quando il verbale viene generato."
   - il funzionamento è quello: `{totale}` e `{totaleMensile}` vengono risolti in `deliberaRisolta` alla generazione, quindi è la formulazione a essere da valutare
-- 11. `verifica-allegati` sezione 12 manda i campi sbagliati
-  - quando non trova una bozza con un punto all'ordine del giorno e ne crea una, manda `dataInizio` invece di `data` e non manda `luogo`, quindi il server risponde 400 con "Invalid date" e "Required"
-  - fallisce solo subito dopo un seed, quando l'unica assemblea esistente è conclusa
-
 PRIORITA MEDIA
 - 1. Privacy policy per ruolo ⏸ rimandato
   - serve un'informativa distinta per chi usa l'applicazione, perché il titolare del trattamento cambia
