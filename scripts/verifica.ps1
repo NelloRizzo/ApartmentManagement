@@ -1,7 +1,7 @@
 # Verifiche di permesso e CRUD sul server locale.
 #
-# Un solo comando instead diCalls separate: ogni script gira in sequenza e il
-# primo rosso interrompe, così la durata totale è nota e limitata.
+# Un solo comando invece di una chiamata per script: girano tutti in sequenza,
+# quelli falliti vengono raccolti e alla fine l'esito è 1 se ce n'è almeno uno.
 #
 #   npm run verifica
 #

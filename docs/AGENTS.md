@@ -21,9 +21,20 @@ riguarda ciò che stai per toccare, chiedere quale affrontare e con quale
 urgenza, invece di decidere da soli l'ordine: il file raccoglie cose che sembrano
 evidenti ma non lo sono.
 
+**All'inizio di ogni sessione, leggere `new_tasks.md`.** Se contiene voci,
+spostarle in `TODO.md` e discutere con l'utente la priorità da assegnare a
+ciascuna prima di lavorarci: il file è la coda di lavoro di chi guida il
+progetto, le voci entrano in `TODO.md` solo dopo questa discussione e non
+vanno svuotate in autonomia.
+
 Quando un punto del `TODO.md` viene realizzato, si sposta in `CHANGELOG.md` con
 la ragione della scelta, che è la parte che serve a chi leggerà il codice fra sei
 mesi.
+
+**Un commit per ogni voce del `TODO.md` affrontata e risolta.** Così la storia
+del repository segue la coda di lavoro: se un intervento non va, si annulla senza
+trascinare gli altri, e da un messaggio di commit si capisce quale voce è stata
+risolta.
 
 ## I bug che si trovano navigando
 
@@ -111,6 +122,15 @@ ripartire e costringe chi guida il progetto a killingli a mano.
   (`Get-NetTCPConnection -State Listen -LocalPort 4000,4001,5173`), poi usare
   `taskkill /PID <pid> /T /F`: senza `/T` resta vivo il `tsx watch` figlio, che
   riapre la porta dopo un secondo.
+- **Se il server non parte, controlla il loop.** In passato è capitato che
+  lanciare `npm run dev` in un certo modo (in background, con le porte non
+  davvero libere o con un'istanza già avviata) andasse in conflitto e il server
+  iniziasse a riavviarsi in loop, con più istanze `tsx`/`vite` appese e una
+  coda di child process che non morivano. Se il server non risponde: controlla
+  che le porte siano libere e che non restino istanze node/tsx/vite in ascolto
+  (`Get-Process node,tsx,vite -ErrorAction SilentlyContinue`), uccidi tutto
+  (`taskkill /F /IM node.exe`, `tsx.exe`, `vite.exe` se servono), poi riprova.
+  Non riavviare a ripetizione se c'è già un processo che le occupa.
 - **Nessun comando che attende all'infinito.** Un'attesa lunga sembra un
   blocco: l'attesa dell'avvio è un ciclo con timeout che dice a ogni tentativo
   cosa sta facendo e termina con `pronto dopo N tentativi`, mai uno `Start-Sleep`
@@ -594,8 +614,9 @@ npm run dev            # in un altro terminale
 npm run verifica       # dalla root: esegue gli script in sequenza
 ```
 
-`npm run verifica` riporta il totale dei controlli (239 al momento) e si ferma al
-primo script che fallisce. Gli script sono in `scripts/` e hanno tutti la stessa
+`npm run verifica` riporta il totale dei controlli (249 al momento) e fa girare
+tutti gli script anche dopo un fallimento: raccoglie alla fine quelli rossi ed esce
+con 1 se ce n'è almeno uno. Gli script sono in `scripts/` e hanno tutti la stessa
 forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 409 della transizione illegale) accanto a quelli positivi.
 
@@ -610,7 +631,7 @@ forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 | `verifica-crud-condomini.ps1` | creazione, codice autogenerato e non modificabile, modifica, cancellazione, dipendenze bloccanti |
 | `verifica-crud-verbali.ps1` | generazione, modifica, approvazione, revoca, eliminazione |
 | `verifica-crud-versamenti.ps1` | registrazione, campi immutabili, cancellazione |
-| `verifica-crud-assemblee.ps1` | transizioni di stato, ricalcolo millesimi, eliminazione, il badge delle convocazioni, la risposta al condòmino, il segretario indicato durante lo svolgimento e la delega riportata nel verbale |
+| `verifica-crud-assemblee.ps1` | transizioni di stato, ricalcolo millesimi, eliminazione, il badge delle convocazioni, la risposta al condòmino, il segretario indicato durante lo svolgimento, la delega riportata nel verbale e la delibera tenuta nascosta ai condòmini finché l'assemblea è in convocazione |
 | `verifica-crud-bilanci.ps1` | creazione, duplicata rifiutata, approvazione, revoca, eliminazione |
 | `verifica-millesimi.ps1` | tabella vuota non valida, tabella coerente, revisione squilibrata rifiutata |
 | `verifica-attivita.ps1` | bacheca del team, assegnatari, proprietario contro assegnatario, thread a un livello, ordine per scadenza con le senza scadenza in fondo |

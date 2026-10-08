@@ -6,10 +6,12 @@ basta il numero. Una voce realizzata si cancella e la sua ragione va nel
 
 PRIORITA ALTA
 _(voci spostate da `bugs.md`, la coda dei difetti trovati navigando: qui non si
-più persa, ma non le abbiamo ancora risolte)_
+perde più, ma non le abbiamo ancora risolte)_
 - 8. Caratteri strani prima del titolo degli allegati
   - controllare i titoli degli allegati, perché in un caso compaiono caratteri strani prima del titolo
   - non è stato determinato in quale pagina né su quale file
+  - **indagato: dal codice non si riproduce.** L'`oggetto` di un allegato arriva solo dall'input dell'utente (`allegatiOggetto` nel caricamento del file, oppure l'`oggetto` della comunicazione passato come `oggettoPredefinito`) ed è sempre sottoposto a `trim()`: nessun percorso inietta caratteri prima del titolo e nessun campo ha un default con caratteri strani
+  - resta il sospetto di spazi non separabili o zero-width copiati insieme al testo da qualche documento: per andare avanti serve il contesto di chi l'ha segnalato, cioè pagina e file
 
 PRIORITA MEDIA
 - 1. Privacy policy per ruolo ⏸ rimandato
@@ -50,3 +52,9 @@ PRIORITA BASSA
   - la conservazione c'è: `nuovaRevisione` chiude la revisione precedente con `validTo` e inserisce la nuova con `revisione + 1`, e la tabella attiva si ottiene filtrando per revisione corrente
   - manca solo la parte che mostra le revisioni chiuse, cioè la consultabilità
   - va deciso cosa mostrare: la tabella completa di ogni revisione, o solo le variazioni rispetto alla precedente. La seconda è più utile per capire chi ha cambiato che cosa, e costa di più
+
+IMPLEMENTAZIONI FUTURE
+_(voci spostate da `new_tasks.md`: idee già messe da parte, da riprendere quando si ha tempo)_
+- 12. Tradurre in inglese tutto il codice che non è interfaccia
+  - identificatori, modelli, strutture dati, variabili, nomi di funzione, nomi dei file, backend e frontend; nell'interfaccia restano in inglese solo i nomi delle rotte
+  - i messaggi di errore inviati dal server restano in italiano
