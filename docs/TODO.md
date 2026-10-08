@@ -7,9 +7,6 @@ basta il numero. Una voce realizzata si cancella e la sua ragione va nel
 PRIORITA ALTA
 _(voci spostate da `bugs.md`, la coda dei difetti trovati navigando: qui non si
 più persa, ma non le abbiamo ancora risolte)_
-- 7. In convocazione i condòmini vedono il testo della delibera
-  - un'assemblea convocata non dovrebbe mostrare ai condòmini il testo di una delibera, visto che la delibera non è stata ancora approvata in stato "Convocazione"
-  - in uno stato diverso, "In corso" o "Conclusa" la delibera può essere presentata
 - 8. Caratteri strani prima del titolo degli allegati
   - controllare i titoli degli allegati, perché in un caso compaiono caratteri strani prima del titolo
   - non è stato determinato in quale pagina né su quale file

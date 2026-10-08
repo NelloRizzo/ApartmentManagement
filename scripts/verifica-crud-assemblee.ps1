@@ -33,10 +33,12 @@ $ad = Login 'admin@condomini.local' 'Admin123!'
 $h = Auth $ad
 $cid = (Invoke-RestMethod -Method Get -Uri "$base/auth/me" -Headers $h).data.condomini[0].condominioId
 
-function NuovaAssemblea($titolo) {
+function NuovaAssemblea($titolo, $delibera) {
+  $punto = @{ordine=1; titolo=$titolo}
+  if ($delibera) { $punto.delibera = $delibera }
   $corpo = @{
     tipo='straordinaria'; data='2026-09-15'; oraInizio='18:00'; luogo='Sala prova';
-    ordineDelGiorno=@(@{ordine=1; titolo=$titolo}); note='verifica'
+    ordineDelGiorno=@($punto); note='verifica'
   }
   (Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee" -Headers $h -ContentType 'application/json' -Body ($corpo|ConvertTo-Json -Depth 8)).data
 }
@@ -198,6 +200,34 @@ Check 'tolta la delega la riga sparisce' (-not $ap.Contains('presente tramite de
 Check 'nessuno per delega in apertura' ($ap.Contains('nessuno per delega'))
 
 Invoke-RestMethod -Method Delete -Uri "$base/condomini/$cid/assemblee/$dgid" -Headers $h | Out-Null
+
+"== 12. la delibera non è ai condòmini in convocazione =="
+# Assemblea dedicata con una delibera scritta, creata per questa verifica e
+# eliminata alla fine, così non confligge col ciclo di pulizia delle sezioni
+# precedenti. Senza delibera il controllo passerebbe anche senza la rimozione.
+$testoDelibera = "Delibera di prova $([guid]::NewGuid().ToString('N').Substring(0,4))"
+$v = NuovaAssemblea "Verifica delibera $([guid]::NewGuid().ToString('N').Substring(0,4))" $testoDelibera
+$vid = Id $v
+Check 'assemblea dedicata creata' ($null -ne $vid)
+# La transizione a convocata è vietata al condòmino, la fa l'amministratore.
+$t = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee/$vid/stato" -Headers $h -ContentType 'application/json' -Body (@{stato='convocata'}|ConvertTo-Json)
+Check 'assemblea convocata' ($t.data.stato -eq 'convocata') $t.error.message
+$co = Login 'marco.rossi@example.com' 'Condomino123!'
+$hco = Auth $co
+$coAssemblea = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$vid" -Headers $hco).data
+Check 'condomino: non vede la delibera in convocazione' ($coAssemblea.ordineDelGiorno.Count -eq 1 -and $null -eq $coAssemblea.ordineDelGiorno[0].delibera) "delibera: $($coAssemblea.ordineDelGiorno[0].delibera)"
+# Chi convoca la deve leggere: la rimozione è solo per il condòmino.
+$adminAssemblea = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$vid" -Headers $h).data
+Check 'amministratore: la delibera in convocazione si vede' ($adminAssemblea.ordineDelGiorno[0].delibera -eq $testoDelibera) "delibera: $($adminAssemblea.ordineDelGiorno[0].delibera)"
+
+# La stessa assemblea, in corso: la delibera è data pubblica e il condòmino la
+# vede (e può scriverla nel verbale).
+$t = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/assemblee/$vid/stato" -Headers $h -ContentType 'application/json' -Body (@{stato='in_corso'}|ConvertTo-Json)
+Check 'assemblea in corso' ($t.data.stato -eq 'in_corso') $t.error.message
+$coAssemblea = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/assemblee/$vid" -Headers $hco).data
+Check 'condomino: vede la delibera in corso' ($coAssemblea.ordineDelGiorno[0].delibera -eq $testoDelibera) "delibera: $($coAssemblea.ordineDelGiorno[0].delibera)"
+
+Invoke-RestMethod -Method Delete -Uri "$base/condomini/$cid/assemblee/$vid" -Headers $h | Out-Null
 
 ""
 "esito: $ok ok, $ko ko"

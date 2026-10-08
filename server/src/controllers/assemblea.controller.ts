@@ -136,7 +136,7 @@ export const getOne = asyncHandler(async (req, res) => {
   // Gli allegati sono sui punti all'ordine del giorno, quindi annidati. Qui prima
   // c'era un `populate('allegati')` sull'assemblea: con `strictPopulate` attivo
   // avrebbe fatto fallire la rotta appena tolto quel campo.
-  const [conAllegati] = await espandiAnnidati([assemblea], 'ordineDelGiorno');
+  const conAllegati = (await espandiAnnidati([assemblea], 'ordineDelGiorno'))[0]!;
 
   if (!condominio) {
     ok(res, {
@@ -154,8 +154,18 @@ export const getOne = asyncHandler(async (req, res) => {
    * ciascuno, e le transizioni sono un comando dell'amministratore. Nessuno dei
    * tre è un dato suo.
    */
+  const ordineDelGiorno =
+    assemblea.stato === 'convocata'
+      ? conAllegati.ordineDelGiorno.map((p) => {
+          const resto = { ...p };
+          delete resto.delibera;
+          return resto;
+        })
+      : conAllegati.ordineDelGiorno;
+
   ok(res, {
     ...conAllegati,
+    ordineDelGiorno,
     presenze: [],
     votazioni: [],
     presiedutaDa: assemblea.presiedutaDa ?? null,

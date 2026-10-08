@@ -48,6 +48,32 @@ Verifiche: la creazione dell'assemblea di prova nella sezione 12 di
 `verifica-allegati` e 35 controlli verdi su quello script; suite completa a 249
 controlli verdi su 9 script.
 
+### In convocazione i condòmini leggevano il testo della delibera
+
+Dal `TODO.md`: "un'assemblea convocata non dovrebbe mostrare ai condòmini il testo di
+una delibera, visto che la delibera non è stata ancora approvata in stato
+'Convocazione'".
+
+`GET /assemblee/:id` restituiva `ordineDelGiorno` identico a tutti: il testo su cui
+l'assemblea delibera era già leggibile da chi era stato convocato, prima ancora che
+l'assemblea cominciasse. Ora, quando l'assemblea è in `convocata`, il server toglie
+il campo `delibera` da ogni punto della risposta rivolta al condòmino — un `delete`
+sulla copia del punto, perché il resto (titolo, allegati, bilancio collegato) deve
+arrivare come prima. La risposta dell'amministratore non cambia: è un ramo a parte
+che torna per primo, e senza quel ramo il foglio presenze non potrebbe mostrare i
+punti da presiedere. L'elemento dell'array è ora preso con `[0]!`, perché leggere i
+campi direttamente rende esplicito che `espandiAnnidati` restituisce una lista.
+
+Da `in_corso` in avanti la delibera torna a essere visibile: è a quel punto che
+l'assemblea la discute e il segretario ci scrive sopra nel verbale.
+
+Verifiche: sezione 12 di `verifica-crud-assemblee`, sei controlli su un'assemblea
+dedicata con una delibera scritta — il condòmino non la vede in convocazione,
+l'amministratore sì, e il condòmino la rivede appena l'assemblea è in corso. Senza
+una delibera dentro il punto il controllo sarebbe passato anche senza la rimozione,
+per questo `NuovaAssemblea` sa adesso scrivere il testo del punto. Suite a 249
+controlli verdi su 9 script, typecheck, lint e 30 test.
+
 ## 2026-10-07
 
 ### Nel verbale non compariva mai "presente tramite delega a …"
