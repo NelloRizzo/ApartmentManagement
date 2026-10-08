@@ -465,8 +465,8 @@ async function seed(): Promise<void> {
   await Condominio.updateOne({ _id: condominio._id }, { $addToSet: { assistenti: assistente._id } });
 
   // ---- Contratto di fornitura ----
-  // L'amministratore demo amministra 8 unità: il contratto ne copre 20, quindi
-  // può ancora aggiungere condomini senza sforare la capacità pattuita.
+  // Il contratto demo copre 5 condomìni, il seed ne crea 2: l'amministratore
+  // può quindi aggiungere ancora condomini senza sforare la capacità pattuita.
   const durataMesi = 24;
   const dataInizio = new Date();
   dataInizio.setMonth(dataInizio.getMonth() - 6);
@@ -478,7 +478,7 @@ async function seed(): Promise<void> {
       codice: 'CTR-DEMO-001',
       amministratore: admin._id,
       stato: 'attivo',
-      condominiMassimi: 2,
+      condominiMassimi: 5,
       costo: 1200,
       periodicita: 'annuale',
       durataMesi,
@@ -493,7 +493,7 @@ async function seed(): Promise<void> {
           data: dataInizio,
           azione: 'stipula',
           a: 'attivo',
-          nota: '20 unità immobiliari a 1200 € per 24 mesi',
+          nota: '5 condomìni a 1200 € per 24 mesi, con capacità ancora disponibile',
           operatore: superadmin._id,
         },
       ],

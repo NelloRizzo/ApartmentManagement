@@ -2,6 +2,32 @@
 
 Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
+## 2026-10-08
+
+### `verifica-millesimi` non partiva da un seed appena fatto
+
+Dal `TODO.md`: "lo script crea un condominio di prova, ma il contratto del seed è
+già a 2 su 2 (`Capacità contrattuale superata: il contratto prevede 2 condomìni e
+ne sono in carico 2`) e si ferma al primo passo".
+
+La capacità del contratto demo coincideva con il numero di condomìni che il seed ne
+crea: contratto a 2, demo a 2, e il primo `POST /condomini` che arrivava, compreso
+quello di prova dello script, veniva rifiutato. La voce chiedeva se lasciare un
+posteggio libero nel seed o se lo script dovesse procurarsi lo stabile in un altro
+modo: a lasciarlo libero è il seed, perché è lui che scrive il contratto, e lo
+script non ha nessun modo di aggirarlo senza inventare dati.
+
+`condominiMassimi` è passato da 2 a 5. Anche il commento parlava di unità invece che
+di condomìni ("il contratto ne copre 20") e la nota dello storico diceva "20 unità
+immobiliari": erano entrambi superati, e ora dicono quello che il contratto è —
+cinque condomìni con capacità ancora disponibile. Gli script che creano condomìni di
+prova li eliminano alla fine (`verifica-millesimi` cancella il suo e si rifiuta di
+partire se ne trova uno orfano), quindi cinque posti bastano anche a esecuzioni
+consecutive.
+
+Verifiche: `verifica-millesimi` a 12 controlli verdi da un seed appena fatto, suite
+completa a 249 controlli verdi su 9 script, typecheck, lint e 30 test.
+
 ## 2026-10-07
 
 ### Nel verbale non compariva mai "presente tramite delega a …"
