@@ -74,6 +74,21 @@ una delibera dentro il punto il controllo sarebbe passato anche senza la rimozio
 per questo `NuovaAssemblea` sa adesso scrivere il testo del punto. Suite a 249
 controlli verdi su 9 script, typecheck, lint e 30 test.
 
+### L'etichetta sul punto collegato a un bilancio parlava di cifre definitive
+
+Dal `TODO.md`: rivedere l'etichetta "Punto collegato a un bilancio: gli importi
+indicati con «€ …» saranno sostituiti dalle cifre definitive del documento quando il
+verbale viene generato."
+
+Il funzionamento non cambia: `{totale}` e `{totaleMensile}` vengono risolti in
+`deliberaRisolta` alla generazione del verbale, con le cifre del bilancio collegato
+al punto. Cambia la promessa del testo: non sono "le cifre definitive del documento"
+— il documento è il bilancio e chi approva è l'assemblea — ma "i segnaposto «€ …»
+verranno sostituiti dalle cifre approvate quando si genera il verbale", che è
+esattamente il momento in cui succede e la fonte dei numeri.
+
+Verifiche: typecheck, lint e 30 test; nessun cambio di logica.
+
 ## 2026-10-07
 
 ### Nel verbale non compariva mai "presente tramite delega a …"

@@ -717,9 +717,8 @@ function ContenutoDettaglio({
                     />
                     {punto.bilancio && (
                       <p className="campo-aiuto">
-                        Punto collegato a un bilancio: gli importi indicati con «€ …» saranno
-                        sostituiti dalle cifre definitive del documento quando il verbale viene
-                        generato.
+                        Punto collegato a un bilancio: i segnaposto «€ …» verranno
+                        sostituiti dalle cifre approvate quando si genera il verbale.
                       </p>
                     )}
                   </div>
