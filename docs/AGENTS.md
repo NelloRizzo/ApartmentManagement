@@ -472,10 +472,16 @@ sfogliare lo stabile.
   dentro il condominio, che ha un `indirizzo` obbligatorio. Per la posizione basta
   il link a Google Maps sull'indirizzo del condominio.
 - **`Condominio.codice` è autogenerato e immutabile.** Lo genera
-  `generaCodiceCondominio` (nome ripulito più 6 cifre esadecimali) e non è un campo
-  che il client possa scegliere: è l'identificativo con cui lo stabile compare nei
-  contratti. Perciò `condominioCreateSchema` e `condominioUpdateSchema` sono
-  `strict`: mandarlo è un 400 esplicito, non una modifica ignorata in silenzio.
+  `generaCodiceCondominio` con **tre lettere del nome più un progressivo di tre
+  cifre** (`Residenza Aurora` → `RES001`); non è un campo che il client possa
+  scegliere: è l'identificativo con cui lo stabile compare nei contratti.
+  Perciò `condominioCreateSchema` e `condominioUpdateSchema` sono `strict`:
+  mandarlo è un 400 esplicito, non una modifica ignorata in silenzio.
+  Il progressivo è per prefisso e si ricalcola a ogni tentativo, perché fra la
+  lettura e la creazione un altro amministratore può prendere lo stesso numero.
+  **Il campo non può scendere a 6 caratteri**: i condomini creati col formato
+  vecchio portano `RESIDENZAA-3F9A2C` e restano in archivio, e abbassare il
+  limite li renderebbe non conformi allo schema.
 - **Il selettore del condominio non è riservato a chi amministra**: la condizione è
   averne più di uno, perché un condòmino iscritto a due stabili deve poter
   scegliere come un amministratore. Al superadmin non serve un'eccezione a parte:

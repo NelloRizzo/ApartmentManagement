@@ -9,6 +9,15 @@ const condominioSchema = baseSchema(
      * Identificativo univoco, **autogenerato** e non modificabile: serve nei
      * contratti e nelle comunicazioni, dove il nome non basta perché due
      * stabili possono omonimi. Vedi `generaCodiceCondominio`.
+     *
+     * `maxlength` è 20 e non 6, che è la lunghezza dei codici nuovi: i condomini
+     * creati con il formato precedente portano `RESIDENZAA-3F9A2C` e restano in
+     * archivio, perché il codice non è modificabile e le comunicazioni già
+     * emesse lo riportano. Abbassare il limite a 6 renderebbe quei documenti
+     * non conformi allo schema, e la validazione Mongoose è il tipo di controllo
+     * che un giorno, magari su una `update` con `runValidators`, blocca la
+     * modifica di uno stabile esistente. La lunghezza dei codici nuovi è
+     * garantita dal generatore, che è l'unico a scriverlo.
      */
     codice: {
       type: String,

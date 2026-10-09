@@ -4,6 +4,49 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### Il codice del condominio passa da 16 caratteri a 6
+
+Da `new_tasks.md`: il codice autogenerato era il nome ripulito più un suffisso
+casuale di sei cifre esadecimali, `RESIDENZAA-3F9A2C`. Compare nei contratti,
+nelle intestazioni e nelle liste, e a quel punto ogni occasione era sprecata per
+sedici caratteri.
+
+Ora è **tre lettere del nome più tre cifre di progressivo**: `Residenza Aurora`
+dà `RES001`, il successivo `RES002`. Le lettere rendono il codice riconoscibile,
+il progressivo porta l'univocità anche fra stabili con lo stesso nome e rende
+leggibile di colpo quale sia il primo: un suffisso casuale non diceva nulla.
+
+Il progressivo è calcolato sul massimo già emesso per quel prefisso e ricalcolato
+a ogni tentativo, perché fra la lettura e la creazione un altro amministratore
+può aver preso lo stesso numero: la prova `exists` è la rete di sicurezza, non il
+meccanismo.
+
+**Tre cifre sono 999 codici per prefisso**, e oltre il codice crescerebbe. Invece
+di far fallire la creazione, il prefisso cede una lettera per far spazio a una
+cifra: `RES999` → `RE0001` → `R00001`, sempre sei caratteri. Il ramo è il più
+facile da sbagliare e il meno raggiungibile a mano, quindi `prefissiDaNome` e
+`codiceSuccessivo` sono funzioni pure con test.
+
+**Il campo non è sceso a 6 caratteri e non deve scenderci.** I condomini creati
+col formato precedente portano `RESIDENZAA-3F9A2C` e restano in archivio, perché il
+codice non è modificabile e le comunicazioni già emesse lo riportano. Un
+`maxlength: 6` li renderebbe non conformi allo schema, e la validazione Mongoose è
+il tipo di controllo che un giorno, magari su una `update` con `runValidators`,
+bloccherebbe la modifica di uno stabile esistente. La lunghezza dei codici nuovi è
+garantita dal generatore, che è l'unico a scriverlo.
+
+Anche i due condomini del seed sono stati allineati a `RES001` e `RES002`: avevano
+codici scritti a mano secondo un'altra regola (dal nome della via, `VDA001`) che
+l'applicazione non produce mai. Restano codici fissi, perché sono la chiave del
+`findOneAndUpdate` e cambiarli a ogni `seed` lascerebbe il condominio precedente
+orfano. **Chi ha il database in locale deve rieseguire `npm run seed -- --reset`**,
+altrimenti i due stabili vecchi restano accanto ai nuovi.
+
+Verifiche: typecheck, lint e 46 test; generatore esercitato contro il database di
+sviluppo su nomi diversi (`RES001`, `RES002`, `VIL001`, `GAM001`, `CON001`,
+`BO0001`, `CIT001`), tutti di 6 caratteri, più il ramo di esaurimento con
+`RES999` occupato che dà `RE0001`; i condomini di prova sono stati rimossi.
+
 ### Lo storico delle quote millesimali è consultabile, e dice cosa è cambiato
 
 Dal `TODO.md`, voce 4: la pagina diceva che la revisione precedente «resta

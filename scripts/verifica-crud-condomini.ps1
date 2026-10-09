@@ -52,14 +52,16 @@ $corpo = @{ nome="Verifica $suff"; indirizzo=@{ via='Via Prova'; civico='1'; cit
 
 "== 1. creazione =="
 $r = Api Post '/condomini' $corpo
-# Il codice non lo manda il client: lo genera il server dal nome più un suffisso
-# casuale di 6 cifre esadecimali. "Verifica 9BA11E4F" dà "VERIFICA9BA11-574D4E":
-# la parte iniziale è il nome ripulito e troncato, quindi il regex non ne fissa la
-# lunghezza.
-$atteso = '^VERIFICA[A-Z0-9]*-[0-9A-F]{6}$'
+# Il codice non lo manda il client: lo genera il server con tre lettere del nome
+# più un progressivo di tre cifre. "Verifica 9BA11E4F" dà "VER001", perché le
+# lettere sono le prime tre del nome ripulito e il numero è il primo libero per
+# quel prefisso: il regex non può fissarlo, perché dipende da quanti condomini con
+# quelle lettere esistono già.
+$atteso = '^VER\d{3}$'
 Check 'crea condominio' ($r.data -and $r.data.nome -eq "Verifica $suff") ($r.__errore)
 Check 'il codice è generato dal nome' ($r.data.codice -match $atteso) "codice $($r.data.codice)"
 Check 'il codice non contiene spazi' ($r.data.codice -notmatch '\s') "codice $($r.data.codice)"
+Check 'il codice è lungo 6 caratteri' ($r.data.codice.Length -eq 6) "codice $($r.data.codice)"
 
 # La creazione riuscita va tenuta da parte: il controllo seguente riusa `$r` per
 # una POST che viene rifiutata, e chi legge `data` dopo troverebbe il vuoto.
@@ -103,6 +105,10 @@ if (-not $id2) { $id2 = $r.data._id }
 # condomini avrebbero lo stesso codice ed è quello che renderebbe ambiguo un
 # contratto.
 Check 'lo stesso nome genera un codice diverso' ($r.data.codice -ne $codice1) "primo $codice1, secondo $($r.data.codice)"
+# Le tre cifre sono un progressivo per prefisso: il secondo stabilo con lo
+# stesso nome prende il numero seguente, non un numero a caso.
+$scoppio = ([int]$codice1.Substring(3)) + 1
+Check 'il secondo codice è il progressivo successivo' ($r.data.codice -eq "VER$('{0:000}' -f $scoppio)") "primo $codice1, secondo $($r.data.codice)"
 $r = Api Post "/condomini/$id2/unita" (@{ codice="U$suff"; piano=1; numero='1'; metratura=50; tipo='appartamento' })
 Check 'crea unita di prova' (-not $r.__errore) ($r.__errore)
 $r = Api Delete "/condomini/$id2" $null

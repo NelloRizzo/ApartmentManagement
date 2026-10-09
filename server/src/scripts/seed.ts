@@ -95,11 +95,17 @@ async function seed(): Promise<void> {
   );
 
   // ---- Condomini ----
+  // I codici sono scritti a mano e non passano da `generaCodiceCondominio`, perché
+  // sono la chiave del `findOneAndUpdate` e cambiarli a ogni `seed` lascerebbe
+  // il condominio precedente orfano. Devono però rispettare la stessa regola del
+  // generatore (tre lettere del nome più tre cifre), altrimenti la demo
+  // mostrerebbe una convenzione che l'applicazione non produce mai: i due
+  // stabili hanno nomi che si somigliano sul primo prefisso, `RES001` e `RES002`.
   const condominio = await Condominio.findOneAndUpdate(
-    { codice: 'VDA001' },
+    { codice: 'RES001' },
     {
       nome: 'Residenza Aurora',
-      codice: 'VDA001',
+      codice: 'RES001',
       indirizzo: { via: 'Via delleQuerce', civico: '12', citta: 'Milano', cap: '20121', provincia: 'MI' },
       amministratore: admin._id,
       deliberaRipartizione: 'Delibera assemblea del 15/03/2024 n. 12/2024',
@@ -110,10 +116,10 @@ async function seed(): Promise<void> {
   );
 
   const condominio2 = await Condominio.findOneAndUpdate(
-    { codice: 'BGO002' },
+    { codice: 'RES002' },
     {
       nome: 'Residenza Belvedere',
-      codice: 'BGO002',
+      codice: 'RES002',
       indirizzo: { via: 'Via Belvedere', civico: '5', citta: 'Bergamo', cap: '24121', provincia: 'BG' },
       amministratore: admin._id,
       totaleMillesimi: 1000,
