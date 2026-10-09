@@ -394,6 +394,18 @@ I ruoli sono `superadmin`, `admin`, `portiere`, `condomino`.
   `amministrazione` e azioni `leggere`/`scrivere`. **`scrivere` implica `leggere`**
   (`haPermesso` in `types/domain.ts`).
 
+**I permessi sono di un utente, non di un utente in un condominio.** `User.permessi`
+è un elenco unico valido su tutti gli stabili dell'assistente: "su questo tutto, su
+quello solo i versamenti" non è esprimibile, e renderlo possibile richiederebbe
+elenchi multipli o togliere il `null` (che oggi significa accesso pieno). **Non è un
+lavoro previsto**, e per questo la delega a un assistente resta tutto o niente (vedi
+«Bacheca delle attività»).
+
+Per questo i permessi **si sistemano una rotta alla volta**, non con un intervento
+unico: `requirePermesso` e `requirePermessoLettura` ricevono già
+`req.params.condominioId` e possono risolvere l'elenco giusto, ma ogni rotta sotto
+`/condomini/:condominioId` va controllata quando la si tocca.
+
 ### I guard di permesso
 
 Sono diversi e non vanno scambiati:

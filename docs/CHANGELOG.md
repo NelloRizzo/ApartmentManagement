@@ -4,6 +4,20 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### Anche la voce 6 era una regola, non un lavoro in coda
+
+Dal `TODO.md`: "I permessi si sistemano uno alla volta".
+
+Buona parte di quella voce era già documentata altrove — la delega a un assistente
+tutto o niente sta in "Bacheca delle attività", il superadmin senza posizioni e
+`RichiediAmministratore` stanno in "Ruoli e permessi" — e il resto non è un
+intervento da fare: è il metodo con cui si toccano i permessi. La voce è quindi
+uscita dalla coda e in `AGENTS.md` è rimasta la regola: i permessi sono di un
+utente, non di un utente in un condominio (per-condominio non è esprimibile e non è
+un lavoro previsto), e si sistemano una rotta alla volta, quando la si tocca.
+
+Verifiche: nessuna, la voce non tocca il codice.
+
 ### La voce 2 non era un lavoro in coda, ma un controllo da fare a ogni rotta di scrittura
 
 Dal `TODO.md`: "Zod rimuove le chiavi non dichiarate: un `PATCH /versamenti/:id`
