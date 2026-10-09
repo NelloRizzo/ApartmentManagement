@@ -460,6 +460,7 @@ Sono diversi e non vanno scambiati:
 | `requirePermessoLettura(p)` | chiunque, ma controlla l'ambito se è `admin` o `portiere` | **liste e dettagli** |
 | `requirePermessoOPartecipante(p)` | chiunque, ma controlla l'ambito solo se è `admin` o `superadmin` | **scritture aperte anche ai condòmini** |
 | `requireRubrica` | admin con `iscritti:leggere`, o il portiere dello stabile | la sola rubrica dei residenti |
+| `requireAmministratore` | admin che **amministra almeno uno stabile** (o `superadmin`) | gestione del team e delle deleghe |
 
 `requirePermessoLettura` esiste perché `requirePermesso` sulle rotte `GET`
 impedirebbe ai condòmini di vedere i propri verbali e le proprie quote: i
@@ -479,6 +480,17 @@ controller ne verificano la proprietà (`mittente`, `bozza`).
 `GET /condomini/:id/unita` è l'eccezione: usa `requirePermesso`, perché il
 condòmino conosce già la propria unità da `GET /auth/me` e non deve poter
 sfogliare lo stabile.
+
+**`requireRole('admin')` non distingue un assistente, perché un assistente è un
+`admin`.** Su `/staff/assistenti` la differenza è concreta: `registraDelegazione`
+collega la persona creata agli stabili di cui il creatore è **amministratore**,
+quindi un assistente che crea un assistente gli produce un account senza un solo
+stabile — che però passa lo stesso `requireRole('admin')` di `/staff/attivita` e vede
+i compiti che gli sono stati affidati. Per questo le rotte del team sono su
+**`requireAmministratore`**, che chiede un fatto e non un ruolo: amministrare almeno
+uno stabile, che è la condizione perché una delega significhi qualcosa. Il
+superadmin esce prima del controllo, perché non amministra nulla e guardare lo
+escluderebbe.
 
 - **La non letta si conta con `lettaDa`, mai con `stato`.** `stato` è un campo
   unico della comunicazione e `segnaLetta` lo porta a `'letta'` per tutti: usarlo

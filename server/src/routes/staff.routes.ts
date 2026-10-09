@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { validate } from '../middleware/validate.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAmministratore, requireAuth, requireRole } from '../middleware/auth.js';
 import * as c from '../controllers/amministrazione.controller.js';
 import {
   aggiornaAmministratoreSchema,
@@ -56,35 +56,43 @@ router.post(
   c.reimpostaPasswordAmministratore,
 );
 
-/** Deleghe: assistenti con permessi ristretti sui propri condomini. */
+/**
+ * Deleghe: assistenti con permessi ristretti sui propri condomini, e il personale
+ * che serve uno stabile.
+ *
+ * Le rotte sono su `requireAmministratore` e non su `requireRole('admin')`: un
+ * assistente è un `admin`, e su `/staff/assistenti` la differenza è concreta perché
+ * `registraDelegazione` collega la persona creata agli stabili di cui il creatore è
+ * amministratore.
+ */
 router.get(
   '/assistenti',
-  requireRole('admin', 'superadmin'),
+  requireAmministratore,
   validate(listaStaffQuery, 'query'),
   c.listAssistenti,
 );
 router.post(
   '/assistenti',
-  requireRole('admin'),
+  requireAmministratore,
   validate(creaAssistenteSchema),
   c.creaAssistente,
 );
 router.patch(
   '/assistenti/:id',
-  requireRole('admin'),
+  requireAmministratore,
   validate(sempliceId, 'params'),
   validate(aggiornaAssistenteSchema),
   c.aggiornaAssistente,
 );
 router.delete(
   '/assistenti/:id',
-  requireRole('admin'),
+  requireAmministratore,
   validate(sempliceId, 'params'),
   c.revocaAssistente,
 );
 router.post(
   '/assistenti/:id/reinvia-conferma',
-  requireRole('admin'),
+  requireAmministratore,
   validate(sempliceId, 'params'),
   c.reinviaConfermaAssistente,
 );

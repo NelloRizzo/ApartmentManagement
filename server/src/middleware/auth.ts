@@ -189,6 +189,39 @@ export const requireRubrica: RequestHandler = (req, res, next) => {
 };
 
 /**
+ * Richiede di essere l'amministratore di almeno uno stabile, non solo un `admin`.
+ *
+ * `requireRole('admin')` non basta, perché un assistente **è** un `admin`: ha il
+ * ruolo `admin` con permessi ristretti e `delegatoDa` valorizzato. Su `/staff/assistenti`
+ * questo non è una differenza teorica: `registraDelegazione` collega la persona
+ * creata agli stabili di cui il creatore è **amministratore**, quindi un assistente
+ * che crea un assistente gli producebbe un account senza nessuno stabile — account
+ * che però passa lo stesso `requireRole` della bacheca, dove `filtroVisibile` gli
+ * mostrerebbe i compiti che gli sono stati affidati.
+ *
+ * Il confronto è quindi su un fatto, non sul ruolo: amministrare almeno uno stabile.
+ * È la condizione che rende significativa una delega.
+ */
+export const requireAmministratore: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) throw unauthorized();
+    if (req.user.role === 'superadmin') return next();
+    if (req.user.role !== 'admin') {
+      return next(forbidden('Operazione riservata agli amministratori di condominio'));
+    }
+    const amministra = await Condominio.exists({ amministratore: req.user.sub });
+    if (!amministra) {
+      return next(
+        forbidden('Solo un amministratore di condominio può gestire il proprio team: gli assistenti ricevono i compiti, non li distribuiscono'),
+      );
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * Verifica che l'utente abbia accesso al condominio indicato.
  * Gli amministratori devono essere il titolare o un assistente delegato; i
  * portieri devono servire il condominio; i condomini devono avere una posizione.

@@ -11,9 +11,10 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { Request } from 'express';
+import type { Request, RequestHandler } from 'express';
 import {
   puoEseguire,
+  requireAmministratore,
   requireCondominioAccess,
   requirePermesso,
   requirePermessoLettura,
@@ -44,6 +45,28 @@ function utente(role: UserRole, permessi: Permesso[] | null): Utente {
  * Un guard che chiama `next()` senza argomento ha accettato la richiesta: è
  * questo il comportamento da verificare, non una risposta HTTP.
  */
+/**
+ * Esegue un guard e restituisce l'errore passato a `next`, se c'è.
+ *
+ * Un guard che chiama `next()` senza argomento ha accettato la richiesta: è
+ * questo il comportamento da verificare, non una risposta HTTP.
+ *
+ * La versione asincrona serve per i guard che aspettano il database: il modello
+ * viene sostituito, quindi nessuna connessione viene aperta.
+ */
+async function eseguiAsync(
+  guard: RequestHandler,
+  req: Partial<Request>,
+): Promise<{ errore: unknown; passato: boolean }> {
+  let esito: { errore: unknown; passato: boolean } | null = null;
+  const reqFinto = req as Request;
+  await guard(reqFinto, {} as never, (errore?: unknown) => {
+    esito = { errore, passato: errore === undefined };
+  });
+  assert.ok(esito, 'il guard non ha chiamato next()');
+  return esito;
+}
+
 function esegui(
   guard: ReturnType<typeof requirePermesso>,
   req: Partial<Request>,
@@ -243,6 +266,46 @@ describe('requirePermessoOPartecipante (comunicazioni)', () => {
       }).passato,
       true,
     );
+  });
+});
+
+describe('requireAmministratore', () => {
+  it('passa per l\'amministratore di almeno uno stabile', async () => {
+    Condominio.exists = (async () => ({ _id: 'x' })) as never;
+    const { passato } = await eseguiAsync(requireAmministratore, { user: utente('admin', []) });
+    assert.equal(passato, true);
+  });
+
+  it('blocca l\'assistente, che è un admin ma non amministra nulla', async () => {
+    // Il caso che ha fatto scoprire il difetto: `requireRole('admin')` passava,
+    // perché un assistente è un admin. Ma `registraDelegazione` collega la persona
+    // creata agli stabili di cui il creatore è amministratore, quindi l'assistente
+    // avrebbe prodotto un account senza nessuno stabile.
+    Condominio.exists = (async () => null) as never;
+    const { passato, errore } = await eseguiAsync(requireAmministratore, {
+      user: utente('admin', ['versamenti:scrivere']),
+    });
+    assert.equal(passato, false);
+    assert.equal((errore as { statusCode: number }).statusCode, 403);
+  });
+
+  it('blocca il condòmino e lascia passare il superadmin senza guardare', async () => {
+    // Il superadmin non amministra nessuno stabile: guardare `exists` lo
+    // escluderebbe, quindi va fuori prima.
+    let guardato = false;
+    Condominio.exists = (async () => {
+      guardato = true;
+      return null;
+    }) as never;
+
+    const condomino = await eseguiAsync(requireAmministratore, { user: utente('condomino', []) });
+    assert.equal(condomino.passato, false);
+
+    const superadmin = await eseguiAsync(requireAmministratore, {
+      user: { ...utente('superadmin', null), isSuperadmin: true } as never,
+    });
+    assert.equal(superadmin.passato, true);
+    assert.equal(guardato, false, 'il controllo non deve girare per il superadmin');
   });
 });
 

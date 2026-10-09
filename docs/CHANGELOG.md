@@ -4,6 +4,31 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### Un assistente poteva creare un proprio assistente, e gli produceva un account senza stabile
+
+Da `bugs.md`: le rotte di `/staff/assistenti` erano protette da
+`requireRole('admin')`, e **un assistente è un `admin`** — ha il ruolo `admin` con
+permessi ristretti e `delegatoDa` valorizzato. Passava.
+
+Non era una differenza teorica. `registraDelegazione` collega la persona appena
+creata agli stabili di cui il creatore è **amministratore**, e un assistente non
+amministra nulla: quindi l'account nasceva con `delegatoDa` valorizzato e **senza
+un solo stabile**. E su quello zero stabili l'account non era del tutto useless:
+passava lo stesso `requireRole('admin')` di `/staff/attivita`, dove `filtroVisibile`
+gli avrebbe mostrato i compiti che l'assistente gli avesse affidato. In più la
+bacheca del team è il modo in cui il nuovo assistente si trovava fra gli
+assegnatari possibili di chi lo aveva creato.
+
+Ora `/staff/assistenti` è su `requireAmministratore`, che chiede **un fatto e non
+un ruolo**: amministrare almeno uno stabile. È la condizione che rende significativa
+una delega, perché senza di essa `registraDelegazione` non collegherebbe nessuno.
+Il superadmin resta ammesso sulle rotte di lettura ed esce prima del controllo,
+perché non amministra nulla e guardare lo escluderebbe.
+
+Tre test sul guard, con il modello sostituito come si fa per
+`requireCondominioAccess`: passa per un amministratore, blocca l'assistente, e
+blocca il condòmino lasciando fuori il superadmin senza guardare.
+
 ### Il personale dello stabile nasce dal team, non dalla pagina dello stabile
 
 Il portiere era stato creato dalla pagina degli iscritti, ed è stato spostato in **Team
