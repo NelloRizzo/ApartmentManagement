@@ -461,6 +461,7 @@ Sono diversi e non vanno scambiati:
 | `requirePermessoOPartecipante(p)` | chiunque, ma controlla l'ambito solo se è `admin` o `superadmin` | **scritture aperte anche ai condòmini** |
 | `requireRubrica` | admin con `iscritti:leggere`, o il portiere dello stabile | la sola rubrica dei residenti |
 | `requireAmministratore` | admin che **amministra almeno uno stabile** (o `superadmin`) | gestione del team e delle deleghe |
+| `requireNonAssistente` | admin senza `delegatoDa` (o `superadmin`) | atti di **titolarietà**, come creare un condominio |
 
 `requirePermessoLettura` esiste perché `requirePermesso` sulle rotte `GET`
 impedirebbe ai condòmini di vedere i propri verbali e le proprie quote: i
@@ -491,6 +492,14 @@ i compiti che gli sono stati affidati. Per questo le rotte del team sono su
 uno stabile, che è la condizione perché una delega significhi qualcosa. Il
 superadmin esce prima del controllo, perché non amministra nulla e guardare lo
 escluderebbe.
+
+**Lo stesso ragionamento vale su `POST /condomini`, che è un atto di
+titolarietà e non un'operazione delegabile**: il condominio nasce intestato a chi lo
+crea e consuma la capacità del contratto di quel titolare, quindi delegare
+`amministrazione:scrivere` non può voler dire «diventa titolare di uno stabile». Va
+perciò su **`requireNonAssistente`**, che confronta `delegatoDa`. **Non riusare
+`requireAmministratore`**: chiede di amministrare almeno uno stabile e sarebbe
+soddisfatto proprio da chi ha appena creato, quindi si verificherebbe da solo.
 
 - **La non letta si conta con `lettaDa`, mai con `stato`.** `stato` è un campo
   unico della comunicazione e `segnaLetta` lo porta a `'letta'` per tutti: usarlo

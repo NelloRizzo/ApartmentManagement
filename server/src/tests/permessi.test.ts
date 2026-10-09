@@ -16,12 +16,14 @@ import {
   puoEseguire,
   requireAmministratore,
   requireCondominioAccess,
+  requireNonAssistente,
   requirePermesso,
   requirePermessoLettura,
   requirePermessoOPartecipante,
 } from '../middleware/auth.js';
 import { Condominio } from '../models/condominio.model.js';
 import { Condomino } from '../models/condomino.model.js';
+import { User } from '../models/user.model.js';
 import { haPermesso, type Permesso, type UserRole } from '../types/domain.js';
 
 type Utente = NonNullable<Request['user']>;
@@ -302,6 +304,42 @@ describe('requireAmministratore', () => {
     assert.equal(condomino.passato, false);
 
     const superadmin = await eseguiAsync(requireAmministratore, {
+      user: { ...utente('superadmin', null), isSuperadmin: true } as never,
+    });
+    assert.equal(superadmin.passato, true);
+    assert.equal(guardato, false, 'il controllo non deve girare per il superadmin');
+  });
+});
+
+describe('requireNonAssistente', () => {
+  it('passa per l\'amministratore, che non ha delegatoDa', async () => {
+    User.findById = (() => ({ select: () => ({ lean: async () => ({ _id: 'x' }) }) })) as never;
+    const { passato } = await eseguiAsync(requireNonAssistente, { user: utente('admin', null) });
+    assert.equal(passato, true);
+  });
+
+  it('blocca l\'assistente, anche con l\'ambito amministrazione in scrittura', async () => {
+    // Il caso reale: `delegatoDa` valorizzato e `amministrazione:scrivere` concesso.
+    // Creava il condominio a proprio nome e ne diventava amministratore.
+    User.findById = (() => ({ select: () => ({ lean: async () => ({ delegatoDa: 'qualcuno' }) }) })) as never;
+    const { passato, errore } = await eseguiAsync(requireNonAssistente, {
+      user: utente('admin', ['amministrazione:scrivere']),
+    });
+    assert.equal(passato, false);
+    assert.equal((errore as { statusCode: number }).statusCode, 403);
+  });
+
+  it('blocca il condòmino e lascia passare il superadmin senza guardare', async () => {
+    let guardato = false;
+    User.findById = (() => {
+      guardato = true;
+      return { select: () => ({ lean: async () => ({}) }) };
+    }) as never;
+
+    const condomino = await eseguiAsync(requireNonAssistente, { user: utente('condomino', []) });
+    assert.equal(condomino.passato, false);
+
+    const superadmin = await eseguiAsync(requireNonAssistente, {
       user: { ...utente('superadmin', null), isSuperadmin: true } as never,
     });
     assert.equal(superadmin.passato, true);

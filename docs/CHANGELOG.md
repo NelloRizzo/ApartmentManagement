@@ -4,6 +4,34 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### Creare un condominio è una titolarità, e non la si delega
+
+Il difetto confermato a runtime mentre si chiudeva quello del team: un
+assistente con `amministrazione:scrivere` — un permesso che nella schermata degli
+ambiti sta accanto a «Delega assistenti e servizi» — poteva fare `POST /condomini`
+e **crearsi uno stabile intestato a sé**. Da lì diventava amministratore a tutti
+gli effetti: il nuovo guard sul team lo lasciava passare, e poteva crearsi un
+assistente che restava collegato a **quello** stabile. La capacità contrattuale
+consumata era quella di chi aveva delegato, perché il contratto è del titolare.
+
+La ragione è la stessa del difetto precedente: `User.role` dice «amministratore»
+per due cose diverse — il titolare di uno stabile e chi riceve una delega — e i
+guard che guardano il ruolo non vedono la differenza.
+
+Ora `POST /condomini` passa da **`requireNonAssistente`**, che confronta
+`delegatoDa` e non il ruolo. Non si è riusato `requireAmministratore` perché
+chiede di amministrare almeno uno stabile e sarebbe quindi soddisfatto proprio da
+chi ha appena creato: una condizione che si verifica da sola.
+
+Verifiche: 54 test, tre nuovi sul guard (passa per l'amministratore, blocca
+l'assistente anche con l'ambito in scrittura, blocca il condòmino e lascia fuori il
+superadmin senza girare la query). Percorso completo **provato a runtime** contro
+il database di sviluppo montando l'app su porta effimera: l'assistente riceve 403 e
+il condominio non viene creato, non arriva al team, e **l'amministratore continua a
+poter creare i propri condomini** — il percorso legittimo è verificato insieme a
+quello negato, perché un guard che blocca tutto passerebbe il test del difetto.
+Aggiunto il controllo di percorso in `verifica-permessi.ps1`.
+
 ### Un assistente poteva creare un proprio assistente, e gli produceva un account senza stabile
 
 Da `bugs.md`: le rotte di `/staff/assistenti` erano protette da

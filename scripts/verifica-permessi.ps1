@@ -30,6 +30,25 @@ $u = (Invoke-RestMethod -Uri "$base/condomini/$cid/unita" -Headers (Auth $ad)).d
 Write-Output "  (condominio in prova: $($prof.condomini[0].codice))"
 
 Write-Output ''
+Write-Output '=== La creazione di un condominio è una titolarità ==='
+# L'assistente del seed ha solo i versamenti, quindi qui si crea qualcuno con
+# l'ambito amministrazione in scrittura: è l'unico modo per provare che il
+# diniego viene dal ruolo e non dal permesso mancante.
+$suff = [guid]::NewGuid().ToString('N').Substring(0, 8).ToUpper()
+$provvisorio = "assistente.prova.$suff@example.com"
+$nuovoAss = (Invoke-RestMethod -Method Post -Uri "$base/staff/assistenti" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{
+  email=$provvisorio; nome='Prova'; cognome='Titolarieta'; password='Assistente123!'
+  permessi=@('amministrazione:scrivere')
+}|ConvertTo-Json)).data
+$asTitolare = Login $provvisorio 'Assistente123!'
+Esito 'assistente POST /condomini (titolarietà)' { (Invoke-RestMethod -Method Post -Uri "$base/condomini" -Headers (Auth $asTitolare) -ContentType 'application/json' -Body (@{nome="Prova titolarita $suff";indirizzo=@{via='Via Prova';civico='1';citta='Milano';cap='20100';provincia='MI'};totaleMillesimi=1000}|ConvertTo-Json)).data.codice }
+Esito 'admin POST /condomini (il percorso legittimo)' { (Invoke-RestMethod -Method Post -Uri "$base/condomini" -Headers (Auth $ad) -ContentType 'application/json' -Body (@{nome="Verifica titolarita $suff";indirizzo=@{via='Via Prova';civico='2';citta='Milano';cap='20100';provincia='MI'};totaleMillesimi=1000}|ConvertTo-Json)).data.codice }
+# Ripulire: il condominio creato dal percorso legittimo e il conto dell'assistente.
+$creato = (Invoke-RestMethod -Uri "$base/condomini" -Headers (Auth $ad)).data | Where-Object { $_.nome -eq "Verifica titolarita $suff" } | Select-Object -First 1
+if ($creato) { Invoke-RestMethod -Method Delete -Uri "$base/condomini/$($creato.id)" -Headers (Auth $ad) | Out-Null }
+Invoke-RestMethod -Method Delete -Uri "$base/staff/assistenti/$($nuovoAss.id)" -Headers (Auth $ad) | Out-Null
+
+Write-Output ''
 Write-Output '=== Permessi delegati all''assistente (solo versamenti) ==='
 Esito 'assistente POST /versamenti (scrittura delegata)' { (Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/versamenti" -Headers (Auth $as) -ContentType 'application/json' -Body (@{unita=$u._id;periodo=@{anno=2026;mese=11};importo=100;dataVersamento='2026-10-01';metodo='contanti'}|ConvertTo-Json)).data.importo }
 Esito 'assistente POST /unita (non delegato)' { (Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/unita" -Headers (Auth $as) -ContentType 'application/json' -Body (@{interno='T1';scala='A';piano=1;tipologia='monolocale';superficie=45;millesimi=100}|ConvertTo-Json)).data.codice }

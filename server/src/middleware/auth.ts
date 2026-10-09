@@ -222,6 +222,40 @@ export const requireAmministratore: RequestHandler = async (req, res, next) => {
 };
 
 /**
+ * Richiede di non essere un assistente: vale dove l'atto è una **titolarietà**.
+ *
+ * Su `POST /condomini` il condominio nasce intestato a chi lo crea e consuma la
+ * capacità del contratto di quel titolare. Delegare `amministrazione:scrivere` non
+ * può voler dire anche «diventa titolare di uno stabile»: l'assistente che lo
+ * faceva si trovava amministratore di un condominio creato con la capacità di chi
+ * aveva delegato, e da lì il team e tutto il resto che ne segue.
+ *
+ * Il confronto è su `delegatoDa`, che è ciò che distingue l'amministratore dal suo
+ * assistente, non sul ruolo: entrambi sono `admin`. Non basta `requireAmministratore`,
+ * che chiede di amministrare almeno uno stabile e sarebbe quindi soddisfatto proprio
+ * da quello che ha appena creato.
+ */
+export const requireNonAssistente: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) throw unauthorized();
+    if (req.user.role === 'superadmin') return next();
+    if (req.user.role !== 'admin') {
+      return next(forbidden('Operazione riservata agli amministratori'));
+    }
+    const autore = await User.findById(req.user.sub).select('delegatoDa').lean<{ delegatoDa?: unknown }>();
+    if (!autore) throw notFound('Utente non trovato');
+    if (autore.delegatoDa) {
+      return next(
+        forbidden('Gli assistenti non possono creare condomini: la creazione è una titolarità, non una delega'),
+      );
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * Verifica che l'utente abbia accesso al condominio indicato.
  * Gli amministratori devono essere il titolare o un assistente delegato; i
  * portieri devono servire il condominio; i condomini devono avere una posizione.

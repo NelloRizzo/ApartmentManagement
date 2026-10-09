@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { validate } from '../middleware/validate.js';
-import { requireAuth, requireCondominioAccess, requirePermesso } from '../middleware/auth.js';
+import { requireAuth, requireCondominioAccess, requireNonAssistente, requirePermesso } from '../middleware/auth.js';
 import { controllaServizio, verificaCapacitaPerCondominio } from '../middleware/servizio.js';
 import * as c from '../controllers/condominio.controller.js';
 import {
@@ -14,10 +14,13 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', c.list);
-// La capacità contrattuale è contata in condomìni: è qui che si consuma.
+// Creare un condominio è diventarlo amministratore: `requireNonAssistente`, non
+// `requirePermesso` da solo, perché delegare `amministrazione:scrivere` non può
+// voler dire diventare titolare di uno stabile con la capacità di chi ha delegato.
 router.post(
   '/',
   controllaServizio,
+  requireNonAssistente,
   requirePermesso('amministrazione:scrivere'),
   verificaCapacitaPerCondominio(1),
   validate(condominioCreateSchema),
