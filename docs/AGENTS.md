@@ -93,6 +93,7 @@ npm run verifica     # verifiche di percorso completo, con API in esecuzione
 npm run seed         # popola il DB con dati demo
 npm run seed -- --reset   # svuota le collezioni e ripopola
 npm run reset:produzione  # azzera il DB di produzione, vedi docs/reset-produzione.md
+npm run reset:password-superadmin -- <password> --yes  # cambia solo la password del superadmin del seed
 ```
 
 Prima di dichiarare finito un intervento, `npm run typecheck` e `npm run lint`
@@ -109,6 +110,12 @@ Le sue difese sono volute e non vanno allentate:
   piano B;
 - `localhost` e `127.0.0.1` vengono rifiutati comunque;
 - `--yes` è obbligatorio, e senza il comando si limita a stampare il piano.
+
+`npm run reset:password-superadmin` usa le stesse difese e le stesse sorgenti
+della password (il primo parametro o `SUPERADMIN_PASSWORD`), ma tocca **solo**
+l'utente `SEED_SUPERADMIN_EMAIL`: riscrive l'hash e incrementa `tokenVersion`,
+nient'altro. Serve a rientrare quando la password dell'amministratore di
+piattaforma è persa, senza passare da `reset:produzione` che azzera tutto.
 
 ## Non lasciare processi appesi
 

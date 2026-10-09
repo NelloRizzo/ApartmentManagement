@@ -5,16 +5,6 @@ basta il numero. Una voce realizzata si cancella e la sua ragione va nel
 `CHANGELOG.md`, come per i bug in `bugs.md`. L'unica eccezione è
 `IMPLEMENTAZIONI FUTURE`, le cui voci non si numerano._
 
-PRIORITA MEDIA
-- 5. Script di emergenza per la password del superadmin in produzione
-  - oggi l'unica via per rientrare è `npm run reset:produzione`, che **azzera il database**: perdere la password dell'unico superadmin significa perdere condomini, unità, quote, verbali, bilanci, contratti, comunicazioni e anche il registro delle operazioni
-  - il buco resta aperto anche dopo il reset degli amministratori: `POST /staff/amministratori/:id/reimposta-password` è riservato al superadmin e sul proprio account risponde 400, e non esiste un recupero self-service
-  - **cosa deve fare**: cambiare **solo** la password del superadmin indicato, senza toccare il resto, con le stesse difese di `reset-produzione.ts`: `MONGODB_URI_PRODUZIONE` e non `MONGODB_URI`, `localhost` rifiutato, `--yes` obbligatorio
-  - **deciso: la password arriva solo dal primo parametro o da `SUPERADMIN_PASSWORD`**. Non va generata e inviata per email: se la casella è persa l'email non arriva, e il caso che giustifica lo script è proprio quello. `SUPERADMIN_PASSWORD` serve perché su Windows `npm run` tronca gli argomenti con `&`, `|`, `<`, `>`, `^` e `"` passando da `cmd.exe`
-  - **da decidere: quale account**. Con un solo superadmin basta `config.seed.superadminEmail`; se in produzione ce ne fossero più serve `--email` esplicito. Cambiare la password sbagliata è l'errore che questo script non deve permettere, quindi il default silenzioso va valutato con criterio
-  - **da decidere: come verificarlo**, perché rifiuta `localhost` e in locale non si può esercitare. La via che resta è lanciarlo nella rete di compose, dove il Mongo si chiama `mongo`: la guardia passa e il colpo arriva sul database di sviluppo
-  - `tokenVersion` va incrementato, come in `reimpostaPasswordAmministratore`: senza, le sessioni già aperte resterebbero valide e la password vecchia continuerebbe a funzionare fino al logout
-
 PRIORITA BASSA
 - 4. Storico delle quote millesimali non consultabile
   - **il testo non promette più niente**: la pagina dice che la revisione precedente "resta conservata", che è vero. Prima diceva "consultabile nello storico" e non lo era
@@ -25,6 +15,7 @@ PRIORITA BASSA
 IMPLEMENTAZIONI FUTURE
 _(voci rimandate e idee messe da parte, da riprendere quando si ha tempo: in
 questa sezione le voci non si numerano, per parlarne basta il titolo)_
+- Guida in pdf (download da dashboard) per l'utilizzo per l'amministratore di condominio e per un utente condòmino
 - Privacy policy per ruolo
   - serve un'informativa distinta per chi usa l'applicazione, perché il titolare del trattamento cambia
   - condòmini: il titolare è l'amministratore di condominio, che tratta i dati delle unità e delle quote per conto del condominio; Gestione Condomini agisce da responsabile del trattamento

@@ -14,6 +14,7 @@
     "seed": "tsx src/scripts/seed.ts",
     "test": "tsx --test src/tests/*.test.ts",
     "reset:produzione": "tsx src/scripts/reset-produzione.ts",
+    "reset:password-superadmin": "tsx src/scripts/reset-password-superadmin.ts",
     "migra:contratti": "tsx src/scripts/migra-contratti.ts",
     "purge:condominio": "tsx src/scripts/purge-condominio.ts"
   },

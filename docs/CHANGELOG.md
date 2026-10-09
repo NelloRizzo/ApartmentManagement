@@ -4,6 +4,32 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### Perdere la password del superadmin non costa più il database
+
+Dal `TODO.md`, voce 5: l'unica via per rientrare era `npm run reset:produzione`,
+che per riavere un amministratore di piattaforma azzera tutto — condomini, unità,
+quote, verbali, bilanci, contratti, comunicazioni e registro delle operazioni.
+
+C'è adesso `npm run reset:password-superadmin -- <password> --yes`: tocca **solo**
+l'utente `SEED_SUPERADMIN_EMAIL`, riscrivendo l'hash e incrementando `tokenVersion`
+perché le sessioni aperte cadano subito. Nessun altro account, nessuna collezione,
+nessun dato. Segue le difese di `reset:produzione`: `MONGODB_URI_PRODUZIONE` e non
+`MONGODB_URI`, `localhost` rifiutato, `--yes` obbligatorio (senza, il comando
+stampa il piano e non si connette nemmeno), password solo dal primo parametro o da
+`SUPERADMIN_PASSWORD`, mai un default. L'account non è scegliibile: un `--email`
+avrebbe introdotto l'errore di cambiare la password a un superadmin diverso da
+quello che si vuole recuperare.
+
+La voce chiedeva anche come verificarlo, dato che `localhost` è rifiutato: la via è
+la rete di compose, dove il Mongo si chiama `mongo` e la guardia passa, quindi il
+colpo arriva sul database di sviluppo.
+
+Verifiche: typecheck, lint e 30 test; i rifiuti girati in locale (variabile
+mancante, `localhost`, password corta, password assente) e il piano senza `--yes`
+che non si connette; il cambio eseguito in container sulla rete di compose, con
+hash nuovo confermato da `bcrypt`, `tokenVersion` da 0 a 1, l'admin intatto e la
+password ripristinata.
+
 ### La voce 8 era una falsa segnalazione, nata da un errore nel nome del file
 
 Dal `TODO.md`: "Caratteri strani prima del titolo degli allegati".
