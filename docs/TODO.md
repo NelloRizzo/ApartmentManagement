@@ -17,6 +17,7 @@ affronta è la prima della lista.)_
     troppo in fretta, o altro. Spostarle inline non è un cambio di `position`: ogni
     pagina dovrebbe riservare il posto, e su una pagina lunga in cui si è scesi in
     fondo un messaggio in alto non si vede
+
 - Rubrica contatti per comunicare con l'esterno
   - **chiarito**: non è la rubrica dei residenti che ha il personale dello stabile,
     ma l'elenco dei **fornitori esterni**, e la vede **solo il team**, personale
@@ -35,6 +36,7 @@ affronta è la prima della lista.)_
     un ambito significa che non è più vuota: va rifatto il ragionamento, perché non
     basta aprire quell'ambito a chi ha `iscritti:leggere` — è la trappola in cui si
     era già caduti una volta
+
 - Privacy policy per ruolo
   - serve un'informativa distinta per chi usa l'applicazione, perché il titolare del trattamento cambia
   - condòmini: il titolare è l'amministratore di condominio, che tratta i dati delle unità e delle quote per conto del condominio; Gestione Condomini agisce da responsabile del trattamento
@@ -55,6 +57,7 @@ affronta è la prima della lista.)_
     - **allargare `mieDati` prima di esporla**: non raccoglie unità immobiliari, versamenti (che hanno `condomino` come riferimento diretto), presenze e votazioni, allegati e contratto, quindi esposta così com'è sarebbe un'esportazione incompleta, che per una richiesta di accesso è peggio che non esportare nulla. Da ricordare che il registro operazioni contiene `ip` e `userAgent`, quindi è dato personale
     - esporre `mieDati` su una rotta `GET` dell'area autenticata (è già `asyncHandler` con `currentUser`) e un pulsante nel profilo che scarica il file dal browser, senza dipendenze nuove
   - l'informativa deve dichiarare l'esportazione dei dati propri **solo dopo che esiste davvero**: prometterla prima sarebbe dichiarare il falso
+
 - Guida in pdf (download da dashboard) per l'utilizzo per l'amministratore di condominio e per un utente condòmino
   - l'infrastruttura c'è già e senza dipendenze: `AreaStampa` e `PulsanteStampa` in `client/src/components/Stampa.tsx`, `_stampa.scss` con `@page`, colore in stampa e `break-inside`, già usati da verbali, bilanci e dettaglio assemblea. La scelta registrata in `AGENTS.md` è il PDF dalla finestra di stampa del browser
   - **da decidere: "download" o "stampa"**. Il pulsante apre la finestra di stampa e l'utente sceglie "Salva in PDF": un file che si scarica da solo richiede una libreria e contraddice quella scelta. La proposta è **stampa**, che costa zero dipendenze
@@ -72,10 +75,12 @@ affronta è la prima della lista.)_
     - ~20-30 righe in più in `_stampa.scss`: il foglio oggi pensa a card, tabelle e controlli, non a un testo lungo (larghezza di colonna, URL dei link stampati, interruzioni di pagina)
   - **regola in `AGENTS.md` da aggiungere**: ogni modifica a un comportamento che un utente vede si riflette nei file di guida, nello stesso intervento. Da sola non basta a garantire niente, nessuna verifica automatica può dire che un paragrafo è diventato falso: l'unica protezione è che l'unica cosa dimenticabile sia il testo, non l'indice
   - il codice è la parte piccola: il grosso sono le guide, e sono testo che invecchierà in silenzio, perché nessuna verifica automatica può segnalare che una guida descrive una schermata cancellata
+
 - Test automatici sulla logica delle quote e del verbale
   - `npm test` copre oggi solo i permessi, che sono l'area a rischio più alto
   - `quoteVersamenti.service.ts` (riparto del residuo sui centesimi, nuda proprietà, regime) e `verbale.service.ts` (quorum ordinaria e straordinaria, millesimi rappresentati, delibere con segnaposto) sono la seconda area a rischio alto e non hanno test
   - `scripts/verifica-bilancio.ps1` e `verifica-crud-verbali.ps1` coprono il percorso via API, ma non i casi limite del calcolo
+
 - Tradurre in inglese tutto il codice che non è interfaccia
   - identificatori, modelli, strutture dati, variabili, nomi di funzione, nomi dei file, backend e frontend; nell'interfaccia restano in inglese solo i nomi delle rotte
   - i messaggi di errore inviati dal server restano in italiano
