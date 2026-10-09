@@ -4,6 +4,18 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### La voce 8 era una falsa segnalazione, nata da un errore nel nome del file
+
+Dal `TODO.md`: "Caratteri strani prima del titolo degli allegati".
+
+L'indagine aveva già mostrato che dal codice non si riproduce: l'`oggetto` di un
+allegato arriva solo dall'input dell'utente ed è sempre sottoposto a `trim()`. La
+segnalazione derivava invece da un errore nel nome del file, non
+dall'applicazione: non c'è nessun difetto da correggere, e la voce è uscita dalla
+coda (la sezione `PRIORITA ALTA`, rimasta senza voci, è stata rimossa).
+
+Verifiche: nessuna, la voce non tocca il codice.
+
 ### Anche la voce 6 era una regola, non un lavoro in coda
 
 Dal `TODO.md`: "I permessi si sistemano uno alla volta".

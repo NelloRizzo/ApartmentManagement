@@ -5,13 +5,6 @@ basta il numero. Una voce realizzata si cancella e la sua ragione va nel
 `CHANGELOG.md`, come per i bug in `bugs.md`. L'unica eccezione è
 `IMPLEMENTAZIONI FUTURE`, le cui voci non si numerano._
 
-PRIORITA ALTA
-- 8. Caratteri strani prima del titolo degli allegati
-  - controllare i titoli degli allegati, perché in un caso compaiono caratteri strani prima del titolo
-  - non è stato determinato in quale pagina né su quale file
-  - **indagato: dal codice non si riproduce.** L'`oggetto` di un allegato arriva solo dall'input dell'utente (`allegatiOggetto` nel caricamento del file, oppure l'`oggetto` della comunicazione passato come `oggettoPredefinito`) ed è sempre sottoposto a `trim()`: nessun percorso inietta caratteri prima del titolo e nessun campo ha un default con caratteri strani
-  - resta il sospetto di spazi non separabili o zero-width copiati insieme al testo da qualche documento: per andare avanti serve il contesto di chi l'ha segnalato, cioè pagina e file
-
 PRIORITA MEDIA
 - 5. Script di emergenza per la password del superadmin in produzione
   - oggi l'unica via per rientrare è `npm run reset:produzione`, che **azzera il database**: perdere la password dell'unico superadmin significa perdere condomini, unità, quote, verbali, bilanci, contratti, comunicazioni e anche il registro delle operazioni
