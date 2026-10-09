@@ -7,8 +7,6 @@ import {
   condominioCreateSchema,
   condominioParams,
   condominioUpdateSchema,
-  servizioCreateSchema,
-  servizioParams,
 } from '../validators/schemas.js';
 
 const router = Router();
@@ -42,28 +40,9 @@ router.patch(
 );
 router.delete('/:condominioId', controllaServizio, requirePermesso('amministrazione:scrivere'), validate(condominioParams, 'params'), c.remove);
 
-// Il personale dello stabile. `GET` elenca chi serve, `POST` assegna (creando
-// l'account), `DELETE` revoca. Le rotte sono sull'amministratore del condominio:
-// assegnare personale è l'atto con cui si decide chi vede i dati dei residenti.
-router.get(
-  '/:condominioId/servizi',
-  controllaServizio, requirePermesso('amministrazione:leggere'),
-  validate(condominioParams, 'params'),
-  c.listServizi,
-);
-router.post(
-  '/:condominioId/servizi',
-  controllaServizio, requirePermesso('amministrazione:scrivere'),
-  validate(condominioParams, 'params'),
-  requireCondominioAccess,
-  validate(servizioCreateSchema),
-  c.addServizio,
-);
-router.delete(
-  '/:condominioId/servizi/:utenteId',
-  controllaServizio, requirePermesso('amministrazione:scrivere'),
-  validate(servizioParams, 'params'),
-  c.removeServizio,
-);
+// Il personale di uno stabile non ha rotte qui: nasce e viene revocato dalla pagina
+// del team (`POST /staff/assistenti` con `ruolo: 'portiere'` e
+// `DELETE /staff/assistenti/:id`). Tenere anche `/servizi` sarebbe un secondo modo
+// di dire la stessa cosa, e i due potrebbero divergere.
 
 export default router;

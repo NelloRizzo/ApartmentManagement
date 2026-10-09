@@ -151,6 +151,18 @@ function ModuloAssistente({
   const [cognome, setCognome] = useState(assistente?.cognome ?? '');
   const [telefono, setTelefono] = useState(assistente?.telefono ?? '');
   const [attivo, setAttivo] = useState(assistente?.attivo ?? true);
+  /**
+   * Assistente o personale di uno stabile: due forme alternative, non due ruoli
+   * insieme. Il radio serve a dirlo una volta sola, e il resto del form cambia di
+   * conseguenza: l'assistente riceve gli ambiti delegati e lavora su tutti gli
+   * stabili, il personale ne serve uno solo e non riceve ambiti.
+   *
+   * In modifica il ruolo non si cambia: la persona ha già un perimesso concesso e
+   * spostarla sarebbe una modifica d'impianto, non una modifica delega.
+   */
+  const [ruolo, setRuolo] = useState<'admin' | 'portiere'>(assistente?.ruolo ?? 'admin');
+  const { condominioId, utente } = useAuth();
+  const [stabile, setStabile] = useState(condominioId ?? '');
   const [permessi, setPermessi] = useState<Set<Permesso>>(
     new Set(assistente?.permessi ?? []),
   );
@@ -213,23 +225,27 @@ function ModuloAssistente({
           conferma?: EsitoConferma;
           passwordDaConsegnare?: boolean;
         }>('/staff/assistenti', {
+          ruolo,
           email: email.trim(),
           nome: nome.trim(),
           cognome: cognome.trim(),
           telefono: telefono.trim() || undefined,
-          permessi: [...permessi],
+          // Il personale di uno stabile non riceve ambiti: il suo perimetro è la
+          // rubrica di quello stabile, e la scelta gliela fa il ruolo.
+          ...(ruolo === 'portiere' ? { condominioId: stabile } : { permessi: [...permessi] }),
         });
         /*
-         * La password provvisoria viaggia nell'email: senza l'invio l'assistente
-         * non avrebbe modo di sapere la sua, perché nessuno l'ha scelta. Va detto
+         * La password provvisoria viaggia nell'email: senza l'invio la persona non
+         * avrebbe modo di sapere la sua, perché nessuno l'ha scelta. Va detto
          * apertamente, altrimenti l'amministratore crederebbe che sia arrivata.
          */
+        const chePersona = ruolo === 'portiere' ? 'Personale dello stabile creato' : 'Assistente creato';
         if (risposta.data.conferma?.inviata) {
-          notifica('Assistente creato: email con password provvisoria e link di conferma inviata.');
+          notifica(`${chePersona}: email con password provvisoria e link di conferma inviata.`);
         } else {
           setPasswordDaConsegnare(true);
           notifica(
-            'Assistente creato, ma l’email non è partita: la password provvisoria andrà consegnata a mano.',
+            `${chePersona}, ma l'email non è partita: la password provvisoria andrà consegnata a mano.`,
             'errore',
           );
         }
@@ -338,22 +354,95 @@ function ModuloAssistente({
             />
           </div>
 
-          <div className="campo">
-            <div className="riga riga-tra">
-              <span className="campo-etichetta">Ambiti delegati</span>
-              <div className="riga">
-                <button type="button" className="btn btn-secondario btn-sm" onClick={selezionaTutto}>
-                  Tutti
-                </button>
-                <button type="button" className="btn btn-fantasma btn-sm" onClick={svuota}>
-                  Nessuno
-                </button>
+          {!assistente && (
+            <div className="campo">
+              <span className="campo-etichetta">Che ruolo ha</span>
+              {/*
+                Radio e non caselle di spunta: sono due forme alternative, e due
+                spunte permetterebbero di scegliere "entrambi", che è
+                precisamente il caso da evitare.
+              */}
+              <div className="pila-1" style={{ marginTop: 'var(--sp-1)' }}>
+                <label className="riga" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="ruolo-team"
+                    value="admin"
+                    checked={ruolo === 'admin'}
+                    onChange={() => setRuolo('admin')}
+                  />
+                  <span>
+                    <strong>Assistente</strong>
+                    <span className="testo-faint">
+                      {' '}
+                      — lavora su tutti i tuoi stabili, con gli ambiti che gli deleghi
+                    </span>
+                  </span>
+                </label>
+                <label className="riga" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="ruolo-team"
+                    value="portiere"
+                    checked={ruolo === 'portiere'}
+                    onChange={() => setRuolo('portiere')}
+                  />
+                  <span>
+                    <strong>Personale dello stabile</strong>
+                    <span className="testo-faint">
+                      {' '}
+                      — serve un solo stabile: vede la rubrica dei residenti e i compiti che gli affidi
+                    </span>
+                  </span>
+                </label>
               </div>
             </div>
-            <span className="campo-aiuto">
-              Concedere la scrittura comprende anche la lettura. Un ambiente con sola lettura nasconde i pulsanti
-              di modifica ma permette di consultare i dati.
-            </span>
+          )}
+
+          {ruolo === 'portiere' && !assistente && (
+            <div className="campo">
+              <label className="campo-etichetta" htmlFor="a-stabile">
+                Stabile da servire
+              </label>
+              <select
+                id="a-stabile"
+                className="area"
+                value={stabile}
+                onChange={(e) => setStabile(e.target.value)}
+              >
+                <option value="">Scegli lo stabile</option>
+                {(utente?.condomini ?? [])
+                  .filter((c) => !c.assistito)
+                  .map((c) => (
+                    <option key={c.condominioId} value={c.condominioId}>
+                      {c.nome} ({c.codice})
+                    </option>
+                  ))}
+              </select>
+              <span className="campo-aiuto">
+                Il personale vede i residenti di questo stabile con cognome e telefono, e i compiti che
+                gli affidi. Non vede quote, versamenti, bilanci né verbali.
+              </span>
+            </div>
+          )}
+
+          {ruolo === 'admin' && (
+            <div className="campo">
+              <div className="riga riga-tra">
+                <span className="campo-etichetta">Ambiti delegati</span>
+                <div className="riga">
+                  <button type="button" className="btn btn-secondario btn-sm" onClick={selezionaTutto}>
+                    Tutti
+                  </button>
+                  <button type="button" className="btn btn-fantasma btn-sm" onClick={svuota}>
+                    Nessuno
+                  </button>
+                </div>
+              </div>
+              <span className="campo-aiuto">
+                Concedere la scrittura comprende anche la lettura. Un ambiente con sola lettura nasconde i pulsanti
+                di modifica ma permette di consultare i dati.
+              </span>
 
             <div style={{ marginTop: 'var(--sp-2)' }}>
               {AMBITI.map((a) => (
@@ -395,11 +484,12 @@ function ModuloAssistente({
                 </div>
               ))}
             </div>
-          </div>
 
-          {permessi.size === 0 && (
-            <div className="avviso avviso-avviso">
-              Senza ambiti delegati l’assistente potrà solo consultare l’app, ma non operare.
+              {permessi.size === 0 && (
+                <div className="avviso avviso-avviso">
+                  Senza ambiti delegati l’assistente potrà solo consultare l’app, ma non operare.
+                </div>
+              )}
             </div>
           )}
 

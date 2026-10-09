@@ -103,24 +103,6 @@ export const cambiaEmailSchema = z.object({
 // ---------- Condominio ----------
 export const condominioParams = z.object({ condominioId: objectId });
 
-export const servizioParams = z.object({ condominioId: objectId, utenteId: objectId });
-
-export const utenteBody = z.object({ utenteId: objectId });
-
-/**
- * Creazione del personale dello stabile.
- *
- * `password` è facoltativa: senza, se ne genera una provvisoria che viaggia solo
- * nell'email di conferma, mai in una risposta né nel registro operazioni.
- */
-export const servizioCreateSchema = z.object({
-  email: z.string().trim().toLowerCase().email('Email non valida'),
-  nome: z.string().trim().min(1, 'Nome obbligatorio').max(80),
-  cognome: z.string().trim().min(1, 'Cognome obbligatorio').max(80),
-  telefono: z.string().trim().max(30).optional(),
-  password: z.string().min(8, 'La password deve essere lunga almeno 8 caratteri').optional(),
-});
-
 export const unitaParams = z.object({ condominioId: objectId, id: objectId });
 
 export const sempliceId = z.object({ id: objectId });
@@ -567,17 +549,42 @@ export const aggiornaAmministratoreSchema = z.object({
   permessi: listaPermessi.nullable().optional(),
 });
 
-export const creaAssistenteSchema = z.object({
-  email: z.string().email('Email non valida').toLowerCase().trim(),
-  nome: z.string().trim().min(1).max(80).optional(),
-  cognome: z.string().trim().min(1).max(80).optional(),
-  telefono: z.string().trim().max(30).optional(),
-  password: z.string().min(10).optional(),
-  permessi: listaPermessi,
-}).refine((d) => !d.nome === !d.cognome, {
-  message: 'Nome e cognome vanno indicati insieme',
-  path: ['nome'],
-});
+/**
+ * Creazione di una persona del team.
+ *
+ * `ruolo` distingue le due forme, e sono **alternative**: una persona è assistente
+ * oppure è personale dello stabile, non entrambe. Un solo campo `role` nel modello
+ * resta quindi sufficiente, e non nasce il caso di una persona con due ruoli che i
+ * guard dovrebbero distinguere.
+ *
+ * I permessi servono all'assistente, che lavora su tutti gli stabili
+ * dell'amministratore. Il personale dello stabile ne serve **uno solo** e ha il
+ * perimetro vuoto: `permessi` non lo riguarda e `condominioId` è obbligatorio,
+ * perché il legame con lo stabile è ciò che lo distingue.
+ */
+export const creaAssistenteSchema = z
+  .object({
+    ruolo: z.enum(['admin', 'portiere']).default('admin'),
+    email: z.string().email('Email non valida').toLowerCase().trim(),
+    nome: z.string().trim().min(1).max(80).optional(),
+    cognome: z.string().trim().min(1).max(80).optional(),
+    telefono: z.string().trim().max(30).optional(),
+    password: z.string().min(10).optional(),
+    condominioId: objectId.optional(),
+    permessi: listaPermessi.optional(),
+  })
+  .refine((d) => !d.nome === !d.cognome, {
+    message: 'Nome e cognome vanno indicati insieme',
+    path: ['nome'],
+  })
+  .refine((d) => d.ruolo !== 'portiere' || Boolean(d.condominioId), {
+    message: 'Il personale dello stabile va assegnato a un condominio',
+    path: ['condominioId'],
+  })
+  .refine((d) => d.ruolo !== 'admin' || d.permessi !== undefined, {
+    message: 'Scegli gli ambiti che l’assistente potrà gestire',
+    path: ['permessi'],
+  });
 
 export const aggiornaAssistenteSchema = z.object({
   nome: z.string().trim().min(1).max(80).optional(),

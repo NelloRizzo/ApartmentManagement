@@ -49,6 +49,15 @@ export interface Collaboratore {
   cognome: string;
   nomeCompleto: string;
   role: UserRole;
+  /**
+   * Che forma ha nel team: `admin` è l'assistente che lavora su tutti gli stabili
+   * del delegante, `portiere` il personale che ne serve **uno**. È la distinzione
+   * che il form del team chiede con il radio, e vale più di `role`: dice anche a chi
+   * non amministra quale dei due sia.
+   */
+  ruolo?: 'admin' | 'portiere';
+  /** Gli stabili in cui la persona opera: uno per il personale, molti per l'assistente. */
+  stabili?: { id: string; nome: string; codice: string }[];
   attivo: boolean;
   telefono?: string;
   accessoPieno: boolean;

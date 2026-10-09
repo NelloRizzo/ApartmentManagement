@@ -10,6 +10,31 @@ _(voci rimandate e idee messe da parte, da riprendere quando si ha tempo: in
 questa sezione le voci non si numerano, per parlarne basta il titolo.
 **L'ordine in cui sono elencate è l'ordine di esecuzione**: la prima che si
 affronta è la prima della lista.)_
+- Le notifiche non dovrebbero coprire la pagina
+  - oggi sono un riquadro `position: fixed` sotto l'intestazione, che passa sopra
+    il contenuto mentre leggi
+  - **da chiarire prima di muoverle**: cosa non va. Coprono il contenuto, spariscono
+    troppo in fretta, o altro. Spostarle inline non è un cambio di `position`: ogni
+    pagina dovrebbe riservare il posto, e su una pagina lunga in cui si è scesi in
+    fondo un messaggio in alto non si vede
+- Rubrica contatti per comunicare con l'esterno
+  - **chiarito**: non è la rubrica dei residenti che ha il personale dello stabile,
+    ma l'elenco dei **fornitori esterni**, e la vede **solo il team**, personale
+    dello stabile compreso. Le due cose hanno nomi simili e scopi opposti
+  - da conseguire: un modello `Contatto` per condominio (nome, ente o ruolo, telefono, email, note), la possibilità di scegliere un contatto come destinatario di una comunicazione, e il fatto che **lettura e non letto non si applicano** a chi non ha una posizione: oggi ogni destinatario ha un posto nella conversazione, e senza posto il conteggio delle non lette non sa che cosa fare
+  - **un contatto esterno non entra nell'applicazione**: nessun account, riceve per email
+  - la creazione si fa dal team, come per le altre persone: niente ruolo nuovo, è
+    solo una rubrica
+  - **privacy, da rifare quando la rubrica esiste**: l'informativa del personale
+    dello stabile dice che vede solo la rubrica dei residenti, e dovrà dire anche i
+    fornitori. I contatti di un fornitore sono dati personali di terzi, con finalità
+    e conservazione diverse da quelli dei residenti, quindi probabilmente meritano
+    una sezione a sé
+  - **serve un ambito nuovo**: la rubrica dei fornitori è un ambito (`fornitori:leggere`).
+    Il perimetro del personale oggi è una lista di permessi **vuota**, e aggiungere
+    un ambito significa che non è più vuota: va rifatto il ragionamento, perché non
+    basta aprire quell'ambito a chi ha `iscritti:leggere` — è la trappola in cui si
+    era già caduti una volta
 - Privacy policy per ruolo
   - serve un'informativa distinta per chi usa l'applicazione, perché il titolare del trattamento cambia
   - condòmini: il titolare è l'amministratore di condominio, che tratta i dati delle unità e delle quote per conto del condominio; Gestione Condomini agisce da responsabile del trattamento
@@ -47,11 +72,6 @@ affronta è la prima della lista.)_
     - ~20-30 righe in più in `_stampa.scss`: il foglio oggi pensa a card, tabelle e controlli, non a un testo lungo (larghezza di colonna, URL dei link stampati, interruzioni di pagina)
   - **regola in `AGENTS.md` da aggiungere**: ogni modifica a un comportamento che un utente vede si riflette nei file di guida, nello stesso intervento. Da sola non basta a garantire niente, nessuna verifica automatica può dire che un paragrafo è diventato falso: l'unica protezione è che l'unica cosa dimenticabile sia il testo, non l'indice
   - il codice è la parte piccola: il grosso sono le guide, e sono testo che invecchierà in silenzio, perché nessuna verifica automatica può segnalare che una guida descrive una schermata cancellata
-- Rubrica contatti per comunicare con l'esterno
-  - oggi `Comunicazione` ha come destinatari solo soggetti dell'applicazione: `filtroVisibilita` costruisce la partecipazione su `User` e `Condomino`, quindi non c'è modo di scrivere a chi non ha un account
-  - **deciso: le aziende esterne si lasciano perdere**, quindi la rubrica non è per fornitori con un ruolo proprio: serve per **mandare**, non per far entrare. Un contatto esterno non ha account e non entra mai nell'applicazione, riceve per email
-  - da conseguire: un modello `Contatto` per condominio (nome, ente o ruolo, telefono, email, note), la possibilità di scegliere un contatto come destinatario, e il fatto che **lettura e non letto non si applicano** a chi non ha una posizione: oggi ogni destinatario ha un posto nella conversazione, e senza posto il conteggio delle non lette non sa che cosa fare
-  - è la stessa esigenza che sta dietro `condominiServito` e il ruolo `portiere`, risolta dal lato opposto: quella porta *dentro* l'applicazione chi serve lo stabile, questa porta *fuori* chi non lo serve
 - Test automatici sulla logica delle quote e del verbale
   - `npm test` copre oggi solo i permessi, che sono l'area a rischio più alto
   - `quoteVersamenti.service.ts` (riparto del residuo sui centesimi, nuda proprietà, regime) e `verbale.service.ts` (quorum ordinaria e straordinaria, millesimi rappresentati, delibere con segnaposto) sono la seconda area a rischio alto e non hanno test

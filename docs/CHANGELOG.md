@@ -4,6 +4,37 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### Il personale dello stabile nasce dal team, non dalla pagina dello stabile
+
+Il portiere era stato creato dalla pagina degli iscritti, ed è stato spostato in **Team
+e deleghe**: è una persona dell'amministratore, non una proprietà dello stabile. Il
+form chiede il ruolo con un **radio** — assistente o personale dello stabile — e sono
+due forme **alternative**, non due ruoli insieme: `User.role` resta un campo solo e i
+guard non devono distinguere il caso di una persona con due ruoli.
+
+Lo spostamento non è solo una questione di pagina. `registraDelegazione` aggiunge
+l'assistente a **tutti** gli stabili del delegante, quindi un portiere creato da quel
+flusso avrebbe avuto accesso a tutto il portafoglio: il personale viene legato a **uno**
+stabile solo, scelto nel form e verificato che sia dell'amministratore che sta creando la
+persona. Su un account convertito da condòmino il legame col delegante viene tolto per la
+stessa ragione.
+
+Con una sola creazione non restano due modi di dire la stessa cosa: le rotte
+`/condomini/:id/servizi` sono state rimosse e la revoca passa da
+`DELETE /staff/assistenti/:id`, che distingue le due forme. La pagina del team elenca
+assistenti e personale insieme, con il ruolo e gli stabili di ciascuno, perché nascono
+dallo stesso form.
+
+Nell'informativa sul trattamento dei dati il testo è stato anche semplificato alle sole
+intenzioni: dice **che cosa facciamo e perché**, senza l'apparato di analisi e senza
+segnaposto. Restano fuori i valori che non abbiamo — denominazione e indirizzo di Gestione
+Condomini, e l'indirizzo per esercitare i diritti — e la pagina non li inventa.
+
+Verifiche: typecheck, lint e 48 test. La verifica del percorso completo **non è stata
+eseguita**: Docker Desktop è spento e il Mongo di sviluppo non è in ascolto.
+`scripts/verifica-portiere.ps1` è stato riportato alle rotte nuove e validato nella
+sintassi, ma va rilanciato.
+
 ### Il personale dello stabile esiste davvero, e non vede niente che non gli serva
 
 Dal `TODO.md`, voce sul ruolo `portiere`: il ruolo era implementato tutto e **non

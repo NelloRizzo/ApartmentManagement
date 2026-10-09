@@ -240,19 +240,29 @@ export const listAssistenti = asyncHandler(async (req, res) => {
   const q = req.query as unknown as { page: number; limit: number; search?: string; sort: string; order: 'asc' | 'desc' };
   const { page, limit, sort, order } = paginazioneDa(q, 'cognome');
 
-  // Gli assistenti sono gli utenti comparsi nell'elenco `assistenti` dei
-  // condomini che l'interessato amministra.
+  // Due popolazioni diverse: chi è in `assistenti` è del team su tutti gli
+  // stabili, chi è in `condominiServito` è personale di **quello** stabile. La
+  // pagina del team le mostra insieme perché nascono dallo stesso form, ma non le
+  // confonde: la lista porta il ruolo e gli stabili di ciascuno.
   const mieiCondomini = await Condominio.find(
     utente.role === 'superadmin' ? {} : { amministratore: utente.sub },
   )
-    .select('_id assistenti')
-    .lean<Pick<CondominioDoc, '_id' | 'assistenti'>[]>();
+    .select('_id nome codice assistenti condominiServito')
+    .lean<Pick<CondominioDoc, '_id' | 'nome' | 'codice' | 'assistenti' | 'condominiServito'>[]>();
 
-  const perCondominio = new Map<string, string>();
+  const perPersona = new Map<string, { ruolo: 'admin' | 'portiere'; stabili: { id: string; nome: string; codice: string }[] }>();
+  const annota = (personaId: string, ruolo: 'admin' | 'portiere', stabile: { id: string; nome: string; codice: string }) => {
+    const voce = perPersona.get(personaId) ?? { ruolo, stabili: [] };
+    if (!voce.stabili.some((s) => s.id === stabile.id)) voce.stabili.push(stabile);
+    perPersona.set(personaId, voce);
+  };
   for (const c of mieiCondomini) {
-    for (const a of c.assistenti) perCondominio.set(String(a), String(c._id));
+    const stabile = { id: String(c._id), nome: c.nome, codice: c.codice };
+    for (const a of c.assistenti) annota(String(a), 'admin', stabile);
+    for (const p of c.condominiServito) annota(String(p), 'portiere', stabile);
   }
-  const ids = [...perCondominio.keys()];
+
+  const ids = [...perPersona.keys()];
   if (ids.length === 0) {
     paginated(res, [], 0, page, limit);
     return;
@@ -276,7 +286,16 @@ export const listAssistenti = asyncHandler(async (req, res) => {
 
   paginated(
     res,
-    documenti.map((u) => ({ ...riepilogoCollaboratore(u), condominoDelegato: perCondominio.get(String(u._id)) })),
+    documenti.map((u) => {
+      const voce = perPersona.get(String(u._id))!;
+      return {
+        ...riepilogoCollaboratore(u),
+        ruolo: voce.ruolo,
+        stabili: voce.stabili,
+        // Tenuto per il form dell'assistente, che mostra lo stabile delegato.
+        condominoDelegato: voce.stabili[0]?.id,
+      };
+    }),
     totale,
     page,
     limit,
@@ -284,26 +303,48 @@ export const listAssistenti = asyncHandler(async (req, res) => {
 });
 
 /**
- * Crea un assistente. Se l'email corrisponde già a un utente esistente che non
- * ha ancora ruolo amministrativo, lo converte in assistente: evita di creare
- * account duplicati quando qualcuno è già un condòmino.
+ * Crea una persona del team: un **assistente**, che lavora su tutti gli stabili
+ * dell'amministratore con gli ambiti che gli sono delegati, oppure il **personale
+ * di un solo stabile**, che vede la rubrica dei residenti e i compiti che gli
+ * vengono affidati.
+ *
+ * Le due forme sono alternative e nascono dallo stesso form, che chiede il ruolo con
+ * un radio. Non è una comodità dell'interfaccia: è la scelta che evita due modi di
+ * dire la stessa cosa. `registraDelegazione` aggiunge l'assistente a **tutti** gli
+ * stabili del delegante, cosa che per il personale sarebbe sbagliato — quindi qui il
+ * portiere viene collegato a **uno** stabile solo, e non passa da quella funzione.
+ *
+ * Se l'email corrisponde già a un utente esistente che non ha ancora ruolo
+ * amministrativo, lo converte: evita di creare account duplicati quando qualcuno è
+ * già un condòmino.
  */
 export const creaAssistente = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
   if (utente.role !== 'admin') {
-    throw forbidden('Solo un amministratore può delegare un assistente');
+    throw forbidden('Solo un amministratore può aggiungere una persona al proprio team');
   }
 
   const body = req.body as {
+    ruolo: 'admin' | 'portiere';
     email: string;
     nome?: string;
     cognome?: string;
     telefono?: string;
     password?: string;
-    permessi: unknown;
+    condominioId?: string;
+    permessi?: unknown;
   };
+  const ruolo = body.ruolo ?? 'admin';
+  const portiere = ruolo === 'portiere';
+  const permessi = portiere ? [] : pulisciPermessi(body.permessi);
 
-  const permessi = pulisciPermessi(body.permessi);
+  // Il portiere va legato a uno stabilo **di chi lo crea**: senza questo controllo
+  // si potrebbe assegnare personale a uno stabile altrui.
+  if (portiere) {
+    const stabile = await Condominio.exists({ _id: oid(body.condominioId!), amministratore: utente.sub });
+    if (!stabile) throw notFound('Condominio non trovato o non amministrato da te');
+  }
+
   const esistente = await User.findOne({ email: body.email });
 
   if (esistente && esistente.role !== 'condomino' && esistente.role !== 'portiere') {
@@ -313,36 +354,46 @@ export const creaAssistente = asyncHandler(async (req, res) => {
   let assistente: UserDoc;
   let conferma: Awaited<ReturnType<typeof inviaConfermaA>> | null = null;
   if (esistente) {
-    if (!body.nome) throw badRequest('Indica il nome per l’assistente');
-    if (!body.cognome) throw badRequest('Indica il cognome per l’assistente');
-    esistente.role = 'admin';
+    if (!body.nome) throw badRequest('Indica il nome della persona');
+    if (!body.cognome) throw badRequest('Indica il cognome della persona');
+    esistente.role = ruolo;
     esistente.permessi = permessi;
-    esistente.delegatoDa = oid(utente.sub);
-    esistente.dataDelega = new Date();
+    esistente.attivo = true;
     esistente.tokenVersion += 1;
+    // Il legame con il delegante è ciò che distingue l'assistente, e non compete al
+    // personale dello stabile: lasciarlo su un account convertito darebbe a un
+    // portiere l'accesso a **tutti** gli stabili dell'amministratore.
+    if (portiere) {
+      esistente.delegatoDa = undefined;
+      esistente.dataDelega = undefined;
+    } else {
+      esistente.delegatoDa = oid(utente.sub);
+      esistente.dataDelega = new Date();
+    }
     await esistente.save();
     assistente = esistente;
   } else {
     if (!body.nome) throw badRequest('Nome obbligatorio');
     if (!body.cognome) throw badRequest('Cognome obbligatorio');
-    const password = body.password ?? passwordTemporanea('Assistente');
+    const password = body.password ?? passwordTemporanea(portiere ? 'Personale' : 'Assistente');
     assistente = await User.create({
       email: body.email,
       nome: body.nome,
       cognome: body.cognome,
       telefono: body.telefono,
       password: await User.hashPassword(password),
-      role: 'admin',
+      role: ruolo,
+      // Lista vuota per il personale: è il perimetro più stretto, e `null` qui
+      // aprirebbe tutto lo stabile. Vedi `requirePermessoLettura`.
       permessi,
-      delegatoDa: oid(utente.sub),
-      dataDelega: new Date(),
+      ...(portiere ? {} : { delegatoDa: oid(utente.sub), dataDelega: new Date() }),
       attivo: true,
       emailConfermato: false,
     });
 
     // La password provvisoria viaggia solo nell'email: prima finiva nel log di
     // audit, in chiaro, e non tornava in nessuna risposta, quindi nessuno
-    // poteva consegnarla all'assistente.
+    // poteva consegnarla a chi l'aveva ricevuta.
     conferma = await inviaConfermaA(assistente, {
       passwordProvvisoria: body.password ? undefined : password,
       organizzazione: 'un amministratore di condominio',
@@ -350,15 +401,28 @@ export const creaAssistente = asyncHandler(async (req, res) => {
 
     await auditLog({
       attore: utente.sub,
-      azione: 'creazione_assistente',
+      azione: portiere ? 'assegnazione_personale' : 'creazione_assistente',
       entita: 'User',
       entitaId: String(assistente._id),
-      dettagli: { email: body.email, permessi, confermaInviata: conferma.esito.inviato },
+      dettagli: {
+        email: body.email,
+        ruolo,
+        ...(portiere ? { condominio: body.condominioId } : { permessi }),
+        confermaInviata: conferma.esito.inviato,
+      },
+      ...(portiere ? { condominio: body.condominioId } : {}),
       req,
     });
   }
 
-  await registraDelegazione(assistente, utente.sub);
+  if (portiere) {
+    await Condominio.updateOne(
+      { _id: oid(body.condominioId!), amministratore: utente.sub },
+      { $addToSet: { condominiServito: assistente._id } },
+    );
+  } else {
+    await registraDelegazione(assistente, utente.sub);
+  }
   await allineaUtente(assistente._id);
 
   created(res, {
@@ -430,12 +494,44 @@ export const aggiornaAssistente = asyncHandler(async (req, res) => {
 export const revocaAssistente = asyncHandler(async (req, res) => {
   const delegante = currentUser(req);
   if (delegante.role !== 'admin') {
-    throw forbidden('Solo un amministratore può revocare un assistente');
+    throw forbidden('Solo un amministratore può revocare una persona dal proprio team');
   }
 
   const id = getObjectId(req.params.id ?? '', 'id');
-  const assistente = await User.findById(id);
-  if (!assistente) throw notFound('Assistente non trovato');
+  const persona = await User.findById(id);
+  if (!persona) throw notFound('Persona non trovata');
+
+  // Il personale di uno stabile è legato da `condominiServito` e non da
+  // `assistenti`: revocarne il legame dall'elenco degli assistenti non
+  // toccerebbe niente e lascerebbe l'incarico in piedi.
+  if (persona.role === 'portiere') {
+    const risultato = await Condominio.updateMany(
+      { amministratore: delegante.sub },
+      { $pull: { condominiServito: id } },
+    );
+    if (risultato.modifiedCount === 0) throw forbidden('Questa persona non serve uno dei tuoi stabili');
+
+    // Un portiere che non serve più nessuno stabile viene disattivato, come
+    // l'assistente che non è più di nessuno: l'account resta e i compiti che ha
+    // svolto restano, ma non c'è più una password in mano a chi non serve più.
+    const serveAltro = await Condominio.exists({ condominiServito: id });
+    if (!serveAltro) {
+      await User.updateOne({ _id: id }, { attivo: false, tokenVersion: 1 });
+    }
+    await allineaUtente(id);
+
+    await auditLog({
+      attore: delegante.sub,
+      azione: 'revoca_personale',
+      entita: 'User',
+      entitaId: String(id),
+      dettagli: { stabiliRimossi: risultato.modifiedCount, disattivato: !serveAltro },
+      req,
+    });
+
+    noContent(res);
+    return;
+  }
 
   const risultato = await Condominio.updateMany({ amministratore: delegante.sub }, { $pull: { assistenti: id } });
   if (risultato.modifiedCount === 0) throw forbidden('Questo assistente non è tuo');

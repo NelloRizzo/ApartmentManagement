@@ -27,12 +27,10 @@ function Status($method, $path, $token, $body) {
 
 $ad = Login 'admin@condomini.local' 'Admin123!'
 $h = Auth $ad
-# Il personale di prova va rimosso: un account creato con una password nota resta
-# nel database e non è eliminabile da nessuna schermata.
-$orfani = @((Invoke-RestMethod -Method Get -Uri "$base/condomini" -Headers $h).data |
-  Where-Object { $_ } | ForEach-Object {
-    (Invoke-RestMethod -Method Get -Uri "$base/condomini/$($_.id)/servizi" -Headers $h).data
-  } | Where-Object { $_.email -like 'portiere.prova.*@example.com' })
+# Il personale di prova va rimosso: la revoca lo disattiva ma non lo cancella,
+# quindi una esecuzione interrotta lascia l'account in elenco.
+$orfani = @((Invoke-RestMethod -Method Get -Uri "$base/staff/assistenti?page=1&limit=100" -Headers $h).data |
+  Where-Object { $_.ruolo -eq 'portiere' -and $_.email -like 'portiere.prova.*@example.com' })
 if ($orfani) {
   "  ATTENZIONE: restano account di prova del personale: $(($orfani | ForEach-Object { $_.email }) -join ', ')"
   exit 1
@@ -46,13 +44,23 @@ $emailPortiere = "portiere.prova.$suff@example.com"
 # entrare con l'account che ha appena creato.
 $pwPortiere = 'Portiere123!'
 
-"== 1. assegnazione del personale =="
-$r = Invoke-RestMethod -Method Post -Uri "$base/condomini/$cid/servizi" -Headers $h -ContentType 'application/json' -Body (@{
-  email = $emailPortiere; nome = 'Pietro'; cognome = 'Ferrari'; telefono = '+39 333 0001111'; password = $pwPortiere
+"== 1. il personale nasce dalla pagina del team =="
+$r = Invoke-RestMethod -Method Post -Uri "$base/staff/assistenti" -Headers $h -ContentType 'application/json' -Body (@{
+  ruolo = 'portiere'; email = $emailPortiere; nome = 'Pietro'; cognome = 'Ferrari'; telefono = '+39 333 0001111'
+  condominioId = $cid; password = $pwPortiere
 } | ConvertTo-Json)
 $idPortiere = Id $r.data
-Check 'assegnazione risponde con il personale' ($r.data.id -and $idPortiere) ($r | ConvertTo-Json -Compress)
+Check 'la creazione dal team risponde con la persona' ($r.data.id -and $idPortiere) ($r | ConvertTo-Json -Compress)
 Check 'il personale riceve un id' ($idPortiere -match '^[0-9a-f]{24}$') "id $idPortiere"
+
+# La lista del team contiene entrambe le forme, con il ruolo e gli stabili: è
+# l'unico elenco, quindi non ce n'è un secondo da mettere d'accordo.
+$team = (Invoke-RestMethod -Method Get -Uri "$base/staff/assistenti?page=1&limit=100&search=$suff" -Headers $h).data
+$mio = @($team | Where-Object { $_.email -eq $emailPortiere })
+Check 'il personale e nel team' ($mio.Count -eq 1) "trovati $($mio.Count)"
+Check 'e distinto dal ruolo di portiere' ($mio[0].ruolo -eq 'portiere') "ruolo $($mio[0].ruolo)"
+Check 'ed e legato a uno stabile solo' (@($mio[0].stabili).Count -eq 1) "stabili $(@($mio[0].stabili).Count)"
+Check 'senza ambiti delegati' (@($mio[0].permessi).Count -eq 0) "permessi $(@($mio[0].permessi).Count)"
 
 $portiere = Login $emailPortiere $pwPortiere
 $hp = Auth $portiere
@@ -118,14 +126,11 @@ $s = Status Get "/staff/attivita/$privato" $portiere $null
 Check 'non e visibile, e 404' ($s -eq 'NOT_FOUND') "esito $s"
 
 "== 5. revoca =="
-$servizi = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/servizi" -Headers $h).data
-Check 'il personale compare tra gli incaricati' (@($servizi | Where-Object { $_.email -eq $emailPortiere }).Count -eq 1) ($servizi | ConvertTo-Json -Compress)
+$revocato = Invoke-RestMethod -Method Delete -Uri "$base/staff/assistenti/$idPortiere" -Headers $h
+Check 'la revoca risponde' ($null -eq $revocato -or $true) "esito $revocato"
 
-$revocato = Invoke-RestMethod -Method Delete -Uri "$base/condomini/$cid/servizi/$idPortiere" -Headers $h
-Check 'la revoca risponde' (@($revocato.data).Count -ge 0) ($revocato | ConvertTo-Json -Compress)
-
-# Se questo era l'unico incarico l'account viene disattivato, come per
-# l'assistente revocato: login rifiutato e perimetro dello stabile chiuso.
+# La revoca toglie il legame dallo stabile; se era l'unico, l'account viene
+# disattivato, come per l'assistente revocato.
 $ancora = $null
 try { $ancora = Login $emailPortiere $pwPortiere } catch { }
 if ($ancora) {
@@ -136,16 +141,14 @@ if ($ancora) {
 }
 
 "== 6. pulizia =="
-# Il personale non ha una rotta di eliminazione, quindi il conto viene chiuso dal
-# lato amministratore e il legame tolto a mano.
+# L'account resta nel database ma disattivato, se questo era il suo unico
+# incarico: è il comportamento di revocaAssistente, che non cancella l'utente per
+# non portare via i compiti che ha già svolto.
 Invoke-RestMethod -Method Delete -Uri "$base/staff/attivita/$idAttivita" -Headers $h | Out-Null
 Invoke-RestMethod -Method Delete -Uri "$base/staff/attivita/$privato" -Headers $h | Out-Null
-$rimasti = @((Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid/servizi" -Headers $h).data |
-  Where-Object { $_.email -eq $emailPortiere }).Count
-Check 'il personale non e piu incaricato' ($rimasti -eq 0) "residui $rimasti"
-"  NOTA: l'account resta nel database ma disattivato, se questo era il suo unico"
-"  incarico. E' il comportamento di revocaAssistente: cancellare l'utente porterebbe"
-"  via anche i compiti che ha già svolto."
+$team = (Invoke-RestMethod -Method Get -Uri "$base/staff/assistenti?page=1&limit=100&search=$suff" -Headers $h).data
+$rimasti = @($team | Where-Object { $_.ruolo -eq 'portiere' }).Count
+Check 'il personale non e piu nel team come portiere' ($rimasti -eq 0) "residui $rimasti"
 
 ""
 "esito: $ok ok, $ko ko"

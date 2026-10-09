@@ -396,17 +396,20 @@ I ruoli sono `superadmin`, `admin`, `portiere`, `condomino`.
 - `admin` senza elenco di permessi ha accesso pieno a tutti i suoi condomini.
 - `admin` **assistente** è un admin con `permessi` non nulli, collegato al
   delegante con `User.delegatoDa` e ammesso nei condomini da `Condominio.assistenti`.
-- `portiere` è il personale che serve **uno** stabile: lo crea l'amministratore di
-  quel condominio con `POST /condomini/:id/servizi`, che **crea** l'account
-  (collegare un id esistente non bastava: ogni guard decide su `role`, quindi il
-  collegamento non rendeva nessuno un portiere). È l'unico posto dove il ruolo e
-  `Condominio.condominiServito` vengono scritti insieme, e per questo non possono
-  contraddirsi. Vede la rubrica dei residenti e i compiti che gli vengono
-  affidati, nient'altro.
-  - **Non può essere un assistente con permessi**: `registraDelegazione` aggiunge
-    l'assistente a tutti i condomini del delegante, quindi un «portiere-assistente»
-    avrebbe visto l'intero portafoglio con gli stessi permessi. Il ruolo dedicato e
-    il legame in `condominiServito` esistono per questo.
+- `portiere` è il personale che serve **uno** stabile. **Nasce dalla pagina del team**
+  (`POST /staff/assistenti` con `ruolo: 'portiere'` e `condominioId`), non dalla pagina
+  dello stabile: è una persona dell'amministratore, e il form chiede il ruolo con un
+  radio perché assistente e personale sono **due forme alternative**, non due ruoli
+  insieme. `User.role` resta un campo solo.
+  - **Non passa da `registraDelegazione`**, che aggiunge l'assistente a **tutti** gli
+    stabili del delegante: per il personale il legame è uno solo e va verificato che
+    quello stabile sia dell'amministratore che sta creando la persona. Su un account
+    convertito da condòmino il `delegatoDa` va tolto, per la stessa ragione.
+  - **Non esistono rotte `/condomini/:id/servizi`**: creare e revocare stanno nel team,
+    con `POST /staff/assistenti` e `DELETE /staff/assistenti/:id`. Due posti per la stessa
+    cosa possono divergere.
+  - **Non può essere un assistente con permessi**: gli stessi due stabili che
+    `registraDelegazione` metterebbe sotto i suoi piedi, e con gli stessi permessi.
   - **La rubrica è una rotta a parte**, `GET /condomini/:id/condomini/rubrica`, e non
     un filtro della lista degli iscritti: i campi sono diversi (unità, cognome,
     telefono) e la lista contiene anche i millesimi. Concederla con
