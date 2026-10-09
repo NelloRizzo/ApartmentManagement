@@ -23,6 +23,7 @@ import PaginaQuote from '@/pages/PaginaQuote';
 import PaginaVersamenti from '@/pages/PaginaVersamenti';
 import PaginaComunicazioni from '@/pages/PaginaComunicazioni';
 import PaginaProfilo from '@/pages/PaginaProfilo';
+import PaginaPrivacy from '@/pages/PaginaPrivacy';
 import PaginaResidenti from '@/pages/PaginaResidenti';
 import PaginaUnita from '@/pages/PaginaUnita';
 import PaginaIscritti from '@/pages/PaginaIscritti';
@@ -43,9 +44,17 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/accedi" element={<PaginaAccesso />} />
-        {/* Pubblica: chi clicca il link nell'email non è ancora collegato. */}
-        <Route path="/conferma-email" element={<PaginaConfermaEmail />} />
+<Route path="/accedi" element={<PaginaAccesso />} />
+          {/* Pubblica: chi clicca il link nell'email non è ancora collegato. */}
+          <Route path="/conferma-email" element={<PaginaConfermaEmail />} />
+          {/*
+            L'informativa è pubblica e sta **fuori** da `RichiediAutenticazione`:
+            va poter leggere prima di accedere, quando non si sa ancora quale
+            ruolo avrà chi la legge. Le pagine sono divise per ruolo perché il
+            titolare del trattamento cambia, non per comodità di lettura.
+          */}
+          <Route path="/privacy" element={<Navigate to="/privacy/condomino" replace />} />
+          <Route path="/privacy/:ruolo" element={<PaginaPrivacy />} />
 
         <Route
           element={

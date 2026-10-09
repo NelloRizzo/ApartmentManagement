@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/api/client';
 import { notifica } from '@/hooks/useNotifiche';
@@ -137,13 +138,30 @@ export default function PaginaProfilo() {
           <p className="testo-muto">
             Accesso effettuato come {etichette.ruolo(utente.role)} su {utente.email}.
           </p>
-          <button type="button" className="btn btn-secondario btn-pieno" onClick={() => void logout()}>
-            Esci dall’account
+<button type="button" className="btn btn-secondario btn-pieno" onClick={() => void logout()}>
+            Esci dall'account
           </button>
         </div>
       </section>
+
+      {/*
+        L'informativa anche qui, oltre che sulla pagina di accesso: chi è già
+        dentro la cerca quando serve, e il ruolo lo sappiamo già. Il ruolo
+        `portiere` non arriva dal profilo perché per lui la sezione non esiste,
+        ma il link resta valido: l'informativa del personale è pubblica.
+      */}
+      <p className="testo-faint testo-centrato" style={{ marginTop: 'var(--sp-4)' }}>
+        <Link to={`/privacy/${ruoloPrivacy(utente.role)}`}>
+          Informativa sul trattamento dei dati personali
+        </Link>
+      </p>
     </>
   );
+}
+
+/** Il ruolo dell'informativa che spetta a questo utente. */
+function ruoloPrivacy(role: string): string {
+  return role === 'superadmin' || role === 'admin' || role === 'portiere' ? role : 'condomino';
 }
 
 /**

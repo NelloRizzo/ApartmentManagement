@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { ApiError } from '@/api/client';
 
@@ -107,6 +107,19 @@ export default function PaginaAccesso() {
             ))}
           </div>
         )}
+
+        {/*
+          L'informativa sta qui e non solo dentro l'area autenticata: è
+          l'informazione che serve *prima* di accedere. Il ruolo lo sceglie
+          chi legge, perché ancora non ce l'ha.
+        */}
+        <p className="testo-faint testo-centrato" style={{ marginTop: 'var(--sp-4)' }}>
+          Informativa sul trattamento dei dati:{' '}
+          <Link to="/privacy/condomino">condòmino</Link>,{' '}
+          <Link to="/privacy/admin">amministratore di condominio</Link>,{' '}
+          <Link to="/privacy/portiere">personale dello stabile</Link>,{' '}
+          <Link to="/privacy/superadmin">amministratore di piattaforma</Link>
+        </p>
       </div>
     </div>
   );
