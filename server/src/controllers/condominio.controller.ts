@@ -84,8 +84,18 @@ export const list = asyncHandler(async (req, res) => {
   paginated(res, documenti, totale, page, limit);
 });
 
+/** Il condominio con i contatti dell'amministratore, che è il suo titolare del trattamento. */
+interface CondominioConAmministratore extends Omit<CondominioDoc, 'amministratore'> {
+  amministratore: CondominioDoc['amministratore'] & { nome: string; cognome: string; email: string; telefono?: string };
+}
+
 export const getOne = asyncHandler(async (req, res) => {
-  const condominio = await Condominio.findById(req.params.condominioId).lean<CondominioDoc>();
+  const condominio = await Condominio.findById(req.params.condominioId)
+    // I contatti dell'amministratore servono all'informativa sul trattamento dei
+    // dati, che deve nominare il titolare: senza, la pagina del condòmino avrebbe
+    // un segnaposto dove ci vuole il nome di chi tratta i suoi dati.
+    .populate('amministratore', 'nome cognome email telefono')
+    .lean<CondominioConAmministratore>();
   if (!condominio) throw notFound('Condominio non trovato');
   ok(res, condominio);
 });

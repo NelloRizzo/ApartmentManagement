@@ -272,6 +272,14 @@ export interface Condominio {
   codice: string;
   indirizzo: { via: string; civico?: string; citta?: string; cap?: string; provincia?: string };
   amministratore: string;
+  /**
+   * Contatti dell'amministratore, popolati da `GET /condomini/:id`.
+   *
+   * Non ci sono altrove nell'interfaccia: l'informativa sul trattamento dei dati
+   * deve **nominare** il titolare, che è l'amministratore di condominio, e senza
+   * questo la pagina avrebbe un segnaposto dove invece serve il nome.
+   */
+  amministratoreContatti?: { nome: string; cognome: string; email: string; telefono?: string };
   condominiServito?: string[];
   deliberaRipartizione?: string;
   dataDeliberaRipartizione?: string;

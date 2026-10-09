@@ -1,5 +1,9 @@
 import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useApi } from '@/hooks/useApi';
+import { api } from '@/api/client';
 import { TitoloPagina } from '@/components/TitoloPagina';
+import type { Condominio } from '@/types/domain';
 
 /**
  * Informativa sul trattamento dei dati personali, una per ruolo.
@@ -30,6 +34,29 @@ const RUOLI: { chiave: Ruolo; etichetta: string }[] = [
 export default function PaginaPrivacy() {
   const { ruolo } = useParams();
   const scelto = RUOLI.find((r) => r.chiave === ruolo);
+  const { condominioId } = useAuth();
+
+  /*
+   * L'informativa del condòmino deve **nominare** il suo amministratore, che è
+   * il titolare del trattamento dei suoi dati, e quel titolare cambia da
+   * condominio a condominio: una pagina statica non può nominarlo. Quindi si legge
+   * dal condominio attivo, che la UI conosce già. Chi non è collegato, o non ha un
+   * condominio attivo, non ha un nome da mostrare e riceve la formulazione
+   * generale: meglio un'indicazione che non pretende di essere completa.
+   *
+   * Vale anche per il personale dello stabile: chi gli ha affidato l'incarico è per
+   * costruzione l'amministratore di quel condominio, perché l'assegnazione la può
+   * fare solo lui.
+   */
+  const leggeStabile = scelto?.chiave === 'condomino' || scelto?.chiave === 'portiere';
+  const stabile = useApi<Condominio>(
+    (segnale) =>
+      api
+        .get<Condominio>(`/condomini/${condominioId}`, undefined, { signal: segnale })
+        .then((r) => r.data),
+    [condominioId],
+    { attivo: leggeStabile && Boolean(condominioId) },
+  );
 
   return (
     <>
@@ -64,9 +91,9 @@ export default function PaginaPrivacy() {
           </p>
         )}
 
-        {scelto?.chiave === 'condomino' && <Condomino />}
+        {scelto?.chiave === 'condomino' && <Condomino stabile={stabile.dati} />}
         {scelto?.chiave === 'admin' && <Amministratore />}
-        {scelto?.chiave === 'portiere' && <Personale />}
+        {scelto?.chiave === 'portiere' && <Personale stabile={stabile.dati} />}
         {scelto?.chiave === 'superadmin' && <Piattaforma />}
       </div>
     </>
@@ -134,18 +161,49 @@ function Comuni() {
   );
 }
 
-function Condomino() {
+function Condomino({ stabile }: { stabile: Condominio | null }) {
+  // Il titolare è l'amministratore di condominio: senza il suo nome
+  // l'informativa non direbbe a chi rivolgersi, che è il primo dato che deve.
+  const titolare = stabile?.amministratoreContatti;
+  const stabileLabel = stabile ? `${stabile.nome} (${stabile.codice})` : null;
+
   return (
     <article className="scheda">
       <div className="scheda-corpo pila-3">
         <h2>Chi tratta i tuoi dati</h2>
         <p>
           I tuoi dati di condòmino — le unità di cui sei titolare o fruitore, i tuoi millesimi, i
-          versamenti, le assemblee a cui partecipi — li tratta <strong>l&apos;amministratore di
-          condominio</strong> che amministra lo stabile, perché è lui che li usa per conto del
-          condominio. <strong>DA COMPILARE: nome e indirizzo dell&apos;amministratore</strong>, che
-          cambia da condominio a condominio e per questo va indicato stabilimento per stabilimento.
+          tuoi versamenti, le assemblee a cui partecipi — li tratta{' '}
+          {titolare ? (
+            <>
+              <strong>
+                {titolare.nome} {titolare.cognome}
+              </strong>
+              {stabileLabel ? (
+                <>
+                  , amministratore di <strong>{stabileLabel}</strong>
+                </>
+              ) : null}
+              {titolare.email ? (
+                <>
+                  , raggiungibile all&apos;indirizzo <strong>{titolare.email}</strong>
+                </>
+              ) : null}
+              {titolare.telefono ? <> ({titolare.telefono})</> : null}
+            </>
+          ) : (
+            <>
+              <strong>l&apos;amministratore di condominio</strong> che amministra il tuo stabile
+            </>
+          )}
+          , perché è lui che li usa per conto del condominio.
         </p>
+        {!titolare && (
+          <p className="testo-faint">
+            Seleziona un condominio per vederne indicato l&apos;amministratore: il titolare del
+            trattamento cambia da uno stabile all&apos;altro.
+          </p>
+        )}
         <p>
           Gestione Condomini <strong>DA COMPILARE: denominazione e indirizzo</strong> tratta questi
           stessi dati in qualità di <strong>responsabile del trattamento</strong>, perché li
@@ -157,10 +215,10 @@ function Condomino() {
         <p>
           Per gestire la contabilità dello stabile: stabilire e applicare i millesimi, calcolare la
           quota dovuta, registrare i versamenti, convocare e verbalizzare le assemblee, gestire le
-          comunicazioni fra te e l&apos;amministratore. La base giuridica è
-          <strong> DA COMPILARE — proposta: esecuzione del contratto e legittimo interesse
-          dell&apos;amministratore</strong> (art. 6 comma 1 lett. b e f del regolamento). La scelta va
-          confermata da chi ne è responsabile.
+          comunicazioni fra te e l&apos;amministratore. La base giuridica è l&apos;
+          <strong>esecuzione del contratto</strong> per la gestione dello stabile e il{' '}
+          <strong>legittimo interesse</strong> dell&apos;amministratore per ciò che gli serve per
+          adempiere agli obblighi del regolamento condominiale (art. 6, comma 1, lettere b e f).
         </p>
 
         <h2>Chi altro li vede</h2>
@@ -206,7 +264,8 @@ function Amministratore() {
         <p>
           Per erogare e gestire il servizio che hai sottoscritto: i tuoi stabili, le unità, gli
           iscritti, le quote millesimali, i bilanci, le assemblee e i verbali. La base giuridica è
-          <strong> DA COMPILARE — proposta: esecuzione del contratto</strong> (art. 6 comma 1 lett. b).
+          l&apos;<strong>esecuzione del contratto</strong> che hai sottoscritto con Gestione
+          Condomini (art. 6, comma 1, lettera b).
         </p>
         <p>
           Trattiamo anche i dati dei tuoi assistenti e del personale che ti assegna, perché servono
@@ -228,7 +287,9 @@ function Amministratore() {
   );
 }
 
-function Personale() {
+function Personale({ stabile }: { stabile: Condominio | null }) {
+  const titolare = stabile?.amministratoreContatti;
+
   return (
     <article className="scheda">
       <div className="scheda-corpo pila-3">
@@ -242,11 +303,23 @@ function Personale() {
 
         <h2>Chi tratta i dati che vedi</h2>
         <p>
-          Li tratta <strong>l&apos;amministratore di condominio</strong> che ti ha assegnato
-          l&apos;incarico — <strong>DA COMPILARE: nome e indirizzo</strong> — per la finalità di
-          gestire il rapporto con i residenti. Gestione Condomini
-          <strong> DA COMPILARE: denominazione e indirizzo</strong> è il
-          <strong>responsabile del trattamento</strong>, perché fornisce l&apos;applicazione che ti
+          Li tratta{' '}
+          {titolare ? (
+            <strong>
+              {titolare.nome} {titolare.cognome}
+            </strong>
+          ) : (
+            <strong>l&apos;amministratore di condominio</strong>
+          )}
+          {stabile ? (
+            <>
+              , amministratore di <strong>{stabile.nome} ({stabile.codice})</strong>
+            </>
+          ) : null}
+          , che è la persona che ti ha affidato l&apos;incarico, per la finalità di gestire il
+          rapporto con i residenti. Gestione Condomini{' '}
+          <strong>DA COMPILARE: denominazione e indirizzo</strong> è il
+          <strong> responsabile del trattamento</strong>, perché fornisce l&apos;applicazione che ti
           fa vedere quei dati.
         </p>
 
@@ -302,7 +375,8 @@ function Piattaforma() {
         <p>
           Per erogare il servizio agli amministratori, gestire i contratti e le relative rate,
           inviare le comunicazioni di piattaforma e assisterli. La base giuridica è
-          <strong> DA COMPILARE — proposta: esecuzione del contratto</strong>.
+          l&apos;<strong>esecuzione del contratto</strong> con l&apos;amministratore di condominio
+          (art. 6, comma 1, lettera b).
         </p>
         <p>
           Il registro operazioni che riguarda le tue azioni ha come finalità la sicurezza del servizio
