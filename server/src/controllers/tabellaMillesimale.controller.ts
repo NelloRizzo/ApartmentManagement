@@ -6,6 +6,7 @@ import {
   buildTabella,
   nuovaRevisione,
   storicoRevisioni,
+  variazioniRevisioni,
   getRevisioneAttiva,
 } from '../services/tabellaMillesimale.service.js';
 
@@ -16,6 +17,10 @@ export const getTabella = asyncHandler(async (req, res) => {
 
 export const revisioni = asyncHandler(async (req, res) => {
   ok(res, await storicoRevisioni(req.params.condominioId!));
+});
+
+export const variazioni = asyncHandler(async (req, res) => {
+  ok(res, await variazioniRevisioni(req.params.condominioId!));
 });
 
 export const attiva = asyncHandler(async (req, res) => {

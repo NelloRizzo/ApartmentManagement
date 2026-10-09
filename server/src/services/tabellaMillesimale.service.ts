@@ -246,6 +246,156 @@ export async function storicoRevisioni(condominioId: string) {
   ]);
 }
 
+export interface VariazioneQuota {
+  ripartizione: Ripartizione;
+  /** Valore nella revisione precedente; `null` se la ripartizione non c'era. */
+  da: number | null;
+  /** Valore in questa revisione; `null` se la ripartizione non c'è più. */
+  a: number | null;
+}
+
+export interface UnitaVariazione {
+  unitaId: string;
+  codice: string;
+}
+
+export interface VariazioneUnita extends UnitaVariazione {
+  quote: VariazioneQuota[];
+}
+
+export interface RevisioneConVariazioni {
+  revisione: number;
+  delibera?: string;
+  dataDelibera?: string;
+  validFrom: string;
+  validTo: string | null;
+  totaleDiritto: number;
+  /** Unità presenti in questa revisione e non nella precedente. */
+  entrate: UnitaVariazione[];
+  /** Unità presenti nella precedente e non in questa. */
+  uscite: UnitaVariazione[];
+  /** Unità presenti in entrambe, ma con almeno una quota diversa. */
+  variazioni: VariazioneUnita[];
+}
+
+/** Una revisione pronta per il confronto: solo le ripartizioni davvero presenti. */
+export interface RevisioneQuote {
+  revisione: number;
+  validFrom: string;
+  validTo: string | null;
+  delibera?: string;
+  dataDelibera?: string;
+  totaleDiritto: number;
+  quote: Map<string, Partial<Record<Ripartizione, number>>>;
+}
+
+/**
+ * Confronta revisioni consecutive e racconta cosa è cambiato. La prima revisione
+ * non ha nulla con cui confrontarsi, quindi le sue unità finiscono tutte fra le
+ * `entrate`: è l'istituzione della tabella, non un passaggio di consegne.
+ *
+ * Una ripartizione assente vale `null`, non zero: una ripartizione introdotta
+ * ma azzerata resta una decisione (l'edificio senza ascensore non introduce la
+ * voce), e confonderla con lo zero la nasconderebbe.
+ */
+export function variazioniTraRevisioni(
+  revisioni: RevisioneQuote[],
+  codici: Map<string, string>,
+): RevisioneConVariazioni[] {
+  const ordinate = [...revisioni].sort((a, b) => a.revisione - b.revisione);
+  const codiceDi = (unitaId: string) => codici.get(unitaId) ?? unitaId;
+  const perCodice = (a: UnitaVariazione, b: UnitaVariazione) => a.codice.localeCompare(b.codice, 'it');
+
+  const risultato = ordinate.map((cur, i) => {
+    const prev = i > 0 ? ordinate[i - 1]! : null;
+    const entrate: UnitaVariazione[] = [];
+    const uscite: UnitaVariazione[] = [];
+    const variazioni: VariazioneUnita[] = [];
+
+    if (!prev) {
+      for (const unitaId of cur.quote.keys()) entrate.push({ unitaId, codice: codiceDi(unitaId) });
+    } else {
+      const ids = new Set([...prev.quote.keys(), ...cur.quote.keys()]);
+      for (const unitaId of ids) {
+        const prima = prev.quote.get(unitaId);
+        const dopo = cur.quote.get(unitaId);
+        if (!prima) {
+          entrate.push({ unitaId, codice: codiceDi(unitaId) });
+          continue;
+        }
+        if (!dopo) {
+          uscite.push({ unitaId, codice: codiceDi(unitaId) });
+          continue;
+        }
+        const quote: VariazioneQuota[] = [];
+        for (const ripartizione of RIPARTIZIONI) {
+          const da = prima[ripartizione] ?? null;
+          const a = dopo[ripartizione] ?? null;
+          if (da !== a) quote.push({ ripartizione, da, a });
+        }
+        if (quote.length > 0) variazioni.push({ unitaId, codice: codiceDi(unitaId), quote });
+      }
+    }
+
+    entrate.sort(perCodice);
+    uscite.sort(perCodice);
+    variazioni.sort(perCodice);
+
+    return {
+      revisione: cur.revisione,
+      delibera: cur.delibera,
+      dataDelibera: cur.dataDelibera,
+      validFrom: cur.validFrom,
+      validTo: cur.validTo,
+      totaleDiritto: cur.totaleDiritto,
+      entrate,
+      uscite,
+      variazioni,
+    };
+  });
+
+  // Dalla più recente alla più vecchia, come lo storico delle revisioni.
+  return risultato.reverse();
+}
+
+/** Storico delle revisioni con, per ognuna, le variazioni rispetto alla precedente. */
+export async function variazioniRevisioni(condominioId: string): Promise<RevisioneConVariazioni[]> {
+  const [quote, unita] = await Promise.all([
+    QuotaMillesimale.find({ condominio: condominioId }).lean(),
+    Unita.find({ condominio: condominioId }).select('codice').lean(),
+  ]);
+
+  const codici = new Map(unita.map((u) => [String(u._id), u.codice]));
+  const perRevisione = new Map<number, RevisioneQuote>();
+
+  for (const q of quote) {
+    let rev = perRevisione.get(q.revisione);
+    if (!rev) {
+      rev = {
+        revisione: q.revisione,
+        validFrom: q.validFrom.toISOString(),
+        validTo: q.validTo?.toISOString() ?? null,
+        delibera: q.delibera,
+        dataDelibera: q.dataDelibera?.toISOString(),
+        totaleDiritto: 0,
+        quote: new Map(),
+      };
+      perRevisione.set(q.revisione, rev);
+    }
+    if (q.validFrom.toISOString() < rev.validFrom) rev.validFrom = q.validFrom.toISOString();
+    const validTo = q.validTo?.toISOString() ?? null;
+    if (validTo && (!rev.validTo || validTo > rev.validTo)) rev.validTo = validTo;
+    if (!rev.delibera && q.delibera) rev.delibera = q.delibera;
+    if (!rev.dataDelibera && q.dataDelibera) rev.dataDelibera = q.dataDelibera.toISOString();
+    if (q.ripartizione === 'diritto') rev.totaleDiritto += q.valore;
+    const riga = rev.quote.get(String(q.unita)) ?? {};
+    riga[q.ripartizione] = q.valore;
+    rev.quote.set(String(q.unita), riga);
+  }
+
+  return variazioniTraRevisioni([...perRevisione.values()], codici);
+}
+
 /** Quote millesimali valide per una data specifica (default oggi). */
 export async function quoteAllaData(condominioId: string, data: Date = new Date()) {
   return QuotaMillesimale.find({

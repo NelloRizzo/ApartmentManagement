@@ -651,7 +651,7 @@ npm run dev            # in un altro terminale
 npm run verifica       # dalla root: esegue gli script in sequenza
 ```
 
-`npm run verifica` riporta il totale dei controlli (249 al momento) e fa girare
+`npm run verifica` riporta il totale dei controlli (256 al momento) e fa girare
 tutti gli script anche dopo un fallimento: raccoglie alla fine quelli rossi ed esce
 con 1 se ce n'è almeno uno. Gli script sono in `scripts/` e hanno tutti la stessa
 forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
@@ -670,7 +670,7 @@ forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 | `verifica-crud-versamenti.ps1` | registrazione, campi immutabili, cancellazione |
 | `verifica-crud-assemblee.ps1` | transizioni di stato, ricalcolo millesimi, eliminazione, il badge delle convocazioni, la risposta al condòmino, il segretario indicato durante lo svolgimento, la delega riportata nel verbale e la delibera tenuta nascosta ai condòmini finché l'assemblea è in convocazione |
 | `verifica-crud-bilanci.ps1` | creazione, duplicata rifiutata, approvazione, revoca, eliminazione |
-| `verifica-millesimi.ps1` | tabella vuota non valida, tabella coerente, revisione squilibrata rifiutata |
+| `verifica-millesimi.ps1` | tabella vuota non valida, tabella coerente, revisione squilibrata rifiutata, storico delle variazioni fra revisioni |
 | `verifica-attivita.ps1` | bacheca del team, assegnatari, proprietario contro assegnatario, thread a un livello, ordine per scadenza con le senza scadenza in fondo |
 | `verifica-allegati.ps1` | caricamento, metadati, firma, rimozione, dominio approvato, allegati per voce e per verbale |
 

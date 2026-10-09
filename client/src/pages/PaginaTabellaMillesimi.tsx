@@ -6,7 +6,7 @@ import { notifica } from '@/hooks/useNotifiche';
 import { Caricamento, ErroreCaricamento } from '@/components/Feedback';
 import { TitoloPagina, RichiediCondominio } from '@/components/TitoloPagina';
 import { numero, data as fmtData, perInputData } from '@/lib/formattazione';
-import type { Ripartizione, TabellaMillesimale } from '@/types/domain';
+import type { RevisioneConVariazioni, Ripartizione, TabellaMillesimale, VariazioneQuota } from '@/types/domain';
 
 const TOTALE_ATTESO = 1000;
 
@@ -39,6 +39,9 @@ export default function PaginaTabellaMillesimi() {
       {tabella.inCorso && <Caricamento />}
       {tabella.errore && <ErroreCaricamento messaggio={tabella.errore} onRiprova={tabella.ricarica} />}
       {tabella.dati && <EditorTabella tabella={tabella.dati} onSalvato={tabella.ricarica} />}
+      {tabella.dati && (
+        <StoricoRevisioni condominioId={condominioId} revisione={tabella.dati.revisione} />
+      )}
     </RichiediCondominio>
   );
 }
@@ -322,4 +325,111 @@ function EditorTabella({ tabella, onSalvato }: { tabella: TabellaMillesimale; on
       </button>
     </>
   );
+}
+
+/**
+ * Storico delle revisioni, chiuso per impostazione predefinita: le revisioni
+ * passate servono di rado, e aperte spingerebbero fuori schermo la tabella in
+ * vigore. Mostra le sole variazioni rispetto alla revisione precedente, non la
+ * tabella intera, perché la domanda è "cosa è cambiato", non "com'era".
+ */
+function StoricoRevisioni({ condominioId, revisione }: { condominioId: string; revisione: number }) {
+  const storico = useApi<RevisioneConVariazioni[]>(
+    (segnale) =>
+      api
+        .get<RevisioneConVariazioni[]>(
+          `/condomini/${condominioId}/tabella-millesimi/revisioni/variazioni`,
+          undefined,
+          { signal: segnale },
+        )
+        .then((r) => r.data),
+    [condominioId, revisione],
+  );
+
+  return (
+    <details className="scheda" style={{ marginTop: 'var(--sp-4)' }}>
+      <summary
+        style={{
+          cursor: 'pointer',
+          padding: 'var(--sp-3) var(--sp-4)',
+          background: 'var(--c-surface-alt)',
+          borderBottom: '1px solid var(--c-border)',
+        }}
+      >
+        <strong>Storico delle revisioni</strong>
+        {storico.dati && (
+          <span className="etichetta etichetta-neutro" style={{ marginLeft: 'var(--sp-2)' }}>
+            {storico.dati.length}
+          </span>
+        )}
+      </summary>
+      <div className="scheda-corpo pila-3">
+        {storico.inCorso && <Caricamento />}
+        {storico.errore && <ErroreCaricamento messaggio={storico.errore} onRiprova={storico.ricarica} />}
+        {storico.dati && storico.dati.length === 0 && (
+          <p className="testo-muto">Nessuna revisione registrata.</p>
+        )}
+        {storico.dati?.map((rev) => <BloccoRevisione key={rev.revisione} rev={rev} />)}
+      </div>
+    </details>
+  );
+}
+
+function BloccoRevisione({ rev }: { rev: RevisioneConVariazioni }) {
+  // Le revisioni iniziano da 1 e sono contigue, quindi la 1 è sempre quella che
+  // ha istituito la tabella e non ha una precedente con cui confrontarsi.
+  const istitutiva = rev.revisione === 1;
+  const nessunCambiamento =
+    rev.variazioni.length === 0 && rev.entrate.length === 0 && rev.uscite.length === 0;
+
+  return (
+    <div className="pila-2" style={{ borderTop: '1px solid var(--c-border)', paddingTop: 'var(--sp-3)' }}>
+      <div className="riga riga-tra">
+        <strong>Revisione {rev.revisione}</strong>
+        <span className="testo-faint">
+          dal {fmtData(rev.validFrom)}
+          {rev.validTo ? ` al ${fmtData(rev.validTo)}` : ' — in vigore'}
+        </span>
+      </div>
+      {(rev.delibera || rev.dataDelibera) && (
+        <p className="testo-faint">
+          {rev.delibera}
+          {rev.dataDelibera ? ` (${fmtData(rev.dataDelibera)})` : ''}
+        </p>
+      )}
+
+      {istitutiva && <p className="testo-muto">Istituzione della tabella millesimale.</p>}
+      {!istitutiva && nessunCambiamento && (
+        <p className="testo-muto">Nessuna variazione rispetto alla revisione precedente.</p>
+      )}
+
+      {rev.variazioni.map((v) => (
+        <div key={v.unitaId} className="pila-1">
+          <strong>{v.codice}</strong>
+          {v.quote.map((q) => (
+            <div key={q.ripartizione} className="riga riga-tra">
+              <span className="testo-muto">{q.ripartizione}</span>
+              <span className="testo-num">{transizione(q)}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {rev.entrate.length > 0 && (
+        <p className="testo-muto">
+          {istitutiva ? 'Unità' : 'Unità entrate'}: {rev.entrate.map((u) => u.codice).join(', ')}
+        </p>
+      )}
+      {rev.uscite.length > 0 && (
+        <p className="testo-muto">Unità uscite: {rev.uscite.map((u) => u.codice).join(', ')}</p>
+      )}
+    </div>
+  );
+}
+
+/** "assente → 120,5‰" oppure "200‰ → rimossa". */
+function transizione(q: VariazioneQuota): string {
+  const da = q.da === null ? 'assente' : `${numero(q.da)}‰`;
+  const a = q.a === null ? 'rimossa' : `${numero(q.a)}‰`;
+  return `${da} → ${a}`;
 }

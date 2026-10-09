@@ -5,13 +5,6 @@ basta il numero. Una voce realizzata si cancella e la sua ragione va nel
 `CHANGELOG.md`, come per i bug in `bugs.md`. L'unica eccezione è
 `IMPLEMENTAZIONI FUTURE`, le cui voci non si numerano._
 
-PRIORITA BASSA
-- 4. Storico delle quote millesimali non consultabile
-  - **il testo non promette più niente**: la pagina dice che la revisione precedente "resta conservata", che è vero. Prima diceva "consultabile nello storico" e non lo era
-  - la conservazione c'è: `nuovaRevisione` chiude la revisione precedente con `validTo` e inserisce la nuova con `revisione + 1`, e la tabella attiva si ottiene filtrando per revisione corrente
-  - manca solo la parte che mostra le revisioni chiuse, cioè la consultabilità
-  - va deciso cosa mostrare: la tabella completa di ogni revisione, o solo le variazioni rispetto alla precedente. La seconda è più utile per capire chi ha cambiato che cosa, e costa di più
-
 IMPLEMENTAZIONI FUTURE
 _(voci rimandate e idee messe da parte, da riprendere quando si ha tempo: in
 questa sezione le voci non si numerano, per parlarne basta il titolo)_

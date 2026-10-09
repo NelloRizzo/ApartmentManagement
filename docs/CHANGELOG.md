@@ -4,6 +4,44 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### Lo storico delle quote millesimali è consultabile, e dice cosa è cambiato
+
+Dal `TODO.md`, voce 4: la pagina diceva che la revisione precedente «resta
+conservata». È vero, e non era consultabile, perché non esisteva una schermata
+che la mostrasse.
+
+In fondo alla pagina delle quote millesimali c'è ora una sezione **chiusa per
+impostazione predefinita**: le revisioni passate servono di rado, e aperte
+spingerebbero fuori schermo la tabella in vigore.
+
+`GET /condomini/:id/tabella-millesimi/revisioni/variazioni` restituisce, per ogni
+revisione, le variazioni rispetto alla precedente: unità entrate e uscite e, per le
+unità presenti in entrambe, **le sole quote cambiate** con il valore di prima e
+quello di dopo.
+
+La voce lasciava aperta la scelta fra la tabella completa di ogni revisione e le
+sole variazioni: è andata sulle seconde, perché la domanda di chi apre lo storico è
+«cosa è cambiato», non «com'era», e la tabella intera ripeterebbe righe identiche da
+una revisione all'altra.
+
+Una ripartizione assente vale `null` e non zero: introdurre «ascensore» a zero
+(l'edificio che non ha ascensore) è una decisione, e confonderla con lo zero la
+nasconderebbe. La revisione 1 elenca tutte le sue unità fra le entrate: non ha una
+precedente con cui confrontarsi, è l'istituzione della tabella.
+
+Il confronto è in `variazioniTraRevisioni`, funzione pura senza database: è il pezzo
+che decide cosa è cambiato, e sbagliarlo non romperebbe nulla a schermo — mostrerebbe
+una tabella con le quote giuste e una storia con le variazioni sbagliate. Ha quindi
+test in `storico-millesimi.test.ts`.
+
+Verifiche: typecheck, lint e 35 test; rotta e percorso completo provati contro il
+database di sviluppo montando l'app su porta effimera (401 senza token, storico
+della revisione istitutiva con tutte le unità, totale 1000 e delibera del seed); il
+diff fra due revisioni reali controllato inserendo e poi ripristinando una revisione
+di prova (quota spostata 180→190, uso azzerato 190→0 distinto da assente, ascensore
+introdotto null→1000, scale rimossa 200→null), col database tornato a una sola
+revisione.
+
 ### Perdere la password del superadmin non costa più il database
 
 Dal `TODO.md`, voce 5: l'unica via per rientrare era `npm run reset:produzione`,

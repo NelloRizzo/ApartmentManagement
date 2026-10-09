@@ -353,6 +353,35 @@ export interface RevisioneTabella {
   totaleDiritto: number;
 }
 
+export interface VariazioneQuota {
+  ripartizione: Ripartizione;
+  /** Valore nella revisione precedente; `null` se la ripartizione non c'era. */
+  da: number | null;
+  /** Valore in questa revisione; `null` se la ripartizione non c'è più. */
+  a: number | null;
+}
+
+export interface UnitaVariazione {
+  unitaId: string;
+  codice: string;
+}
+
+export interface VariazioneUnita extends UnitaVariazione {
+  quote: VariazioneQuota[];
+}
+
+export interface RevisioneConVariazioni {
+  revisione: number;
+  delibera?: string;
+  dataDelibera?: string;
+  validFrom: string;
+  validTo: string | null;
+  totaleDiritto: number;
+  entrate: UnitaVariazione[];
+  uscite: UnitaVariazione[];
+  variazioni: VariazioneUnita[];
+}
+
 export interface Condomino {
   _id: string;
   condominio: string;

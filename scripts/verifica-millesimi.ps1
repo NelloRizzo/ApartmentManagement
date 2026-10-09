@@ -79,6 +79,20 @@ if ($null -ne $conTabella) {
   Check 'revisione squilibrata rifiutata' ($s -ne '200') "esito $s"
   $dopo = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$($conTabella.id)/tabella-millesimi" -Headers $h).data
   Check 'la revisione attiva non e cambiata' ($dopo.revisione -eq $prima) "prima $prima, dopo $($dopo.revisione)"
+
+  "== 4. lo storico delle variazioni e consultabile =="
+  # Solo lettura: il condominio ha una sola revisione (quella del seed), quindi
+  # qui si verifica la forma e il caso istitutivo. Il confronto fra due revisioni
+  # e coperto dal test unitario di `variazioniTraRevisioni`.
+  $storico = @((Invoke-RestMethod -Method Get -Uri "$base/condomini/$($conTabella.id)/tabella-millesimi/revisioni/variazioni" -Headers $h).data)
+  Check 'lo storico e un elenco non vuoto' ($storico.Count -ge 1) "conteggio: $($storico.Count)"
+  $istitutiva = $storico[-1]
+  Check 'la revisione piu vecchia e la 1' ($istitutiva.revisione -eq 1) "revisione $($istitutiva.revisione)"
+  Check 'la revisione istitutiva elenca le unita fra le entrate' ($istitutiva.entrate.Count -gt 0) "entrate: $($istitutiva.entrate.Count)"
+  Check 'la revisione istitutiva non ha variazioni' ($istitutiva.variazioni.Count -eq 0) "variazioni: $($istitutiva.variazioni.Count)"
+  Check 'nessuna unita uscita' ($istitutiva.uscite.Count -eq 0) "uscite: $($istitutiva.uscite.Count)"
+  Check 'lo storico e ordinato dalla revisione piu recente' ($storico[0].revisione -eq $dopo.revisione) "in testa $($storico[0].revisione), attiva $($dopo.revisione)"
+  Check 'la revisione attiva e in vigore' ($null -eq $storico[0].validTo) "validTo '$($storico[0].validTo)'"
 }
 
 try {
