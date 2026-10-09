@@ -4,6 +4,68 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### Il personale dello stabile esiste davvero, e non vede niente che non gli serva
+
+Dal `TODO.md`, voce sul ruolo `portiere`: il ruolo era implementato tutto e **non
+attivabile**. Nessuna rotta creava un `User` con `role: 'portiere'`, e `addServizio`
+collegava un id esistente a `condominiServito` **senza impostare il ruolo**: il
+collegamento non bastava, perché ogni guard decide su `role`, quindi quel utente
+restava un utente qualunque in più nella lista. Il client non chiamava mai
+`/servizi`, non c'era schermata per scegliere a chi assegnare il servizio, il seed
+non ne creava e nessuna verifica lo copriva. Insieme c'erano **due modi di dire la
+stessa cosa** — «è in `condominiServito`» e «`role` vale `portiere`» — che potevano
+contraddirsi senza che nulla lo mostrasse.
+
+Ora l'amministratore di un condominio **crea** l'account con
+`POST /condomini/:id/servizi` (nome, cognome, telefono, password facoltativa,
+altrimenti provvisoria via email di conferma come per gli altri del team), ed è
+l'unico posto dove il ruolo e il legame nello stabile vengono scritti insieme. Il
+personale vede **la rubrica dei residenti** e **i compiti che gli vengono
+affidati**, nient'altro.
+
+**La fuga che è venuta fuori mentre si faceva.** `requirePermessoLettura` controllava
+l'elenco dei permessi solo per `admin`, e dentro i controller l'unico filtro era per
+`condomino`: un portiere sarebbe passato da **ogni** rotta di lettura, e avrebbe
+visto versamenti, quote mensili con gli importi, bilanci e verbali dello stabile in
+cui serve. Oggi l'elenco si controlla anche per il portiere, che è la forma più
+stretta di perimetro: `permessi` è una **lista vuota**, non `null`. E `null` per lui
+non è accesso pieno ma un errore 403 — se valesse come per l'amministratore senza
+delega, un account con la lista azzerata aprirebbe tutto.
+
+**La rubrica è una rotta a parte**, `GET /condomini/:id/condomini/rubrica`, e non un
+filtro della lista degli iscritti. Concederla con `iscritti:leggere` — la prima cosa
+tentata, e il motivo per cui è stata rifatta — dava al portiere la **posizione
+economica di ogni residente** insieme al cognome e al telefono, perché quel permesso
+apre anche l'elenco con i millesimi. Un permesso non può bastare per due letture che
+espongono cose diverse: qui i campi sono unità, cognome e telefono, e l'accesso è
+deciso dal ruolo (`requireRubrica`) perché serva quello stabile.
+
+**La bacheca aveva un buco di scope.** `/staff/attivita` è l'unico router fuori da
+`/condomini/:id`, perché un'attività è un compito che non appartiene a uno stabile,
+ma il portiere ne serve **uno**: senza scope, un amministratore con cinque stabili
+poteva affidare il compito di uno al portiere di un altro, e nessuno dei due lo
+notava. Ora `Attivita.condominio` c'è e lo scrive `assicuraAssegnatari` quando fra
+gli assegnatari c'è del personale — non lo sceglie il client.
+
+Sul lato annotazione c'era già tutto: `filtroVisibile` e `assicuraPuoSegnareFatto`
+danno a proprietario e assegnatario lo stesso diritto. Bastava aprire il router al
+ruolo e chiudere la creazione, che è negata agli assistenti e al personale.
+
+La **revoca** toglie il legame e **disattiva l'account** se era l'unico incarico,
+come fa `revocaAssistente`: cancellare l'utente porterebbe via anche i compiti che ha
+già svolto. La revoca è l'atto con cui si toglie a qualcuno la rubrica dei
+residenti, quindi va registrata, e lo fa in `auditLog`.
+
+Verifiche: typecheck, lint e 48 test, con due casi nuovi sul perimetro (il portiere
+non passa le rotte fuori dalla sua lista, e `permessi` vuoto non è accesso pieno);
+percorso completo provato contro il database di sviluppo montando l'app su porta
+effimera — 36 controlli: assegnazione, dieci rotte negate, rubrica senza millesimi né
+email, riepilogo senza la tabella, compito creato e legato allo stabile, compito non
+creabile e non eliminabile dal personale, compito altrui non visibile, un portiere
+senza stabile non può ricevere compiti, e dopo la revoca la rubrica sparisce.
+`scripts/verifica-portiere.ps1` porta lo stesso percorso in `npm run verifica` ed è
+validato nella sintassi, non eseguito.
+
 ### Il codice del condominio passa da 16 caratteri a 6
 
 Da `new_tasks.md`: il codice autogenerato era il nome ripulito più un suffisso

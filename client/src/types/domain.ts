@@ -680,9 +680,42 @@ export const ETICHETTE_COLORE: Record<ColoreAttivita, string> = {
   nomeCompleto: string;
 }
 
-/** Assistente assegnabile, come lo restituisce `GET /staff/attivita/team`. */
+/**
+ * Assistente assegnabile, come lo restituisce `GET /staff/attivita/team`.
+ *
+ * Ci sono due popolazioni diverse e la UI le deve distinguere: `assistente`
+ * lavora su tutto il portafoglio, `servito` su **uno** stabile, ed è quello che
+ * rende il compito non ambiguo. `stabili` dice quale.
+ */
 export interface AssistenteAttivita extends UtenteAttivita {
   email: string;
+  ruolo: 'assistente' | 'servito';
+  stabili: string[];
+}
+
+/** Una persona della rubrica: unità e contatto, niente posizione patrimonica. */
+export interface Residente {
+  utenteId: string;
+  cognome: string;
+  telefono: string | null;
+  unita: string[];
+}
+
+/** La rubrica dello stabile, come la restituisce `GET /condomini/:id/condomini/rubrica`. */
+export interface RubricaStabile {
+  unita: { codice: string; piano: number }[];
+  residenti: Residente[];
+}
+
+/** Persona assegnata allo stabile perché lo serve. */
+export interface PersonaServizio {
+  _id: string;
+  nome: string;
+  cognome: string;
+  email: string;
+  telefono?: string;
+  attivo: boolean;
+  emailConfermato?: boolean;
 }
 
 /**

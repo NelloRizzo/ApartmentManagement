@@ -59,6 +59,22 @@ export function RichiediPermesso({ permesso, children }: { permesso: Permesso; c
   return <>{children}</>;
 }
 
+/**
+ * La rubrica dei residenti dello stabile.
+ *
+ * Chi amministra deve avere il permesso sugli iscritti; il personale dello stabile
+ * passa perché serve quello stabile e non perché ha un permesso, che è la stessa
+ * distinzione del guard `requireRubrica` sul server. Serve a non ripetere qui il
+ * ragionamento: il perimetro del portiere è una lista di permessi vuota, quindi
+ * `RichiediPermesso` da solo gli mostrerebbe "sezione non disponibile" su una
+ * pagina che invece può aprire.
+ */
+export function RichiediRubrica({ children }: { children: ReactNode }) {
+  const { utente } = useAuth();
+  if (utente?.role === 'portiere') return <>{children}</>;
+  return <RichiediPermesso permesso="iscritti:leggere">{children}</RichiediPermesso>;
+}
+
 /** Area riservata all'amministratore di piattaforma. */
 export function RichiediSuperadmin({ children }: { children: ReactNode }) {
   const { isSuperadmin, inCaricamento, autenticato } = useAuth();

@@ -46,6 +46,17 @@ const attivitaSchema = baseSchema(
     assegnatari: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 
     /**
+     * Lo stabile a cui l'attività si riferisce, quando c'è.
+     *
+     * Il team è del team e non di uno stabile, quindi il campo resta assente per
+     * le attività che riguardano l'amministratore nel suo complesso. È
+     * necessario per il portiere, che serve **un** stabile: senza questo scope
+     * un amministratore con cinque stabili potrebbe affidare il compito di uno al
+     * portiere di un altro, senza che nessuno dei due lo noti.
+     */
+    condominio: { type: Schema.Types.ObjectId, ref: 'Condominio', index: true },
+
+    /**
      * Attività di primo livello a cui questa appartiene (il thread).
      *
      * Un solo livello: un figlio non può avere figli. Senza il controllo, A
@@ -88,6 +99,8 @@ const attivitaSchema = baseSchema(
 attivitaSchema.index({ proprietario: 1, fatto: 1, dataFine: 1 });
 // Le attività che un assistente ha ricevuto.
 attivitaSchema.index({ assegnatari: 1, fatto: 1, dataFine: 1 });
+// I compiti di uno stabile affidati al suo personale.
+attivitaSchema.index({ condominio: 1, assegnatari: 1, fatto: 1 });
 
 export interface AttivitaDoc {
   _id: ObjectId;
@@ -95,6 +108,8 @@ export interface AttivitaDoc {
   descrizione: string;
   proprietario: ObjectId;
   assegnatari: ObjectId[];
+  /** Assente se l'attività non riguarda uno stabile in particolare. */
+  condominio?: ObjectId;
   parent?: ObjectId;
   milestone: boolean;
   dataInizio?: Date;

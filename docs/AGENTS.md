@@ -395,7 +395,32 @@ I ruoli sono `superadmin`, `admin`, `portiere`, `condomino`.
   l'interfaccia gli presenta come suo.
 - `admin` senza elenco di permessi ha accesso pieno a tutti i suoi condomini.
 - `admin` **assistente** è un admin con `permessi` non nulli, collegato al
-  delegante con `User.delegatoDa` e ammesso nei condomii da `Condominio.assistenti`.
+  delegante con `User.delegatoDa` e ammesso nei condomini da `Condominio.assistenti`.
+- `portiere` è il personale che serve **uno** stabile: lo crea l'amministratore di
+  quel condominio con `POST /condomini/:id/servizi`, che **crea** l'account
+  (collegare un id esistente non bastava: ogni guard decide su `role`, quindi il
+  collegamento non rendeva nessuno un portiere). È l'unico posto dove il ruolo e
+  `Condominio.condominiServito` vengono scritti insieme, e per questo non possono
+  contraddirsi. Vede la rubrica dei residenti e i compiti che gli vengono
+  affidati, nient'altro.
+  - **Non può essere un assistente con permessi**: `registraDelegazione` aggiunge
+    l'assistente a tutti i condomini del delegante, quindi un «portiere-assistente»
+    avrebbe visto l'intero portafoglio con gli stessi permessi. Il ruolo dedicato e
+    il legame in `condominiServito` esistono per questo.
+  - **La rubrica è una rotta a parte**, `GET /condomini/:id/condomini/rubrica`, e non
+    un filtro della lista degli iscritti: i campi sono diversi (unità, cognome,
+    telefono) e la lista contiene anche i millesimi. Concederla con
+    `iscritti:leggere` avrebbe dato al portiere la posizione economica di ogni
+    residente insieme al cognome e al telefono. Va dichiarata **prima** di `/:id`, o
+    `rubrica` verrebbe letta come un id.
+  - **La bacheca non ha uno scope di condominio** (`/staff/attivita` è l'unico router
+    fuori da `/condomini/:id`), quindi `Attivita.condominio` è ciò che rende
+    assegnabile un compito al personale: senza, un amministratore con cinque stabili
+    può affidare il compito di uno al portiere di un altro senza che nulla lo
+    segnali. Il campo lo risolve `assicuraAssegnatari`, non il client.
+  - **La revoca toglie il legame e disattiva l'account** se era l'unico incarico,
+    come fa `revocaAssistente` con l'assistente: cancellare l'utente porterebbe via
+    anche i compiti che ha già svolto.
 - I permessi sono `ambito:azione`, con ambiti `unita`, `iscritti`, `tabella`,
   `bilanci`, `assemblee`, `verbali`, `versamenti`, `comunicazioni`,
   `amministrazione` e azioni `leggere`/`scrivere`. **`scrivere` implica `leggere`**
@@ -407,6 +432,15 @@ quello solo i versamenti" non è esprimibile, e renderlo possibile richiederebbe
 elenchi multipli o togliere il `null` (che oggi significa accesso pieno). **Non è un
 lavoro previsto**, e per questo la delega a un assistente resta tutto o niente (vedi
 «Bacheca delle attività»).
+
+**`permessi` non è solo la delega dell'assistente: è la lista di ciò che quell'utente
+può leggere, e il perimetro del portiere è una lista vuota.** `requirePermessoLettura`
+lo controlla per `admin` **e per `portiere`**: senza questo il portiere passava da
+ogni rotta di lettura, perché il controllo era solo sul ruolo `admin` e i controller
+filtrano solo il condòmino — avrebbe letto versamenti, quote mensili con gli
+importi, bilanci e verbali dello stabile in cui serve. **`null` per un portiere non è
+accesso pieno ma un errore**, e va risposto 403: se valesse come per l'amministratore
+senza delega, un account con la lista azzerata aprirebbe tutto.
 
 Per questo i permessi **si sistemano una rotta alla volta**, non con un intervento
 unico: `requirePermesso` e `requirePermessoLettura` ricevono già
@@ -420,8 +454,9 @@ Sono diversi e non vanno scambiati:
 | Guard | Chi passa | Da usare su |
 | --- | --- | --- |
 | `requirePermesso(p)` | solo `superadmin` e `admin` | **scritture** (blocca condòmini e portieri) |
-| `requirePermessoLettura(p)` | chiunque, ma controlla l'ambito se è `admin` | **liste e dettagli** |
+| `requirePermessoLettura(p)` | chiunque, ma controlla l'ambito se è `admin` o `portiere` | **liste e dettagli** |
 | `requirePermessoOPartecipante(p)` | chiunque, ma controlla l'ambito solo se è `admin` o `superadmin` | **scritture aperte anche ai condòmini** |
+| `requireRubrica` | admin con `iscritti:leggere`, o il portiere dello stabile | la sola rubrica dei residenti |
 
 `requirePermessoLettura` esiste perché `requirePermesso` sulle rotte `GET`
 impedirebbe ai condòmini di vedere i propri verbali e le proprie quote: i
@@ -561,8 +596,19 @@ dipende dal documento, ed è `attivita.service.ts` a stabilirlo.
 - **`assegnatari` è un elenco esplicito e può essere vuoto**, che significa "non
   ancora passata a nessuno" e quindi visibile solo al proprietario. Non è "tutti":
   è la trappola di `permessi: null` capovolta.
-- **Gli assegnatari sono validati contro il team** in `assicuraAssegnatari`,
-  altrimenti si assegnerebbe lavoro a chiunque, compreso il superadmin.
+- **Gli assegnatari sono validati in `assicuraAssegnatari`**, altrimenti si
+  assegnerebbe lavoro a chiunque, compreso il superadmin. Sono due popolazioni: gli
+  **assistenti** del team, che non hanno uno stabile, e il **personale dello
+  stabile**, che ne serve uno solo. Se fra gli assegnatari c'è del personale, la
+  validazione **scrive anche `Attivita.condominio`** con lo stabile che quel
+  personiere serve: non lo sceglie il client ed è il controllo che impedisce di
+  affidare il compito di uno stabile al portiere di un altro. Un portiere non può
+  ricevere compiti se è collegato a più di uno stabile, perché non si saprebbe a
+  quale riferire l'attività.
+- **La creazione è negata agli assistenti e al personale** in `assicuraCreatore`:
+  `requireRole` non basta, perché un assistente è un `admin`. Il confronto è sul
+  documento che lo identifica — `delegatoDa` per l'assistente, `role` per il
+  portiere — non sul ruolo.
 - **Un thread è di un solo livello**: `parent` su se stesso, e un'attività che ha
   già un padre non può diventare padre. Senza il controllo A → B → A non
   termina.
@@ -657,7 +703,7 @@ npm run dev            # in un altro terminale
 npm run verifica       # dalla root: esegue gli script in sequenza
 ```
 
-`npm run verifica` riporta il totale dei controlli (256 al momento) e fa girare
+`npm run verifica` riporta il totale dei controlli (286 al momento) e fa girare
 tutti gli script anche dopo un fallimento: raccoglie alla fine quelli rossi ed esce
 con 1 se ce n'è almeno uno. Gli script sono in `scripts/` e hanno tutti la stessa
 forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
@@ -678,6 +724,7 @@ forma: un `Check` per ogni asserzione, con i casi negativi (403 del condòmino,
 | `verifica-crud-bilanci.ps1` | creazione, duplicata rifiutata, approvazione, revoca, eliminazione |
 | `verifica-millesimi.ps1` | tabella vuota non valida, tabella coerente, revisione squilibrata rifiutata, storico delle variazioni fra revisioni |
 | `verifica-attivita.ps1` | bacheca del team, assegnatari, proprietario contro assegnatario, thread a un livello, ordine per scadenza con le senza scadenza in fondo |
+| `verifica-portiere.ps1` | assegnazione del personale di uno stabile, il suo perimetro di lettura, la rubrica dei residenti, i compiti che riceve e annota, la revoca |
 | `verifica-allegati.ps1` | caricamento, metadati, firma, rimozione, dominio approvato, allegati per voce e per verbale |
 
 Gli script sono eseguiti da `verifica.ps1` con `powershell` (Windows PowerShell

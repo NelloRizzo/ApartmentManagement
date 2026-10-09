@@ -1,11 +1,15 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { RichiediAmministratore, RichiediAutenticazione, RichiediPermesso, RichiediRuoli, RichiediSuperadmin } from '@/components/Guardie';
+import { RichiediAmministratore, RichiediAutenticazione, RichiediPermesso, RichiediRuoli, RichiediRubrica, RichiediSuperadmin } from '@/components/Guardie';
 import { useAuth } from '@/contexts/AuthContext';
 
-/** Porta alla dashboard del ruolo: piattaforma per il superadmin, panorama per gli altri. */
+/** Porta alla pagina iniziale del ruolo: piattaforma per il superadmin, panorama per gli altri. */
 function ReindirizzaIniziale() {
-  const { isSuperadmin } = useAuth();
-  return <Navigate to={isSuperadmin ? '/p' : '/c/panorama'} replace />;
+  const { isSuperadmin, utente } = useAuth();
+  // Il personale dello stabile non amministra: il panorama gli aprirebbe
+  // pagine di gestione che il backend gli rifiuta, quindi parte dai compiti.
+  if (isSuperadmin) return <Navigate to="/p" replace />;
+  if (utente?.role === 'portiere') return <Navigate to="/c/compiti" replace />;
+  return <Navigate to="/c/panorama" replace />;
 }
 import PaginaAccesso from '@/pages/PaginaAccesso';
 import GuscioApp from '@/pages/GuscioApp';
@@ -19,6 +23,7 @@ import PaginaQuote from '@/pages/PaginaQuote';
 import PaginaVersamenti from '@/pages/PaginaVersamenti';
 import PaginaComunicazioni from '@/pages/PaginaComunicazioni';
 import PaginaProfilo from '@/pages/PaginaProfilo';
+import PaginaResidenti from '@/pages/PaginaResidenti';
 import PaginaUnita from '@/pages/PaginaUnita';
 import PaginaIscritti from '@/pages/PaginaIscritti';
 import PaginaBilanci from '@/pages/PaginaBilanci';
@@ -121,6 +126,27 @@ export default function App() {
               <RichiediRuoli ruoli={['admin']}>
                 <PaginaBacheca />
               </RichiediRuoli>
+            }
+          />
+          {/* La stessa pagina per il personale dello stabile, che riceve e
+              annota i compiti ma non li crea. Sul server `filtroVisibile`
+              lascia vedere solo le attività di cui è proprietario o assegnatario. */}
+          <Route
+            path="c/compiti"
+            element={
+              <RichiediRuoli ruoli={['portiere']}>
+                <PaginaBacheca />
+              </RichiediRuoli>
+            }
+          />
+          <Route
+            path="c/residenti"
+            element={
+              <RichiediAmministratore>
+                <RichiediRubrica>
+                  <PaginaResidenti />
+                </RichiediRubrica>
+              </RichiediAmministratore>
             }
           />
           {/*

@@ -69,6 +69,27 @@ const amministratore: GruppoNavigazione[] = [
   },
 ];
 
+/**
+ * Sezioni per il ruolo `portiere`.
+ *
+ * Il personale dello stabile non amministra: vede i compiti che gli sono stati
+ * affidati e la rubrica dei residenti, che è tutto ciò che gli serve per fare il
+ * suo mestiere. Non gli si propone la gestione perché il backend gliela
+ * rifiuterebbe, e non gli si propone il contratto perché non è un fornitore.
+ */
+const portiere: GruppoNavigazione[] = [
+  {
+    titolo: 'Il mio lavoro',
+    voci: [
+      { a: '/c/compiti', etichetta: 'I miei compiti', icona: '☐', primaria: true },
+      // Nessun `permesso`: il perimetro del portiere è una lista vuota, e la
+      // rubrica gliela concede `requireRubrica` perché serve quello stabile.
+      // Un `permesso: 'iscritti:leggere'` qui la farebbe sparire dal menu.
+      { a: '/c/residenti', etichetta: 'Residenti', icona: '⌸' },
+    ],
+  },
+];
+
 /** Sezioni per il ruolo `condomino`. */
 const condomino: GruppoNavigazione[] = [
   {
@@ -130,11 +151,11 @@ export function gruppiNavigazione(
   const base: GruppoNavigazione[] =
     role === 'superadmin'
       ? [...(amministra ? amministratore : []), ...piattaforma, ...gruppoAccount(false)]
-      : role === 'condomino'
-        ? [...condomino, ...gruppoAccount(false)]
-        : role === 'portiere'
-          ? gruppoAccount(false)
-          : [...amministratore, ...gruppoAccount(true)];
+: role === 'condomino'
+          ? [...condomino, ...gruppoAccount(false)]
+          : role === 'portiere'
+            ? [...portiere, ...gruppoAccount(false)]
+            : [...amministratore, ...gruppoAccount(true)];
 
   // Le voci senza permesso restano sempre; quelle con permesso sono filtrate.
   return base

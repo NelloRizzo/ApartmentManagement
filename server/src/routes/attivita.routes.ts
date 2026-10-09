@@ -23,11 +23,17 @@ import {
  * `requireRole('admin')` è insufficiente da solo, perché anche un assistente è
  * un `admin`: chi crea è l'amministratore delegante, e la verifica sta in
  * `assicuraCreatore`.
+ *
+ * Anche il portiere entra nel router, perché **riceve** compiti e li annota. Non
+ * però crearli, non modificarli e non eliminarli: `assicuraCreatore` lo blocca
+ * sul `role`, e le altre rotte sono chiuse da `assicuraProprietario`, che guarda
+ * il documento. Aggiungere il ruolo qui non gli apre la bacheca degli altri: ogni
+ * attività è filtrata da `filtroVisibile`, che lascia passare solo le sue.
  */
 const router = Router();
 
 router.use(requireAuth);
-router.use(requireRole('admin'));
+router.use(requireRole('admin', 'portiere'));
 
 /** Il team, per il form di assegnazione. Va prima di `/:id`. */
 router.get('/team', c.listTeam);

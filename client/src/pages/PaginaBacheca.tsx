@@ -102,6 +102,14 @@ export default function PaginaBacheca() {
   // Il server risponde 403 al superadmin, quindi non ha senso chiedergli la
   // bacheca e ricevere un errore.
   const sonoAmministratore = utente?.role === 'admin';
+  /**
+   * Il personale dello stabile entra sulla stessa pagina, ma solo per ricevere e
+   * annotare i compiti: non crea, non modifica e non elimina, e su quelle azioni
+   * è `sonoProprietario` a nascondere i pulsanti. Sul server i due filtri ci sono
+   * comunque (`assicuraCreatore` sul ruolo, `assicuraProprietario` sul
+   * documento): qui si evita solo di offrire strade che verrebbero rifiutate.
+   */
+  const possoOperare = sonoAmministratore || utente?.role === 'portiere';
 
   /**
    * Ha senso filtrare per "affidate a me" solo se posso essere un assegnatario.
@@ -155,9 +163,9 @@ export default function PaginaBacheca() {
     }
   }
 
-  let contenuto: ReactNode;
-  if (!sonoAmministratore) {
-    contenuto = (
+let contenuto: ReactNode;
+if (!possoOperare) {
+  contenuto = (
       <PaginaVuota
         titolo="Bacheca non disponibile"
         descrizione="La bacheca delle attività è riservata agli amministratori."
@@ -189,12 +197,18 @@ export default function PaginaBacheca() {
     contenuto = (
       <>
         <TitoloPagina
-          titolo="Bacheca"
-          descrizione="I compiti che dividi con il tuo team. Li vede solo chi li ha ricevuti."
+          titolo={sonoAmministratore ? 'Bacheca' : 'I miei compiti'}
+          descrizione={
+            sonoAmministratore
+              ? 'I compiti che dividi con il tuo team. Li vede solo chi li ha ricevuti.'
+              : 'I compiti che l’amministratore ti ha affidato. Puoi segnarli come fatti, non cambiarli.'
+          }
           azioni={
-            <button type="button" className="btn btn-primario" onClick={() => setInCreazione(true)}>
-              Nuova attività
-            </button>
+            sonoAmministratore ? (
+              <button type="button" className="btn btn-primario" onClick={() => setInCreazione(true)}>
+                Nuova attività
+              </button>
+            ) : undefined
           }
         />
 

@@ -19,6 +19,7 @@ $scriptVerifiche = @(
   'verifica-crud-bilanci.ps1',
   'verifica-millesimi.ps1',
   'verifica-attivita.ps1',
+  'verifica-portiere.ps1',
   'verifica-allegati.ps1'
 )
 

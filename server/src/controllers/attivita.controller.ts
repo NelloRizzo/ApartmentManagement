@@ -3,7 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created, noContent, paginated } from '../utils/http.js';
 import { getObjectId, paginazioneDa, regexDaTesto } from '../utils/pagination.js';
 import { notFound } from '../utils/errors.js';
-import { Attivita, User, type AttivitaDoc, type ColoreAttivita, type UserDoc } from '../models/index.js';
+import { Attivita, Condominio, User, type AttivitaDoc, type ColoreAttivita, type UserDoc } from '../models/index.js';
 import { currentUser } from '../middleware/auth.js';
 import { auditLog } from '../services/audit.service.js';
 import {
@@ -231,10 +231,18 @@ export const crea = asyncHandler(async (req, res) => {
     colore?: ColoreAttivita | null;
     dataInizio?: Date;
     dataFine?: Date;
+    condominio?: string;
   };
 
   await assicuraCreatore({ id: utente.sub });
-  const assegnatari = await assicuraAssegnatari(utente.sub, body.assegnatari ?? []);
+  // Il controllo degli assegnatari decide anche a quale stabile l'attività è
+  // legata: se fra i destinatari c'è un portiere, il suo stabile è l'unico
+  // possibile, e non va scelto dal client.
+  const { assegnatari, condominio } = await assicuraAssegnatari(
+    utente.sub,
+    body.assegnatari ?? [],
+    body.condominio,
+  );
   const parent = await assicuraPadreValido(body.parent);
 
   const attivita = await Attivita.create({
@@ -244,6 +252,7 @@ export const crea = asyncHandler(async (req, res) => {
     // creare un'attività intestata a un altro.
     proprietario: utente.sub,
     assegnatari,
+    condominio: condominio ?? undefined,
     parent: parent ?? undefined,
     milestone: body.milestone ?? false,
     colore: body.colore ?? null,
@@ -276,6 +285,11 @@ export const crea = asyncHandler(async (req, res) => {
 export const aggiorna = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
   const id = getObjectId(req.params.id ?? '', 'id');
+  // Lo stesso percorso di `elimina`: 404 se non è visibile, 403 se è visibile ma
+  // non è dell'utente. Serve il documento perché il controllo degli assegnatari
+  // deve confrontare lo stabile già legato all'attività con quello del portiere:
+  // riassegnare il compito di uno stabile al personale di un altro passerebbe
+  // inosservato.
   const esistente = await getVisibileOrThrow(id, { id: utente.sub });
   assicuraProprietario(esistente, { id: utente.sub });
 
@@ -288,13 +302,19 @@ export const aggiorna = asyncHandler(async (req, res) => {
     dataFine?: Date;
   };
 
-  const aggiornata = await Attivita.findOneAndUpdate(
-    { _id: id, proprietario: utente.sub },
+  const { assegnatari } = await assicuraAssegnatari(
+    utente.sub,
+    body.assegnatari ?? [],
+    esistente.condominio ? String(esistente.condominio) : undefined,
+  );
+
+  const aggiornata = await Attivita.findByIdAndUpdate(
+    id,
     {
       $set: {
         titolo: body.titolo,
         descrizione: body.descrizione ?? '',
-        assegnatari: await assicuraAssegnatari(utente.sub, body.assegnatari ?? []),
+        assegnatari,
         colore: body.colore ?? null,
         dataInizio: body.dataInizio,
         dataFine: body.dataFine,
@@ -389,32 +409,71 @@ export const elimina = asyncHandler(async (req, res) => {
 });
 
 /**
- * Il team di cui l'utente è proprietario, per il form di assegnazione.
+ * A chi può affidare un compito: il team e il personale dei propri stabili.
  *
  * Esposto a parte perché la UI deve poter scegliere i destinatari senza derivare
  * "il mio team" da `GET /staff/assistenti`, che legge un'altra fonte.
+ *
+ * Le due popolazioni sono diverse e la UI deve distinguerle: l'assistente lavora
+ * su tutto il portafoglio, il personale dello stabile su **uno** stabile, ed è
+ * quello che rende il compito non ambiguo. Per questo ogni voce porta `ruolo` e
+ * `stabili`, e chi è già del team compare una volta sola anche se serve anche uno
+ * stabile.
  */
 export const listTeam = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
-  const ids = await teamDi(utente.sub);
-  if (ids.length === 0) {
-    ok(res, []);
-    return;
+  const [idAssistenti, mieiStabili] = await Promise.all([
+    teamDi(utente.sub),
+    Condominio.find({ amministratore: utente.sub })
+      .select('codice nome condominiServito')
+      .lean<{ codice: string; nome: string; condominiServito: Types.ObjectId[] }[]>(),
+  ]);
+
+  /** Stabile in cui ogni persona serve: serve a non assegnare a caso. */
+  const stabiliDi = new Map<string, string[]>();
+  for (const s of mieiStabili) {
+    for (const persona of s.condominiServito) {
+      const chiave = String(persona);
+      stabiliDi.set(chiave, [...(stabiliDi.get(chiave) ?? []), `${s.nome} (${s.codice})`]);
+    }
   }
+  const idServito = [...stabiliDi.keys()];
 
-  const assistenti = await User.find({ _id: { $in: ids } })
-    .select('nome cognome email')
-    .sort({ cognome: 1 })
-    .lean<Pick<UserDoc, '_id' | 'nome' | 'cognome' | 'email'>[]>();
+  const [assistenti, servitori] = await Promise.all([
+    User.find({ _id: { $in: idAssistenti } })
+      .select('nome cognome email')
+      .sort({ cognome: 1 })
+      .lean<Pick<UserDoc, '_id' | 'nome' | 'cognome' | 'email'>[]>(),
+    User.find({ _id: { $in: idServito } })
+      .select('nome cognome email')
+      .sort({ cognome: 1 })
+      .lean<Pick<UserDoc, '_id' | 'nome' | 'cognome' | 'email'>[]>(),
+  ]);
 
+  const giaNelTeam = new Set(idAssistenti);
   ok(
     res,
-    assistenti.map((a) => ({
-      id: String(a._id),
-      nome: a.nome,
-      cognome: a.cognome,
-      nomeCompleto: `${a.nome} ${a.cognome}`.trim(),
-      email: a.email,
-    })),
+    [
+      ...assistenti.map((a) => ({
+        id: String(a._id),
+        nome: a.nome,
+        cognome: a.cognome,
+        nomeCompleto: `${a.nome} ${a.cognome}`.trim(),
+        email: a.email,
+        ruolo: 'assistente' as const,
+        stabili: stabiliDi.get(String(a._id)) ?? [],
+      })),
+      ...servitori
+        .filter((s) => !giaNelTeam.has(String(s._id)))
+        .map((s) => ({
+          id: String(s._id),
+          nome: s.nome,
+          cognome: s.cognome,
+          nomeCompleto: `${s.nome} ${s.cognome}`.trim(),
+          email: s.email,
+          ruolo: 'servito' as const,
+          stabili: stabiliDi.get(String(s._id)) ?? [],
+        })),
+    ],
   );
 });

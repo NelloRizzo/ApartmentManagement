@@ -107,6 +107,20 @@ export const servizioParams = z.object({ condominioId: objectId, utenteId: objec
 
 export const utenteBody = z.object({ utenteId: objectId });
 
+/**
+ * Creazione del personale dello stabile.
+ *
+ * `password` è facoltativa: senza, se ne genera una provvisoria che viaggia solo
+ * nell'email di conferma, mai in una risposta né nel registro operazioni.
+ */
+export const servizioCreateSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Email non valida'),
+  nome: z.string().trim().min(1, 'Nome obbligatorio').max(80),
+  cognome: z.string().trim().min(1, 'Cognome obbligatorio').max(80),
+  telefono: z.string().trim().max(30).optional(),
+  password: z.string().min(8, 'La password deve essere lunga almeno 8 caratteri').optional(),
+});
+
 export const unitaParams = z.object({ condominioId: objectId, id: objectId });
 
 export const sempliceId = z.object({ id: objectId });
@@ -658,6 +672,13 @@ export const creaAttivitaSchema = z
     titolo: z.string().trim().min(1, 'Il titolo è obbligatorio').max(300),
     descrizione: z.string().trim().max(20_000).default(''),
     assegnatari: assegnatari.default([]),
+    /**
+     * Obbligatorio se si assegna a del personale dello stabile: un portiere serve
+     * un solo stabile, quindi un compito senza `condominio` non potrebbe essere
+     * validato contro "chi serve quello stabile" e aprirebbe la strada a
+     *assegnare il compito di uno stabile al portiere di un altro.
+     */
+    condominio: objectId.optional(),
     parent: objectId.optional(),
     milestone: z.boolean().default(false),
     /** `null` è "nessun colore scelto", non "nero". */

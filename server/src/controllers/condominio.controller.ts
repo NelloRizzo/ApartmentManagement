@@ -13,12 +13,15 @@ import {
   Condomino,
   QuotaMillesimale,
   Unita,
+  User,
   Verbale,
   Versamento,
 } from '../models/index.js';
 import { currentUser, puoEseguire } from '../middleware/auth.js';
 import { auditLog } from '../services/audit.service.js';
 import { generaCodiceCondominio } from '../services/condominio.service.js';
+import { allineaUtente, passwordTemporanea } from '../services/ruolo.service.js';
+import { inviaConfermaA } from '../services/confermaEmail.service.js';
 import { buildTabella } from '../services/tabellaMillesimale.service.js';
 import { calcolaQuoteMensili } from '../services/quoteVersamenti.service.js';
 import type { CondominioDoc } from '../models/index.js';
@@ -226,19 +229,150 @@ export const remove = asyncHandler(async (req, res) => {
   noContent(res);
 });
 
-/** Assegna un portiere/servizio al condominio. */
+/**
+ * Assegna del personale allo stabile, creandone l'account.
+ *
+ * Prima collegava un `utenteId` esistente senza impostargli il ruolo: il
+ * collegamento non bastava, perché ogni guard decide su `role` e quel utente
+ * restava un utente qualunque. Creare l'account qui risolve la contraddizione tra
+ * "è in `condominiServito`" e "`role` vale `portiere`", che sono due modi di dire
+ * la stessa cosa e possono divergere.
+ *
+ * I permessi sono una **lista vuota**, non `null`: il portiere serve uno stabile e
+ * non ha alcun ambito delegato. È la forma più stretta di perimetro — non gli
+ * si apre niente e non si esclude niente, ogni rotta decisa caso per caso — e
+ * `null` significa accesso pieno, che qui aprirebbe versamenti, quote e bilanci
+ * dello stabile in cui serve. La rubrica dei residenti non passa da qui: la
+ * concede `requireRubrica` perché serva quello stabile.
+ */
 export const addServizio = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
-  const { utenteId } = req.body as { utenteId: string };
-  const condominio = await Condominio.findOneAndUpdate(
+  const body = req.body as {
+    email: string;
+    nome: string;
+    cognome: string;
+    telefono?: string;
+    password?: string;
+  };
+
+  // Il titolare dello stabile è l'unico che può assegnare personale: è l'atto con
+  // cui decide chi vede i dati dei residenti. Un assistente che lo farebbe
+  // assegnerebbe la visibilità dei dati al posto suo.
+  const stabile = await Condominio.findOne({
+    _id: req.params.condominioId,
+    amministratore: utente.sub,
+  })
+    .select('_id')
+    .lean();
+  if (!stabile) throw notFound('Condominio non trovato');
+
+  const esistente = await User.findOne({ email: body.email });
+  if (esistente) {
+    if (esistente.role !== 'condomino' && esistente.role !== 'portiere') {
+      throw forbidden('Questo utente ha già un ruolo amministrativo');
+    }
+  }
+
+  const password = body.password ?? passwordTemporanea('Personale');
+  const persona =
+    esistente ??
+    (await User.create({
+      email: body.email,
+      nome: body.nome,
+      cognome: body.cognome,
+      telefono: body.telefono,
+      password: await User.hashPassword(password),
+      role: 'portiere',
+      // Lista vuota, non `null`: vedi la nota sul perimetro del ruolo.
+      permessi: [],
+      attivo: true,
+      emailConfermato: false,
+    }));
+
+  if (esistente) {
+    esistente.role = 'portiere';
+    esistente.permessi = [];
+    esistente.attivo = true;
+    esistente.tokenVersion += 1;
+    await esistente.save();
+  }
+
+  await Condominio.updateOne(
     { _id: req.params.condominioId, amministratore: utente.sub },
-    { $addToSet: { condominiServito: id(utenteId) } },
-    { new: true },
+    { $addToSet: { condominiServito: persona._id } },
   );
-  if (!condominio) throw notFound('Condominio non trovato');
-  ok(res, condominio.condominiServito.map(String));
+  await allineaUtente(persona._id);
+
+  // La password provvisoria viaggia solo nell'email: nel registro operazioni non
+  // deve finire, e senza questa email il portiere non potrebbe accedere.
+  const conferma = await inviaConfermaA(persona, {
+    passwordProvvisoria: body.password ? undefined : password,
+    organizzazione: 'un amministratore di condominio',
+  });
+
+  await auditLog({
+    condominio: req.params.condominioId,
+    attore: utente.sub,
+    azione: 'assegnazione_personale',
+    entita: 'User',
+    entitaId: String(persona._id),
+    dettagli: { email: body.email, ruolo: 'portiere', confermaInviata: conferma.esito.inviato },
+    req,
+  });
+
+  created(res, {
+    id: String(persona._id),
+    nome: persona.nome,
+    cognome: persona.cognome,
+    email: persona.email,
+    telefono: persona.telefono,
+    emailConfermato: persona.emailConfermato ?? false,
+    conferma: {
+      inviata: conferma.esito.inviato,
+      motivo: conferma.motivo ?? null,
+      scadenza: conferma.scadenza ?? null,
+    },
+    // Se l'email non è partita la password va consegnata a mano: senza di lei il
+    // portiere non potrebbe accedere, e nessuno potrebbe sapere qual è.
+    ...(conferma.esito.inviato || body.password
+      ? {}
+      : { passwordDaConsegnare: true, motivoInvio: conferma.motivo ?? null }),
+  });
 });
 
+/** Una persona di `condominiServito` dopo il popolamento. */
+interface PersonaAssegnata {
+  _id: Types.ObjectId;
+  nome: string;
+  cognome: string;
+  email: string;
+  telefono?: string;
+  attivo: boolean;
+  emailConfermato?: boolean;
+}
+
+/** Il personale attualmente assegnato allo stabile. */
+export const listServizi = asyncHandler(async (req, res) => {
+  const utente = currentUser(req);
+  const condominio = await Condominio.findOne({ _id: req.params.condominioId, amministratore: utente.sub })
+    .populate<{ condominiServito: PersonaAssegnata[] }>(
+      'condominiServito',
+      'nome cognome email telefono attivo emailConfermato',
+    )
+    .lean();
+  if (!condominio) throw notFound('Condominio non trovato');
+  ok(res, condominio.condominiServito);
+});
+
+/**
+ * Revoca l'incarico: toglie il legame dallo stabile.
+ *
+ * Non cancella l'utente, come `revocaAssistente`: se serve un altro stabile deve
+ * poter continuare a lavorare lì, e i compiti che ha già fatto non si cancellano
+ * con lui. Se invece questo era l'unico incarico, l'account viene **disattivato**,
+ * come per l'assistente: altrimenti resterebbe un accesso con password in mano a
+ * chi non serve più lo stabile, e senza nessuna rotta per eliminarlo.
+ */
 export const removeServizio = asyncHandler(async (req, res) => {
   const utente = currentUser(req);
   const condominio = await Condominio.findOneAndUpdate(
@@ -247,5 +381,26 @@ export const removeServizio = asyncHandler(async (req, res) => {
     { new: true },
   );
   if (!condominio) throw notFound('Condominio non trovato');
+
+  const personaId = req.params.utenteId!;
+  const serveAltro = await Condominio.exists({ condominiServito: id(personaId) });
+  if (!serveAltro) {
+    await User.updateOne(
+      { _id: id(personaId) },
+      { attivo: false, tokenVersion: 1 },
+    );
+  }
+  await allineaUtente(personaId);
+
+  await auditLog({
+    condominio: req.params.condominioId,
+    attore: utente.sub,
+    azione: 'revoca_personale',
+    entita: 'User',
+    entitaId: personaId,
+    dettagli: { disattivato: !serveAltro },
+    req,
+  });
+
   ok(res, condominio.condominiServito.map(String));
 });

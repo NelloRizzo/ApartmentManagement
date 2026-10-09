@@ -1,6 +1,7 @@
 import { Types, type FilterQuery } from 'mongoose';
-import { Attivita, User, type AttivitaDoc } from '../models/index.js';
+import { Attivita, Condominio, User, type AttivitaDoc } from '../models/index.js';
 import { badRequest, forbidden, notFound } from '../utils/errors.js';
+import type { UserRole } from '../types/domain.js';
 
 /**
  * Attività della bacheca del team.
@@ -32,6 +33,19 @@ export async function teamDi(proprietarioId: string): Promise<string[]> {
   return assistenti.map((a) => String(a._id));
 }
 
+/** Il personale che serve uno stabile di questo amministratore. */
+export async function portieriDi(proprietarioId: string, condominioId: string): Promise<string[]> {
+  const stabile = await Condominio.findOne({ _id: oid(condominioId), amministratore: oid(proprietarioId) })
+    .select('_id')
+    .lean();
+  if (!stabile) return [];
+
+  const portieri = await User.find({ role: 'portiere', attivo: true, condominiServito: stabile._id })
+    .select('_id')
+    .lean<{ _id: Types.ObjectId }[]>();
+  return portieri.map((p) => String(p._id));
+}
+
 /** Un'attività è visibile se sono il proprietario o un assegnatario. */
 export function visibileA(doc: AttivitaDoc, utenteId: string): boolean {
   if (String(doc.proprietario) === utenteId) return true;
@@ -50,22 +64,72 @@ export function filtroVisibile(utenteId: string): FilterQuery<AttivitaDoc> {
 }
 
 /**
- * Valida gli assegnatari contro il team.
+ * Valida gli assegnatari e stabilisce a quale stabile si riferisce l'attività.
  *
  * Serve perché l'id arriva dal client: senza questo controllo si potrebbe
  * assegnare un'attività a chiunque, compreso il superadmin, che non è del team e
  * non potrebbe vederla.
+ *
+ * Gli assegnatari sono due popolazioni diverse. Gli assistenti sono del team e non
+ * hanno uno stabile: lavorano su tutto il portafoglio. I portieri invece servono
+ * **un** stabile, quindi se entrano nell'elenco l'attività viene legata a quello e
+ * non a un altro scelto a caso: è la condizione che impedisce all'amministratore
+ * di cinque stabili di affidare il compito di uno al portiere di un altro. Il
+ * portiere che riceve un compito non porta con sé il proprio stabile nei campi
+ * dell'attività, ci arriva perché gliel'ha risolto il controllo.
  */
-export async function assicuraAssegnatari(proprietarioId: string, assegnatari: string[]): Promise<Types.ObjectId[]> {
+export async function assicuraAssegnatari(
+  proprietarioId: string,
+  assegnatari: string[],
+  condominio?: string,
+): Promise<{ assegnatari: Types.ObjectId[]; condominio?: Types.ObjectId }> {
+  const scelto = condominio ? oid(condominio) : undefined;
   const unici = [...new Set(assegnatari.map(String))];
-  if (unici.length === 0) return [];
+  if (unici.length === 0) return { assegnatari: [], condominio: scelto };
 
   const team = await teamDi(proprietarioId);
-  const fuori = unici.filter((a) => !team.includes(a));
-  if (fuori.length > 0) {
-    throw badRequest('Alcuni destinatari non sono assistenti di questo amministratore', { nonValidi: fuori });
+  const candidati = unici.filter((a) => !team.includes(a));
+  if (candidati.length === 0) return { assegnatari: unici.map(oid), condominio: scelto };
+
+  const portieri = await User.find({ _id: { $in: candidati.map(oid) }, role: 'portiere' })
+    .select('_id condominiServito')
+    .lean<{ _id: Types.ObjectId; condominiServito?: Types.ObjectId[] }[]>();
+  const idPortieri = new Set(portieri.map((p) => String(p._id)));
+  const nonValidi = candidati.filter((c) => !idPortieri.has(c));
+  if (nonValidi.length > 0) {
+    throw badRequest('Alcuni destinatari non sono del team di questo amministratore né portieri di un suo stabile', {
+      nonValidi,
+    });
   }
-  return unici.map(oid);
+
+  // Il portiere porta con sé il legame in `condominiServito`. Se ne servisse più di
+  // uno non sapremmo a quale stabile riferire l'attività, quindi il compito non
+  // viene accettato: è più honesto far rimettere a posto il legame.
+  const serviti = [
+    ...new Set(portieri.flatMap((p) => (p.condominiServito ?? []).map(String))),
+  ];
+  if (serviti.length !== 1) {
+    throw badRequest(
+      serviti.length === 0
+        ? 'Nessuno di questi portieri è collegato a uno stabile'
+        : 'Un portiere collegato a più stabili non può ricevere compiti: correggi il suo incarico',
+    );
+  }
+
+  const stabile = await Condominio.findOne({ _id: serviti[0], amministratore: oid(proprietarioId) })
+    .select('_id')
+    .lean();
+  if (!stabile) {
+    throw badRequest('Nessuno di questi portieri serve uno stabilo tuo');
+  }
+  if (scelto && String(scelto) !== String(stabile._id)) {
+    throw badRequest('L’attività è già legata a uno stabile diverso da quello del portiere', {
+      stabileDellAttivita: String(scelto),
+      stabileDelPortiere: String(stabile._id),
+    });
+  }
+
+  return { assegnatari: unici.map(oid), condominio: stabile._id };
 }
 
 /**
@@ -111,8 +175,13 @@ export function assicuraPuoSegnareFatto(doc: AttivitaDoc, utente: Identita): voi
  * che non gli spettano.
  */
 export async function assicuraCreatore(utente: Identita): Promise<void> {
-  const autore = await User.findById(utente.id).select('delegatoDa').lean<{ delegatoDa?: Types.ObjectId }>();
+  const autore = await User.findById(utente.id)
+    .select('delegatoDa role')
+    .lean<{ delegatoDa?: Types.ObjectId; role: UserRole }>();
   if (!autore) throw notFound('Utente non trovato');
+  if (autore.role === 'portiere') {
+    throw forbidden('Il personale dello stabile riceve i compiti, non li crea');
+  }
   if (autore.delegatoDa) {
     throw forbidden("Gli assistenti ricevono le attività, non le creano");
   }

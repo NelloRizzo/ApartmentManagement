@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created, noContent, paginated } from '../utils/http.js';
-import { badRequest, conflict, notFound } from '../utils/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
 import { paginazioneDa, regexDaTesto } from '../utils/pagination.js';
 import { Condomino, Condominio, Unita, User, type UnitaRiepilogo, type UtenteRiepilogo } from '../models/index.js';
 import { currentUser } from '../middleware/auth.js';
@@ -33,6 +33,73 @@ export async function condominiDiUtente(utenteId: string): Promise<string[]> {
   const legs = await Condomino.find({ utente: utenteId, attivo: true }).select('condominio').lean();
   return [...new Set(legs.map((l) => String(l.condominio)))];
 }
+
+/** Un legame dopo il popolamento di utente e unità, con i soli campi che servono. */
+interface LegameRubrica {
+  utente: { _id: Types.ObjectId; nome: string; cognome: string; telefono?: string };
+  unita: UnitaRiepilogo[];
+}
+
+/**
+ * Rubrica dei residenti, per il personale dello stabile.
+ *
+ * È una vista dedicata e non un parametro della lista degli iscritti, perché i
+ * campi non sono gli stessi: qui ci sono **codice unità, piano, cognome e
+ * telefono**, e non l'email né i millesimi. A chi serve bussare alla porta non
+ * serve sapere la posizione patrimoniale del vicino, e mettere quei dati nella
+ * stessa risposta significherebbe che basta una rotta sbagliata per esporli.
+ *
+ * Un documento per nucleo familiare: chi è iscritto con due unità compare una
+ * volta sola, con tutte e due.
+ *
+ * Il condòmino è escluso esplicitamente: ha già `mie-quote` per i suoi dati e non
+ * deve vedere il resto dello stabile.
+ */
+export const rubrica = asyncHandler(async (req, res) => {
+  const utente = currentUser(req);
+  if (utente.role === 'condomino') {
+    throw forbidden('La rubrica dello stabile è riservata a chi lo amministra');
+  }
+
+  const [legami, unita] = await Promise.all([
+    Condomino.find({ condominio: req.params.condominioId, attivo: true })
+      .populate('utente', 'nome cognome telefono')
+      .populate('unita', 'codice piano')
+      .lean<LegameRubrica[]>(),
+    Unita.find({ condominio: req.params.condominioId, attiva: true })
+      .select('codice piano')
+      .sort({ codice: 1 })
+      .lean<UnitaRiepilogo[]>(),
+  ]);
+
+  const perPersona = new Map<
+    string,
+    { nome: string; cognome: string; telefono?: string; unita: string[] }
+  >();
+  for (const legame of legami) {
+    const persona = legame.utente;
+    const voce = perPersona.get(String(persona._id)) ?? {
+      nome: persona.nome,
+      cognome: persona.cognome,
+      telefono: persona.telefono,
+      unita: [],
+    };
+    for (const u of legame.unita) voce.unita.push(u.codice);
+    perPersona.set(String(persona._id), voce);
+  }
+
+  ok(res, {
+    unita: unita.map((u) => ({ codice: u.codice, piano: u.piano })),
+    residenti: [...perPersona.entries()]
+      .map(([utenteId, p]) => ({
+        utenteId,
+        cognome: `${p.cognome} ${p.nome}`.trim(),
+        telefono: p.telefono ?? null,
+        unita: p.unita.sort(),
+      }))
+      .sort((a, b) => a.cognome.localeCompare(b.cognome, 'it')),
+  });
+});
 
 export const list = asyncHandler(async (req, res) => {
   const utente = currentUser(req);

@@ -165,11 +165,38 @@ describe('requirePermesso (scritture)', () => {
 });
 
 describe('requirePermessoLettura (liste e dettagli)', () => {
-  it('lascia passare i ruoli non admin', () => {
-    // I condòmini devono vedere i propri verbali e le proprie quote: il
-    // filtro per utente è dentro il controller, qui il ruolo non viene toccato.
+  it('lascia passare il condòmino', () => {
+    // Il condòmino deve vedere i propri verbali e le proprie quote: il filtro per
+    // utente è dentro il controller, qui il ruolo non viene toccato.
     assert.equal(esegui(requirePermessoLettura('verbali:leggere'), { user: utente('condomino', []) }).passato, true);
-    assert.equal(esegui(requirePermessoLettura('versamenti:leggere'), { user: utente('portiere', []) }).passato, true);
+  });
+
+  it('chiude al portiere tutto ciò che non è nella sua lista', () => {
+    // Il perimetro del portiere è la sua lista di permessi. Prima passava da ogni
+    // rotta di lettura, perché il controllo era solo per `admin`, e i controller
+    // filtrano solo il condòmino: avrebbe letto versamenti, quote con gli
+    // importi, bilanci e verbali dello stabile in cui serve.
+    const { passato, errore } = esegui(requirePermessoLettura('versamenti:leggere'), {
+      user: utente('portiere', []),
+    });
+    assert.equal(passato, false);
+    assert.equal((errore as { statusCode: number }).statusCode, 403);
+
+    assert.equal(
+      esegui(requirePermessoLettura('iscritti:leggere'), { user: utente('portiere', ['iscritti:leggere']) }).passato,
+      true,
+    );
+  });
+
+  it('non tratta il permesso vuoto del portiere come accesso pieno', () => {
+    // `null` è "tutto" ed è il modo con cui viene salvato l'amministratore senza
+    // delega. Se valesse anche per il portiere, un account con la lista azzerata
+    // avrebbe aperto tutto lo stabile.
+    const { passato, errore } = esegui(requirePermessoLettura('iscritti:leggere'), {
+      user: utente('portiere', null),
+    });
+    assert.equal(passato, false);
+    assert.equal((errore as { statusCode: number }).statusCode, 403);
   });
 
   it('blocca l\'assistente su un ambito non delegato', () => {

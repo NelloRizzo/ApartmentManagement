@@ -93,20 +93,36 @@ export const requirePermesso =
  * Richiede il permesso di lettura su un ambito, senza vietare la rotta agli altri
  * ruoli.
  *
- * `requirePermesso` è pensato per le scritture e therefore esclude condòmini e
+ * `requirePermesso` è pensato per le scritture e quindi esclude condòmini e
  * portieri. Sulle liste, invece, il filtro per utente è già dentro il controller e
  * ignorare l'ambito significherebbe mostrare a un assistente dati che l'amministratore
- * non gli ha delegato. Qui quindi si controlla solo il ruolo `admin`: gli altri
- * ruoli proseguono e restano vincolati dai filtri del controller.
+ * non gli ha delegato.
+ *
+ * **L'elenco di permessi si controlla per `admin` e per `portiere`.** Non è solo
+ * la delega dell'assistente: è la lista di ciò che quell'utente può leggere, e
+ * per il portiere è anche il suo perimetro dentro lo stabile. Senza questo controllo
+ * il portiere passava da tutte le rotte di lettura, e i controller filtrano solo
+ * il `condomino`: avrebbe letto versamenti, quote mensili con gli importi, bilanci
+ * e verbali dello stabile in cui serve. Il condòmino resta fuori perché non
+ * amministra e i suoi controller già filtrano.
  */
 export const requirePermessoLettura =
   (...permessi: Permesso[]): RequestHandler =>
   (req, _res, next) => {
     if (!req.user) return next(unauthorized());
-    if (req.user.role !== 'admin') return next();
+    if (req.user.role !== 'admin' && req.user.role !== 'portiere') return next();
 
     const assegnati = req.user.permessi;
-    if (assegnati === null) return next();
+    if (assegnati === null) {
+      // `null` è il modo con cui viene salvato l'amministratore senza delega, e
+      // significa accesso pieno. Per il portiere non è un caso ammesso: la sua
+      // lista è sempre compilata, e trattare `null` come pieno gli aprirebbe
+      // tutto lo stabile.
+      if (req.user.role === 'portiere') {
+        return next(forbidden('Account del personale dello stabile non configurato: chiedi all’amministratore'));
+      }
+      return next();
+    }
 
     if (permessi.some((p) => haPermesso(assegnati, p))) return next();
 
@@ -135,6 +151,9 @@ export const requirePermessoOPartecipante =
 
     const ruolo = req.user.role;
     if (ruolo === 'superadmin') return next();
+    if (ruolo === 'portiere') {
+      return next(forbidden('Il personale dello stabile non scrive ai residenti: è l’amministratore a scrivere'));
+    }
     if (ruolo !== 'admin') return next();
 
     const assegnati = req.user.permessi;
@@ -146,6 +165,28 @@ export const requirePermessoOPartecipante =
       forbidden('Non sei autorizzato a questa operazione: l’amministratore non ti ha delegato questo ambito'),
     );
   };
+
+/**
+ * Chi può leggere la rubrica dei residenti.
+ *
+ * L'amministratore deve avere il permesso sugli iscritti. Il personale dello
+ * stabile passa perché **serve** quello stabile, e non perché ha un permesso:
+ * questo è il punto del perimetro. Un permesso non può bastare, perché la rubrica
+ * e la lista degli iscritti sono due letture diverse e il secondo elenco contiene
+ * anche i millesimi: un permesso condiviso avrebbe dato al portiere la posizione
+ * economica di ogni residente insieme al cognome e al telefono.
+ *
+ * Il condòmino è escluso qui e non nel controller: è il guard il posto in cui si
+ * dichiara chi entra, e la regola è la stessa per tutti.
+ */
+export const requireRubrica: RequestHandler = (req, res, next) => {
+  if (!req.user) return next(unauthorized());
+  if (req.user.role === 'portiere') return next();
+  if (req.user.role !== 'admin') {
+    return next(forbidden('La rubrica dello stabile è riservata a chi lo amministra'));
+  }
+  return requirePermessoLettura('iscritti:leggere')(req, res, next);
+};
 
 /**
  * Verifica che l'utente abbia accesso al condominio indicato.

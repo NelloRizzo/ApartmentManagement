@@ -7,8 +7,8 @@ import {
   condominioCreateSchema,
   condominioParams,
   condominioUpdateSchema,
+  servizioCreateSchema,
   servizioParams,
-  utenteBody,
 } from '../validators/schemas.js';
 
 const router = Router();
@@ -42,12 +42,21 @@ router.patch(
 );
 router.delete('/:condominioId', controllaServizio, requirePermesso('amministrazione:scrivere'), validate(condominioParams, 'params'), c.remove);
 
+// Il personale dello stabile. `GET` elenca chi serve, `POST` assegna (creando
+// l'account), `DELETE` revoca. Le rotte sono sull'amministratore del condominio:
+// assegnare personale è l'atto con cui si decide chi vede i dati dei residenti.
+router.get(
+  '/:condominioId/servizi',
+  controllaServizio, requirePermesso('amministrazione:leggere'),
+  validate(condominioParams, 'params'),
+  c.listServizi,
+);
 router.post(
   '/:condominioId/servizi',
   controllaServizio, requirePermesso('amministrazione:scrivere'),
   validate(condominioParams, 'params'),
   requireCondominioAccess,
-  validate(utenteBody),
+  validate(servizioCreateSchema),
   c.addServizio,
 );
 router.delete(
