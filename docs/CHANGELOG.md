@@ -4,6 +4,22 @@ Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
 ## 2026-10-08
 
+### La voce 2 non era un lavoro in coda, ma un controllo da fare a ogni rotta di scrittura
+
+Dal `TODO.md`: "Zod rimuove le chiavi non dichiarate: un `PATCH /versamenti/:id`
+con `unita` o `periodo` risponde 200 e lascia i valori come erano".
+
+Il caso non capita una volta sola: capita ogni volta che si scrive una rotta di
+scrittura e si dimentica di dichiarare nello schema un campo che il client manda o
+che il controller legge. Non era un difetto da correggere, era una raccomandazione
+da tenere presente, quindi la voce è uscita dal `TODO.md` ed è diventata una regola
+in `AGENTS.md` ("Campi dichiarati nelle rotte di scrittura"), con la decisione
+collegata: niente passata di `strict()` su tutti i domini, si aggiunge per schema
+quando un dominio dà fastidio, e i candidati restano `versamentoUpdateSchema` e
+`bilancioUpdateSchema`.
+
+Verifiche: nessuna, la voce non tocca il codice.
+
 ### `verifica-millesimi` non partiva da un seed appena fatto
 
 Dal `TODO.md`: "lo script crea un condominio di prova, ma il contratto del seed è

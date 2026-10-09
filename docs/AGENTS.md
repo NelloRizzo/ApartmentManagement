@@ -209,6 +209,24 @@ Usare `flagQuery` (`validators/schemas.ts`), mai `z.coerce.boolean()`:
 `Boolean("false")` vale `true`, quindi `?approvato=false` selezionerebbe i
 documenti approvati.
 
+### Campi dichiarati nelle rotte di scrittura
+
+`validate` **sostituisce** `req.body` con il risultato di Zod, che rimuove le
+chiavi non dichiarate: un `PATCH` con un campo assente dallo schema riceve 200 e
+lascia i valori come erano, quindi la risposta sembra aver applicato una modifica
+che non è avvenuta (visto su `PATCH /versamenti/:id` con `unita` o `periodo`).
+
+**Ogni volta che si aggiunge o si tocca una rotta di scrittura (`POST`, `PUT`,
+`PATCH`), verificare che tutti i campi che il client manda e che il controller
+legge siano dichiarati nello schema Zod**, anche quelli annidati: è la stessa
+trappola di `delibera` e `bilancio` in `assembleaCreateSchema`, che non dichiarati
+spariscono dalla convocazione senza errore.
+
+Non serve una passata di `strict()` su tutti i domini: si aggiunge **per schema**,
+quando un dominio dà fastidio. I condomini sono già `strict` in creazione e
+modifica; `versamentoUpdateSchema` e `bilancioUpdateSchema` (che usano `.omit()`
+per i campi immutabili) sono i candidati più probabili.
+
 ### Query e riferimenti
 
 Un campo `ref` non si può filtrare con il percorso puntato (`'utente.nome'`):

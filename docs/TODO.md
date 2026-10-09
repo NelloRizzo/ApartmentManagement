@@ -31,11 +31,6 @@ PRIORITA MEDIA
     - 2026-10-07 — `RichiediAmministratore` (client): esclude anche il superadmin, che nelle pagine di condominio vedeva stabili non suoi
 
 PRIORITA BASSA
-- 2. Campi sconosciuti scartati in silenzio
-  - Zod rimuove le chiavi non dichiarate: un `PATCH /versamenti/:id` con `unita` o `periodo` risponde 200 e lascia i valori come erano, verificato
-  - l'interfaccia mostra già quei due campi come immutabili, quindi non è un bug visibile; resta però una risposta che sembra aver applicato la modifica
-  - **non fare una passata su tutti i domini**: aggiungere `strict` allo schema quando un dominio dà fastidio, non prima. I condomini sono già `strict` in creazione e modifica
-  - `strict()` compare 3 volte su circa una decina di schemi di modifica; `versamentoUpdateSchema` e `bilancioUpdateSchema` usano `.omit()` e sono i candidati più probabili
 - 4. Storico delle quote millesimali non consultabile
   - **il testo non promette più niente**: la pagina dice che la revisione precedente "resta conservata", che è vero. Prima diceva "consultabile nello storico" e non lo era
   - la conservazione c'è: `nuovaRevisione` chiude la revisione precedente con `validTo` e inserisce la nuova con `revisione + 1`, e la tabella attiva si ottiene filtrando per revisione corrente
