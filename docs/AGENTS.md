@@ -821,6 +821,13 @@ Controlli minimi dopo una modifica al dominio:
 - **`paginazioneDa` invece di `getPagination`.** Vedi la regola sulle liste.
 - **Service worker disattivato in dev** (`devOptions.enabled: false`) perché
   mascherebbe le modifiche a caldo del frontend.
+- **L'aggiornamento della PWA è `registerType: 'prompt'`, non `autoUpdate`.** Con
+  `autoUpdate` una versione nuova ricaricava la pagina da sola, nel momento in cui
+  il nuovo service worker prendeva il controllo: chi stava compilando un verbale o
+  inserendo un versamento perdeva quello che stava scrivendo. Con `prompt` la
+  versione aspetta e ad applicarla è chi usa l'applicazione, dall'avviso fisso
+  `AvvisoAggiornamento` (segnalato da `onNeedRefresh` via `hooks/useAggiornamento`).
+  Non è un toast: un avviso che sparisce da solo riproporrebbe il problema.
 - **Gli allegati stanno in MongoDB, non su disco.** Il filesystem del servizio
   è temporaneo su Render: i file in `server/uploads` sparisce a ogni deploy.
   `allegato.service.ts` li salva e li serve da `/allegati/:id` con firma a tempo
