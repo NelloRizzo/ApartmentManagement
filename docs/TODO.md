@@ -37,6 +37,18 @@ affronta è la prima della lista.)_
     basta aprire quell'ambito a chi ha `iscritti:leggere` — è la trappola in cui si
     era già caduti una volta
 
+PRIORITA ALTA
+- 12. Esportazione dei dati propri: oggi l'interessato non può scaricarli
+  - **reale, non è un di più**: `mieDati` in `comunicazione.controller.ts` raccoglie comunicazioni, legami e registro operazioni di un utente, ma **nessuna rotta la chiama**, quindi oggi non si può. È un diritto che l'informativa promette e che l'applicazione non onora
+  - perché è alta e non bassa: non è una comodità, è il diritto di accesso, ed è l'unico pezzo che manca perché l'informativa possa dichiararlo senza dichiarare il falso
+  - **prima di esporla va allargata**, perché così com'è sarebbe un'esportazione incompleta: non raccoglie unità immobiliari, versamenti (che hanno `condomino` come riferimento diretto, non serve passare dalle unità), presenze e votazioni nelle assemblee, allegati e contratto. Per una richiesta di accesso un elenco parziale è peggio di nessun elenco, perché sembra completo
+  - da ricordare che il registro operazioni contiene `ip` e `userAgent`, quindi è dato personale e va incluso per come è
+  - passi:
+    - allargare `mieDati` a unità, versamenti, presenze e votazioni, allegati e contratto, con la stessa forma piatta e leggibile che ha adesso
+    - esporla su una rotta `GET` dell'area autenticata: è già `asyncHandler` con `currentUser`, quindi il lavoro è la rotta e non il controller
+    - pulsante nel profilo che scarica il file dal browser, senza dipendenze nuove
+    - verifiche: un caso per ogni raccolta e il caso negativo, che l'utente non esporti i dati di un altro
+  - **la voce sulla privacy policy dichiara l'esportazione solo dopo che esiste**: oggi la pagina non la nomina, ed è il comportamento giusto
 - Privacy policy per ruolo
   - serve un'informativa distinta per chi usa l'applicazione, perché il titolare del trattamento cambia
   - condòmini: il titolare è l'amministratore di condominio, che tratta i dati delle unità e delle quote per conto del condominio; Gestione Condomini agisce da responsabile del trattamento
@@ -46,17 +58,13 @@ affronta è la prima della lista.)_
   - **deciso: presa visione**, non firma del consenso. Non esiste registrazione self-service (`auth.routes.ts` espone solo login, refresh, logout e conferma email, e gli account li crea il superadmin o l'amministratore), quindi non c'è un momento naturale in cui raccogliere un consenso; e senza un consenso da registrare il registro non serve
   - **deciso: registro operazioni 12 mesi**, **dati di uno stabile, comunicazioni e verbali 10 anni**, con la motivazione delle prescrizioni in materia civile. Vedi il punto sulle scadenze non applicate sotto
   - **fatto**: `client/src/pages/PaginaPrivacy.tsx` con le quattro informative (condòmino, amministratore di condominio, personale dello stabile, amministratore di piattaforma), rotta pubblica `/privacy/:ruolo` **fuori da `RichiediAutenticazione`** con `/privacy` che manda al ruolo condòmino, e link nella pagina di accesso e nel profilo
-  - **fatto**: l'informativa **nomina l'amministratore di condominio**, che è il titolare del trattamento dei dati del condòmino. `GET /condomini/:id` popola `amministratore` con nome, cognome, email e telefono: una pagina statica non poteva nominarlo, perché il titolare cambia da condominio a condominio, e la pagina lo legge dal condominio attivo che la UI conosce già. Chi non è collegato riceve la formulazione generale, che dichiara di non essere completa
+  - **fatto**: l'informativa **nomina l'amministratore di condominio**, che è il titolare del trattamento dei dati del condòmino. `GET /condomini/:id` espone `amministratoreContatti` con nome, cognome, email e telefono: una pagina statica non poteva nominarlo, perché il titolare cambia da condominio a condominio, e la pagina lo legge dal condominio attivo che la UI conosce già. Chi non è collegato riceve la formulazione generale, che dichiara di non essere completa. I contatti stanno in un campo a parte e non dentro `amministratore`, che resta l'id: `populate` avrebbe dato allo stesso campo due forme diverse fra la lista e il dettaglio
   - **restano informazioni che non abbiamo**:
     - **denominazione e indirizzo di Gestione Condomini**, e l'indirizzo per esercitare i diritti: sono i punti segnati `DA COMPILARE` nel testo, finché restano così la pagina è una bozza e lo dichiara in testa
     - **l'informativa del personale dello stabile** richiede che l'amministratore dichiari i suoi tempi di conservazione e gli obblighi di riservatezza del ruolo: non sono nostri e non li conosciamo
     - **il testo va riletto da chi ne è responsabile prima della pubblicazione**: è un documento legale, non una descrizione del prodotto
   - **le scadenze dichiarate non sono ancora applicate**: non esiste nessuna cancellazione automatica, quindi il testo promette una cancellazione che il sistema non fa. Serve uno script di cancellazione del registro operazioni e una procedura per i dati di uno stabile, altrimenti la promessa va riscritta come impegno manuale
-  - passi, ancora da fare:
-    - diritto di accesso: `mieDati` in `comunicazione.controller.ts` raccoglie comunicazioni, legami e registro operazioni di un utente ma nessuna rotta la chiama, quindi oggi l'interessato non può scaricarli
-    - **allargare `mieDati` prima di esporla**: non raccoglie unità immobiliari, versamenti (che hanno `condomino` come riferimento diretto), presenze e votazioni, allegati e contratto, quindi esposta così com'è sarebbe un'esportazione incompleta, che per una richiesta di accesso è peggio che non esportare nulla. Da ricordare che il registro operazioni contiene `ip` e `userAgent`, quindi è dato personale
-    - esporre `mieDati` su una rotta `GET` dell'area autenticata (è già `asyncHandler` con `currentUser`) e un pulsante nel profilo che scarica il file dal browser, senza dipendenze nuove
-  - l'informativa deve dichiarare l'esportazione dei dati propri **solo dopo che esiste davvero**: prometterla prima sarebbe dichiarare il falso
+  - l'informativa deve dichiarare l'esportazione dei dati propri **solo dopo che esiste**: oggi non la nomina, ed è il comportamento giusto. Il lavoro è alla voce 12
 
 - Guida in pdf (download da dashboard) per l'utilizzo per l'amministratore di condominio e per un utente condòmino
   - l'infrastruttura c'è già e senza dipendenze: `AreaStampa` e `PulsanteStampa` in `client/src/components/Stampa.tsx`, `_stampa.scss` con `@page`, colore in stampa e `break-inside`, già usati da verbali, bilanci e dettaglio assemblea. La scelta registrata in `AGENTS.md` è il PDF dalla finestra di stampa del browser
