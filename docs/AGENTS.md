@@ -470,6 +470,26 @@ Applicare `requirePermesso` a una rotta di lettura rompe il pannello del
 condòmino; non applicare `requirePermessoLettura` a una lista lascia passare un
 assistente su ambiti non delegati.
 
+**Il guard decide *chi* passa, non *cosa* esce.** Su una rotta che ammette più
+ruoli — è il caso di `GET /condomini/:id`, dove `requireCondominioAccess` lascia
+passare amministratore, assistente, personale e condòmino — il contenuto va
+limitato nel controller a chi non scrive sullo stabile: senza, il condòmino e il
+personale leggevano `note` (campo libero dell'amministratore, fino a 4000
+caratteri) e l'elenco di chi vi lavora. Il criterio è `amministrazione:scrivere` e
+non `amministrare`, perché l'assistente che può modificare lo stabile deve
+leggerlo per intero: nascondendo i campi anche a lui, il form di modifica li
+azzererebbe salvando il resto. L'elenco dei campi pubblici è **per inclusione
+esplicita**, non un `rest` da cui si toglie: un campo nuovo del modello deve
+comparire lì per uscire, altrimenti la finestra di esposizione si riapre da sola.
+
+**I contatti dell'amministratore non stanno dentro `amministratore`.** In
+`GET /condomini/:id` vanno in un campo a parte, `amministratoreContatti`, perché
+`populate` sostituirebbe l'id con l'oggetto e lo stesso campo avrebbe due forme
+diverse fra la lista (un id) e il dettaglio (un oggetto) — e il frontend, che lo
+tipizza come stringa, non se ne accorgerebbe. È già successo: la pagina della
+privacy leggeva `amministratoreContatti`, che non arrivava mai, e mostrava la
+formula generica al posto del nome del titolare del trattamento.
+
 `requirePermessoOPartecipante` esiste per le rotte in cui la stessa scrittura è
 legittima per due soggetti diversi: il condòmino scrive all'amministratore,
 l'amministratore scrive ai condòmini (è il caso delle comunicazioni). Applicare

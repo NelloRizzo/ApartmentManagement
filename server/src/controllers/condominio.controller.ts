@@ -13,6 +13,7 @@ import {
   Condomino,
   QuotaMillesimale,
   Unita,
+  User,
   Verbale,
   Versamento,
 } from '../models/index.js';
@@ -81,20 +82,61 @@ export const list = asyncHandler(async (req, res) => {
   paginated(res, documenti, totale, page, limit);
 });
 
-/** Il condominio con i contatti dell'amministratore, che è il suo titolare del trattamento. */
-interface CondominioConAmministratore extends Omit<CondominioDoc, 'amministratore'> {
-  amministratore: CondominioDoc['amministratore'] & { nome: string; cognome: string; email: string; telefono?: string };
+/** I contatti dell'amministratore di condominio, che è il titolare del trattamento. */
+interface ContattiAmministratore {
+  nome: string;
+  cognome: string;
+  email: string;
+  telefono?: string;
 }
 
 export const getOne = asyncHandler(async (req, res) => {
-  const condominio = await Condominio.findById(req.params.condominioId)
-    // I contatti dell'amministratore servono all'informativa sul trattamento dei
-    // dati, che deve nominare il titolare: senza, la pagina del condòmino avrebbe
-    // un segnaposto dove ci vuole il nome di chi tratta i suoi dati.
-    .populate('amministratore', 'nome cognome email telefono')
-    .lean<CondominioConAmministratore>();
+  const condominio = await Condominio.findById(req.params.condominioId).lean<CondominioDoc>();
   if (!condominio) throw notFound('Condominio non trovato');
-  ok(res, condominio);
+
+  // I contatti servono all'informativa sul trattamento dei dati, che deve nominare
+  // il titolare: senza, la pagina del condòmino avrebbe un segnaposto dove ci
+  // vuole il nome di chi tratta i suoi dati.
+  //
+  // Va in un campo **separato** da `amministratore` e non dentro: `populate`
+  // sostituisce l'id con l'oggetto, quindi lo stesso campo avrebbe due forme
+  // diverse a seconda della rotta — un id nella lista, un oggetto qui — e il
+  // frontend, che tipizza `amministratore` come stringa, non se ne accorgerebbe.
+  // Già è successo: la pagina leggeva `amministratoreContatti`, che qui non
+  // arrivava mai, e mostrava la formula generica al posto del nome del titolare.
+  const contatti = await User.findById(condominio.amministratore)
+    .select('nome cognome email telefono')
+    .lean<ContattiAmministratore>();
+  const amministratoreContatti = contatti ?? null;
+
+  // `note` è un campo libero dell'amministratore, fino a 4000 caratteri, e questa
+  // rotta passa anche per chi non scrive sullo stabile: senza questo, il condòmino e
+  // il personale che lo serve leggevano note interne e l'elenco di chi vi lavora.
+  // Il criterio è **scrivere**, non amministrare: l'assistente che può modificare lo
+  // stabile deve continuare a leggerlo per intero, altrimenti il form di modifica
+  // gli azzererebbe le note salvando il resto.
+  //
+  // I campi si elencano per inclusione esplicita e non togliendo da un oggetto
+  // `rest`: un campo nuovo aggiunto al modello deve comparire qui per essere
+  // pubblico, altrimenti la finestra di esposizione si riapre da sola.
+  if (!leggibile(req, 'amministrazione:scrivere')) {
+    ok(res, {
+      _id: condominio._id,
+      nome: condominio.nome,
+      codice: condominio.codice,
+      indirizzo: condominio.indirizzo,
+      amministratore: condominio.amministratore,
+      amministratoreContatti,
+      deliberaRipartizione: condominio.deliberaRipartizione,
+      dataDeliberaRipartizione: condominio.dataDeliberaRipartizione,
+      totaleMillesimi: condominio.totaleMillesimi,
+      createdAt: condominio.createdAt,
+      updatedAt: condominio.updatedAt,
+    });
+    return;
+  }
+
+  ok(res, { ...condominio, amministratoreContatti });
 });
 
 /** `true` se l'utente corrente può consultare l'ambito indicato. */

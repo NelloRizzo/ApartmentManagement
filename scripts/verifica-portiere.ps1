@@ -93,8 +93,22 @@ Check 'il residente ha cognome e unita' ($primo.cognome -and $primo.unita.Count 
 # I campi che non devono esserci: sono la ragione per cui la rubrica e una rotta
 # separata e non la lista degli iscritti con un filtro.
 Check 'la rubrica non ha i millesimi' ($primo.PSObject.Properties.Name -notcontains 'millesimi') ($primo | ConvertTo-Json -Compress)
-Check 'la rubrica non ha la email' ($primo.PSObject.Properties.Name -notcontains 'email') ($primo | ConvertTo-Json -Compress)
 Check 'la rubrica ha il telefono' ($primo.PSObject.Properties.Name -contains 'telefono') ($primo | ConvertTo-Json -Compress)
+
+# Il documento dello stabile non è solo la rubrica: `GET /condomini/:id` passa anche
+# per il personale e portava con se' `note`, un campo libero dell'amministratore, e
+# l'elenco di chi lavora nello stabile. `assistenti` fa da sentinella del documento
+# intero: c'e' sempre, e non deve esserci per chi non scrive sullo stabile.
+$dettaglioPersonale = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid" -Headers $hp).data
+Check 'il personale non legge le note interne' ($dettaglioPersonale.PSObject.Properties.Name -notcontains 'note') ($dettaglioPersonale | ConvertTo-Json -Compress)
+Check 'il personale non legge chi lavora nello stabile' ($dettaglioPersonale.PSObject.Properties.Name -notcontains 'assistenti') ($dettaglioPersonale | ConvertTo-Json -Compress)
+Check 'il personale riceve i contatti del titolare' ($null -ne $dettaglioPersonale.amministratoreContatti.nome) ($dettaglioPersonale | ConvertTo-Json -Compress)
+# Il verso opposto: chi amministra continua a leggere il documento intero, altrimenti
+# il guard nasconderebbe i campi anche a chi deve modificarli e il form li azzererebbe.
+$dettaglioAdmin = (Invoke-RestMethod -Method Get -Uri "$base/condomini/$cid" -Headers $h).data
+Check "l'amministratore legge il documento intero" ($dettaglioAdmin.PSObject.Properties.Name -contains 'assistenti') ($dettaglioAdmin | ConvertTo-Json -Compress)
+Check "l'amministratore riceve i contatti del titolare" ($null -ne $dettaglioAdmin.amministratoreContatti.nome) ($dettaglioAdmin | ConvertTo-Json -Compress)
+
 
 $scritta = Status Post "/condomini/$cid/comunicazioni" $portiere @{ oggetto = 'ciao'; corpo = 'test'; destinatari = @() }
 Check 'il personale non scrive ai residenti' ($scritta -eq 'FORBIDDEN') "esito $scritta"

@@ -2,6 +2,41 @@
 
 Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
+## 2026-10-09
+
+### Il dettaglio di un condominio, e i due difetti che teneva nascosti
+
+Verificando il difetto di titolarità è emerso che `GET /condomini/:id` restituiva
+il **documento intero** a chiunque avesse una posizione nello stabile. Il guard
+`requireCondominioAccess` ammette l'amministratore, il suo assistente, il personale
+e il condòmino, e la rotta non filtrava il contenuto: così il condòmino e il
+personale che serve lo stabile leggevano `note` — un campo libero dell'amministratore,
+fino a 4000 caratteri — l'elenco `assistenti` e l'elenco `condominiServito`, cioè chi
+lavora nello stabile. Verificato a runtime prima di correggere, per entrambi i ruoli.
+
+Ora la risposta dipende da ciò che si può **scrivere**, non da chi si è: chi non ha
+`amministrazione:scrivere` riceve un documento a elenco **esplicito** di campi
+(`nome`, `codice`, `indirizzo`, `amministratoreContatti`, le delibere millesimali, il
+totale), e un campo nuovo aggiunto al modello non è pubblico finché non compare in
+quell'elenco. Il criterio è `scrivere` e non `amministrare` perché l'assistente che
+può modificare lo stabile deve continuare a leggerlo per intero: nascondendo `note`
+anche a lui, il form di modifica l'avrebbe azzerata salvando il resto.
+
+**Nello stesso punto c'era un secondo difetto, e non si vedeva.** I contatti
+dell'amministratore arrivavano sotto `amministratore`, perché `populate` sostituisce
+l'id con l'oggetto; ma `amministratore` è un id nella lista degli stabili, e il
+frontend lo tipizza come stringa. La pagina della privacy leggeva
+`amministratoreContatti`, che non arrivava mai, e ripiegava in silenzio sulla
+formula generica: **la funzione che doveva nominare il titolare del trattamento non
+ha mai funzionato**, pur risultando «fatta». I contatti ora stanno in un campo
+separato, `amministratoreContatti`, e `amministratore` torna a essere l'id — così lo
+stesso campo non ha due forme diverse a seconda della rotta. Verificato a runtime:
+il condòmino riceve nome, cognome, email e telefono del proprio amministratore.
+
+Verifiche: cinque controlli nuovi in `verifica-portiere.ps1` (il personale non legge
+le note né chi vi lavora, riceve i contatti del titolare; e il verso opposto, che
+l'amministratore continui a leggere il documento intero). 54 test.
+
 ## 2026-10-08
 
 ### Creare un condominio è una titolarità, e non la si delega

@@ -286,9 +286,15 @@ export interface Condominio {
    *
    * Non ci sono altrove nell'interfaccia: l'informativa sul trattamento dei dati
    * deve **nominare** il titolare, che è l'amministratore di condominio, e senza
-   * questo la pagina avrebbe un segnaposto dove invece serve il nome.
+   * questo la pagina avrebbe un segnaposto dove invece serve il nome. `null` se
+   * l'utente non esiste più.
    */
-  amministratoreContatti?: { nome: string; cognome: string; email: string; telefono?: string };
+  amministratoreContatti?: { nome: string; cognome: string; email: string; telefono?: string } | null;
+  /**
+   * Presenti solo per chi ha `amministrazione:scrivere` su questo stabile: gli
+   * altri ricevono il documento senza i campi interni (`note`, `assistenti`,
+   * `condominiServito`).
+   */
   condominiServito?: string[];
   deliberaRipartizione?: string;
   dataDeliberaRipartizione?: string;
