@@ -2,6 +2,27 @@
 
 Cosa è cambiato e **perché**. Le cose ancora da fare stanno in `TODO.md`.
 
+## 2026-10-10 — L'aggiornamento della PWA non ricarica più da solo
+
+Il service worker era configurato con `registerType: 'autoUpdate'`. In
+quell'assetto una versione nuova si applicava **da sola**, ricaricando la pagina
+nel momento in cui il nuovo service worker prendeva il controllo. Su una PWA di
+gestione è il momento peggiore possibile: chi sta compilando un verbale o
+inserendo un versamento vede la pagina ricaricarsi sotto le mani e perde quello
+che stava scrivendo, senza che nulla gli abbia detto perché.
+
+Ora la registrazione è `registerType: 'prompt'`: la versione nuova **aspetta**. Il
+segnale di `onNeedRefresh` di `registerSW` arriva a un piccolo store
+(`hooks/useAggiornamento.ts`, stesso schema di `useNotifiche`) e `AvvisoAggiornamento`
+mostra un avviso fisso, con il pulsante che attiva il nuovo service worker e
+ricarica quando è un momento buono per chi usa l'applicazione. Non è un toast:
+quelli spariscono dopo pochi secondi e non hanno un'azione, e un avviso che sparisce
+da solo è esattamente ciò che si vuole evitare.
+
+L'avviso si vede anche sulle pagine pubbliche (accesso e informativa privacy),
+perché è renderizzato accanto alle notifiche in `App.tsx` e non dentro l'area
+autenticata.
+
 ## 2026-10-09
 
 ### Il dettaglio di un condominio, e i due difetti che teneva nascosti

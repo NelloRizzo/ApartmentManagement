@@ -7,7 +7,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // `prompt`: la versione nuova si segnala e la applica chi usa l'app.
+      // `autoUpdate` ricaricava la pagina senza avviso, anche durante una
+      // compilazione: si perdono le modifiche non salvate e non si capisce perché.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'robots.txt'],
       manifest: {
         name: 'Gestione Condomini',
