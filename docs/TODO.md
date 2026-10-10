@@ -49,6 +49,7 @@ PRIORITA ALTA
     - pulsante nel profilo che scarica il file dal browser, senza dipendenze nuove
     - verifiche: un caso per ogni raccolta e il caso negativo, che l'utente non esporti i dati di un altro
   - **la voce sulla privacy policy dichiara l'esportazione solo dopo che esiste**: oggi la pagina non la nomina, ed è il comportamento giusto
+
 - Privacy policy per ruolo
   - serve un'informativa distinta per chi usa l'applicazione, perché il titolare del trattamento cambia
   - condòmini: il titolare è l'amministratore di condominio, che tratta i dati delle unità e delle quote per conto del condominio; Gestione Condomini agisce da responsabile del trattamento
