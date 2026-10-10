@@ -117,36 +117,6 @@ I due nomi non sono decorativi: da essi dipendono i valori derivati
 `CORS_ORIGINS`, `URL_FRONTEND`, `URL_API` e `VITE_API_URL`. Rinominare un
 servizio richiede di aggiornare quei campi.
 
-### Cookie di sessione e dominio (obbligatorio per la PWA)
-
-Il refresh token sta in un cookie `httpOnly`: è ciò che tiene connessa la PWA
-fra un avvio e l'altro. Perché il browser lo mandi, frontend e API devono essere
-**same-site**. Non lo sono sui nomi di default: `onrender.com` è nella
-[Public Suffix List](https://publicsuffix.org/), quindi
-`stewardmanagementsystem.onrender.com` e `steward-api-ef7e.onrender.com` hanno
-registrabile diverso e sono **cross-site**. Un cookie `SameSite=Lax` non parte
-mai nelle chiamate `fetch` a `/auth/refresh`: la sessione non si rinnova e si
-rifà il login a ogni avvio. **Non è un problema di durata del token**, ed è la
-stessa cosa che risponde il supporto di Render.
-
-La correzione è dare **a entrambi i servizi un dominio custom sotto lo stesso
-dominio registrabile**, ad esempio `app.example.com` (statico) e
-`api.example.com` (API). Diventano same-site e `lax` funziona. Passi:
-
-1. Render → servizio → **Settings** → **Custom Domains** → aggiungi
-   `app.example.com` al site e `api.example.com` all'API, e crea i CNAME che
-   Render indica.
-2. Aggiorna in `render.yaml` (o nel pannello) i valori che dipendono dagli URL:
-   - `steward-api` → `CORS_ORIGINS=https://app.example.com`,
-     `URL_FRONTEND=https://app.example.com`,
-     `URL_API=https://api.example.com`;
-   - `stewardmanagementsystem` → `VITE_API_URL=https://api.example.com/api`.
-   `VITE_API_URL` finisce nel pacchetto: cambiarlo richiede un nuovo deploy.
-3. `COOKIE_DOMAIN` resta vuoto e `COOKIE_SAME_SITE=lax`: con i custom domain il
-   cookie è host-only e viene inviato correttamente, senza `SameSite=None`.
-   `SameSite=None` va evitato: Safari e iOS bloccano i cookie di terze parti,
-   quindi la PWA mobile resterebbe rotta.
-
 ### MongoDB Atlas
 
 1. Cluster M0 gratuito su [MongoDB Atlas](https://cloud.mongodb.com), regione

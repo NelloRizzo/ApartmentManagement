@@ -81,24 +81,10 @@ services:
         value: 7d
 
       # ---- Cookie del refresh token ----
-      # Il refresh token sta in un cookie `httpOnly`: è così che la PWA resta
-      # connessa fra un avvio e l'altro. Perché il browser lo mandi, frontend e
-      # API devono essere **same-site**, e non lo sono sui nomi di default:
-      # `stewardmanagementsystem.onrender.com` e `steward-api-ef7e.onrender.com`
-      # hanno registrabile diverso, perché `onrender.com` è nella Public Suffix
-      # List. Sono quindi cross-site, e un cookie `SameSite=Lax` non parte mai
-      # nelle chiamate `fetch` → `/auth/refresh`: la sessione non si rinnova e si
-      # rifà il login a ogni avvio. NON è un problema di durata del token.
-      #
-      # La soluzione è dare **a entrambi i servizi un dominio custom sotto lo
-      # stesso dominio registrabile** (es. `app.example.com` e `api.example.com`):
-      # diventano same-site e `lax` funziona. Vedi il README, «Cookie di sessione
-      # e dominio». Finché non c'è, `lax` qui è inutile e va corretto anche
-      # `CORS_ORIGINS`, `URL_FRONTEND`, `URL_API` e `VITE_API_URL` (sotto).
-      #
-      # `COOKIE_DOMAIN` resta vuoto: con i custom domain il cookie è host-only e
-      # va bene così; impostarlo a mano su un dominio che non comprende entrambi
-      # gli host romperebbe il cookie invece di aggiustarlo.
+      # `COOKIE_DOMAIN` va lasciato vuoto: il dominio lo gestisce Render e
+      # impostarlo a mano romperebbe il cookie. Il frontend e l'API sono
+      # entrambi su onrender.com, quindi same-site "lax" basta e i cookie
+      # passano anche nelle chiamate XHR cross-origin.
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAME_SITE

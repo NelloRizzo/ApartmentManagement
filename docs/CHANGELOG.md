@@ -23,31 +23,6 @@ L'avviso si vede anche sulle pagine pubbliche (accesso e informativa privacy),
 perché è renderizzato accanto alle notifiche in `App.tsx` e non dentro l'area
 autenticata.
 
-### La PWA rifaceva il login a ogni avvio: non era la durata del token
-
-Nell'app installata la sessione non sopravviveva alla chiusura: a ogni avvio
-toccava rifare il login, pur non avendo mai scelto «Esci». Il sospetto era la
-durata dei token, ma i token non c'entrano.
-
-Il refresh token sta in un cookie `httpOnly`, e perché il browser lo mandi
-frontend e API devono essere **same-site**. In produzione non lo erano:
-`stewardmanagementsystem.onrender.com` e `steward-api-ef7e.onrender.com` stanno
-su sottodomini diversi di `onrender.com`, che è nella
-[Public Suffix List](https://publicsuffix.org/). Il registrabile dei due è diverso,
-quindi sono **cross-site** e un cookie `SameSite=Lax` non viene mai inviato nelle
-chiamate `fetch` a `/auth/refresh`: all'avvio `AuthContext` prova a rinnovare la
-sessione, non riceve il cookie, e ripresenta il login. È la stessa diagnosi che
-darebbe il supporto di Render. Il commento in `render.yaml` che dichiarava i due
-servizi same-site era falso ed è stato corretto.
-
-La correzione è nei **domini**, non nel codice: dare a entrambi i servizi un
-dominio custom sotto lo stesso registrabile (`app.example.com` e
-`api.example.com`). Diventano same-site, `lax` viene inviato e la sessione dura i
-7 giorni di `JWT_REFRESH_TTL`. `SameSite=None` va evitato: Safari e iOS bloccano i
-cookie di terze parti, quindi la PWA mobile resterebbe rotta. I passi sono nel
-README, «Cookie di sessione e dominio», e la regola è ora in `AGENTS.md`
-(Sicurezza), così non si torna a dichiarare same-site ciò che non lo è.
-
 ## 2026-10-09
 
 ### Il dettaglio di un condominio, e i due difetti che teneva nascosti
