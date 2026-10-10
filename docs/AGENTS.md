@@ -683,15 +683,16 @@ dipende dal documento, ed è `attivita.service.ts` a stabilirlo.
 
 - Access token solo in memoria, mai in `localStorage`. Refresh token in cookie
   `httpOnly` con path `/api/auth`.
-- **Il cookie di refresh richiede frontend e API same-site.** In produzione i due
-  servizi Render stanno su sottodomini diversi di `onrender.com`, che è nella
+- **Il cookie di refresh richiede frontend e API stesso host.** In produzione i
+  due servizi Render stanno su sottodomini diversi di `onrender.com`, che è nella
   Public Suffix List: sono quindi **cross-site**, e un cookie `SameSite=Lax` non
   viene inviato nelle `fetch` a `/auth/refresh` — la sessione non si rinnova e si
   rifà il login a ogni avvio della PWA. Non è la durata del token e non si
-  corregge con `SameSite=None` (Safari e iOS bloccano i cookie di terze parti):
-  si correggono i **domini**, dando a entrambi i servizi un dominio custom sotto
-  lo stesso dominio registrabile (`app.example.com`, `api.example.com`). Vedi il
-  README, «Cookie di sessione e dominio».
+  corregge con `SameSite=None` (Safari e iOS bloccano i cookie di terze parti).
+  Per questo **il SPA è servito dal servizio API** (`server/src/app.ts`, solo in
+  produzione): stesso host, cookie inviato, sessione di 7 giorni. L'alternativa —
+  due servizi con domini custom sotto lo stesso registrabile — è possibile ma
+  richiede un dominio proprio. Vedi il README, «Cookie di sessione e dominio».
 - Cambiare la password incrementa `tokenVersion` e invalida tutte le sessioni.
 - `requireCondominioAccess` controlla che l'utente sia amministratore, servizio
   o condòmino di quel condominio. Ogni rotta sotto
@@ -844,8 +845,10 @@ Controlli minimi dopo una modifica al dominio:
 - **Il documento che ospita un allegato tiene solo l'id**, non l'URL firmato né una
   copia dei metadati. Vedi la sezione "Allegati".
 - **Gli URL degli allegati sono assoluti in produzione.** Servono `URL_API` e il
-  percorso firmato: senza, un `src="/allegati/x"` finirebbe sul sito statico e
-  riceverebbe un 404. In sviluppo restano relativi e passano dal proxy di Vite.
+  percorso firmato: senza, un `src="/allegati/x"` verrebbe chiesto con l'origine
+  corrente e, se il frontend fosse su un host diverso, riceverebbe un 404. In
+  sviluppo restano relativi e passano dal proxy di Vite; oggi il SPA è same-origin
+  all'API, ma l'URL assoluto resta perché la firma deve puntare all'host giusto.
 - **Gli allegati non vanno in cache nella PWA:** il link firmato scade, e una
   copia in cache continuerebbe a essere servita dopo la scadenza.
 - **`.velo` centrato, `.velo-lato` per il pannello.** `.velo` è l'overlay dei

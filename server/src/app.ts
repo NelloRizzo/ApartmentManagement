@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'node:path';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -48,6 +49,25 @@ export function createApp(): express.Express {
   // `<img src>` non può inviare l'intestazione `Authorization`.
   app.use('/allegati', allegatoRoutes);
   app.use('/api', routes);
+
+  // In produzione il frontend è servito da questo stesso servizio. È ciò che
+  // rende **same-origin** il cookie di refresh: frontend e API sullo stesso
+  // host, quindi `SameSite=Lax` viene inviato e la sessione si rinnova fra un
+  // avvio e l'altro (vedi README, «Cookie di sessione e dominio»). In sviluppo
+  // il SPA lo serve Vite sulla 5173 e questi file non esistono.
+  if (config.isProd) {
+    const clientDir = path.join(config.rootDir, 'client', 'dist');
+    app.use(express.static(clientDir, { index: false }));
+    app.get('*', (req, res, next) => {
+      // Solo le navigazioni del SPA ricadono su `index.html`. Le chiamate API e
+      // i file mancanti devono continuare a rispondere 404, non con la pagina:
+      // per questo si guarda l'`Accept` (una navigazione chiede `text/html`, un
+      // asset no), invece di `req.accepts('html')`, che accetterebbe anche `*/*`.
+      if (req.path.startsWith('/api') || req.path.startsWith('/allegati')) return next();
+      if (!req.accepts('html') || !(req.get('accept') ?? '').includes('text/html')) return next();
+      res.sendFile(path.join(clientDir, 'index.html'));
+    });
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

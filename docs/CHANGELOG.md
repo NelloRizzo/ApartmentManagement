@@ -30,23 +30,31 @@ toccava rifare il login, pur non avendo mai scelto «Esci». Il sospetto era la
 durata dei token, ma i token non c'entrano.
 
 Il refresh token sta in un cookie `httpOnly`, e perché il browser lo mandi
-frontend e API devono essere **same-site**. In produzione non lo erano:
-`stewardmanagementsystem.onrender.com` e `steward-api-ef7e.onrender.com` stanno
-su sottodomini diversi di `onrender.com`, che è nella
-[Public Suffix List](https://publicsuffix.org/). Il registrabile dei due è diverso,
-quindi sono **cross-site** e un cookie `SameSite=Lax` non viene mai inviato nelle
-chiamate `fetch` a `/auth/refresh`: all'avvio `AuthContext` prova a rinnovare la
-sessione, non riceve il cookie, e ripresenta il login. È la stessa diagnosi che
-darebbe il supporto di Render. Il commento in `render.yaml` che dichiarava i due
+frontend e API devono stare sullo **stesso host**. In produzione non era così:
+`stewardmanagementsystem.onrender.com` (sito statico) e
+`steward-api-ef7e.onrender.com` (API) sono due sottodomini diversi di
+`onrender.com`, che è nella [Public Suffix List](https://publicsuffix.org/).
+Per il browser sono quindi **cross-site** e un cookie `SameSite=Lax` non viene mai
+inviato nelle chiamate `fetch` a `/auth/refresh`: all'avvio `AuthContext` prova a
+rinnovare la sessione, non riceve il cookie, e ripresenta il login. È la stessa
+diagnosi del supporto di Render. Il commento in `render.yaml` che dichiarava i due
 servizi same-site era falso ed è stato corretto.
 
-La correzione è nei **domini**, non nel codice: dare a entrambi i servizi un
-dominio custom sotto lo stesso registrabile (`app.example.com` e
-`api.example.com`). Diventano same-site, `lax` viene inviato e la sessione dura i
-7 giorni di `JWT_REFRESH_TTL`. `SameSite=None` va evitato: Safari e iOS bloccano i
-cookie di terze parti, quindi la PWA mobile resterebbe rotta. I passi sono nel
-README, «Cookie di sessione e dominio», e la regola è ora in `AGENTS.md`
-(Sicurezza), così non si torna a dichiarare same-site ciò che non lo è.
+La correzione non è nella durata dei token ma nel **deploy**: il frontend è ora
+servito **dallo stesso servizio dell'API** (`server/src/app.ts` espone
+`client/dist` e fa da fallback SPA alle navigazioni, lasciando 404 le chiamate API
+e i file mancanti). Stesso host, cookie inviato, sessione di 7 giorni
+(`JWT_REFRESH_TTL`). `render.yaml` descrive un solo web service, che compila server
+e client, e `VITE_API_URL` sparisce: il client usa il default relativo `/api`.
+`SameSite=None` va evitato: funziona solo dove i cookie di terze parti sono
+ammessi, e Safari/iOS li bloccano, lasciando rotta la PWA mobile.
+
+Il prezzo è il piano free: essendo un unico servizio, anche il frontend si
+addormenta con l'API, quindi la prima apertura dopo 15 minuti di inattività
+attende il risveglio. L'alternativa senza questo costo è un dominio custom sotto
+cui mettere entrambi i servizi (`app.example.com`, `api.example.com`), ma richiede
+un dominio proprio; è documentata nel README, «Cookie di sessione e dominio», e la
+regola è in `AGENTS.md` (Sicurezza).
 
 ## 2026-10-09
 
