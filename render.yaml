@@ -2,14 +2,13 @@
 #
 # Avvio: Render → New → Blueprint → selezionare questo repository.
 #
-# Un solo servizio web: il backend Node, che serve **anche** il frontend
-# compilato (`client/dist`) e l'API. Frontend e API sulla stessa origine è ciò
-# che rende same-origin il cookie di refresh e risolve il login che si rifaceva
-# a ogni avvio della PWA: vedi «Cookie di sessione e dominio» nel README.
+# I due servizi hanno nomi fissi perché da essi dipendono i valori derivati:
+# l'URL del frontend finisce in URL_FRONTEND (link di conferma email) e
+# CORS_ORIGINS, l'URL del backend finisce in VITE_API_URL e URL_API. Rinominarli
+# da qui richiede aggiornare anche questi campi.
 #
-# L'hostname reale del servizio è `steward-api-ef7e.onrender.com` (Render assegna
-# i nomi su tutto onrender.com e `steward-api` era già occupato). Da quell'URL
-# dipendono URL_FRONTEND (link di conferma email), URL_API e CORS_ORIGINS.
+# Il nome del servizio frontend genera il dominio: `stewardmanagementsystem`
+# diventa https://stewardmanagementsystem.onrender.com.
 #
 # Le variabili marcate `sync: false` non si possono valorizzare dal file: si
 # inseriscono a mano nel pannello di Render (Render → service → Environment).
@@ -17,11 +16,10 @@
 # ---- Limiti del piano free, e come questo blueprint li tiene conto ----
 #
 # * L'istanza free si addormenta dopo 15 minuti e ci mette circa un minuto a
-#   risvegliarsi. Servendo il frontend dallo stesso servizio, si addormenta
-#   anche lui: la prima apertura dopo un periodo di inattività attende il
-#   risveglio. È il prezzo di restare senza un dominio custom. Per questo il
-#   server ha timeout di connessione a MongoDB larghi (60 s): con i 10 s di
-#   partenza l'avvio andava in crash loop finché Atlas non si svegliava.
+#   risvegliarsi. Il frontend è un sito statico, quindi parte subito: la prima
+#   chiamata all'API può però mettere fino a un minuto. Per questo il server ha
+#   timeout di connessione a MongoDB larghi (60 s): con i 10 s di partenza
+#   l'avvio andava in crash loop finché Atlas non si svegliava.
 #
 # * Nessun health check. Un controllo periodico è una richiesta HTTP in arrivo,
 #   e quindi tiene l'istanza sveglia consumando le 750 ore mensili del workspace:
@@ -37,9 +35,8 @@
 #   qui prima del primo deploy.
 #
 # * Il piano free non permette il dimensionamento oltre una singola istanza e
-#   non riceve traffico di rete privata. Non serve: con un solo servizio non
-#   c'è traffico fra servizi, e `CORS_ORIGINS` resta dichiarato per completezza
-#   anche se il SPA è same-origin.
+#   non riceve traffico di rete privata: il frontend statico raggiunge l'API
+#   solo via https pubblico, quindi `CORS_ORIGINS` è indispensabile.
 
 services:
   # ---------------------------------------------------------------- API
@@ -51,11 +48,9 @@ services:
     # `branch` non è dichiarato di proposito: Render usa il ramo predefinito del
     # repository, che potrebbe non essere `main`.
     # `--include=dev` e' obbligatorio: NODE_ENV=production fa saltare a npm i
-    # devDependencies, quindi tsc, @types/node e il bundler di Vite non
-    # verrebbero installati e la build fallirebbe con "Cannot find type
-    # definition file for 'node'". La build compila **server e client**: il
-    # frontend finisce in `client/dist` e viene servito da questo servizio.
-    buildCommand: npm ci --include=dev && npm run build
+    # devDependencies, quindi tsc e @types/node non verrebbero installati e la
+    # build fallirebbe con "Cannot find type definition file for 'node'".
+    buildCommand: npm ci --include=dev && npm run build --workspace server
     startCommand: npm run start --workspace server
     # Nessun `healthCheckPath`: vedi la nota sul piano free in testa al file.
     autoDeploy: true
@@ -86,29 +81,40 @@ services:
         value: 7d
 
       # ---- Cookie del refresh token ----
-      # Il refresh token sta in un cookie `httpOnly` con `SameSite=Lax`, ed è
-      # così che la PWA resta connessa fra un avvio e l'altro. Perché il browser
-      # lo invii su `/auth/refresh` serve **same-origin**: il SPA è servito da
-      # questo stesso servizio (`server/src/app.ts`), quindi il cookie parte e
-      # la sessione dura i 7 giorni di `JWT_REFRESH_TTL`.
+      # Il refresh token sta in un cookie `httpOnly`: è così che la PWA resta
+      # connessa fra un avvio e l'altro. Perché il browser lo mandi, frontend e
+      # API devono essere **same-site**, e non lo sono sui nomi di default:
+      # `stewardmanagementsystem.onrender.com` e `steward-api-ef7e.onrender.com`
+      # hanno registrabile diverso, perché `onrender.com` è nella Public Suffix
+      # List. Sono quindi cross-site, e un cookie `SameSite=Lax` non parte mai
+      # nelle chiamate `fetch` → `/auth/refresh`: la sessione non si rinnova e si
+      # rifà il login a ogni avvio. NON è un problema di durata del token.
       #
-      # Non usare `SameSite=None`: funzionerebbe solo dove i cookie di terze
-      # parti sono ammessi, e Safari/iOS li bloccano, lasciando rotta la PWA
-      # mobile. `COOKIE_DOMAIN` resta vuoto: il cookie è host-only e va bene.
+      # La soluzione è dare **a entrambi i servizi un dominio custom sotto lo
+      # stesso dominio registrabile** (es. `app.example.com` e `api.example.com`):
+      # diventano same-site e `lax` funziona. Vedi il README, «Cookie di sessione
+      # e dominio». Finché non c'è, `lax` qui è inutile e va corretto anche
+      # `CORS_ORIGINS`, `URL_FRONTEND`, `URL_API` e `VITE_API_URL` (sotto).
+      #
+      # `COOKIE_DOMAIN` resta vuoto: con i custom domain il cookie è host-only e
+      # va bene così; impostarlo a mano su un dominio che non comprende entrambi
+      # gli host romperebbe il cookie invece di aggiustarlo.
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAME_SITE
         value: lax
 
-      # ---- URL del servizio ----
-      # Frontend e API sono lo stesso host: `URL_FRONTEND` (link di conferma
-      # email) e `URL_API` (base degli URL firmati degli allegati) coincidono.
-      # `VITE_API_URL` non serve più: il client usa `/api` relativo (vedi
-      # `client/src/api/client.ts`).
+      # ---- Frontend ----
       - key: CORS_ORIGINS
-        value: https://steward-api-ef7e.onrender.com
+        value: https://stewardmanagementsystem.onrender.com
       - key: URL_FRONTEND
-        value: https://steward-api-ef7e.onrender.com
+        value: https://stewardmanagementsystem.onrender.com
+      # Base pubblica di questa API: senza, gli URL degli allegati restano
+      # relativi e il frontend li chiederebbe al sito statico ricevendone 404.
+      # L'hostname reale e' `steward-api-ef7e.onrender.com`: Render assegna i
+      # nomi su tutto onrender.com e `steward-api` era gia' occupato, quindi ha
+      # aggiunto un suffisso. Il nome nel blueprint e' il nome del servizio nel
+      # dashboard, non l'hostname, e va lasciato com'e'.
       - key: URL_API
         value: https://steward-api-ef7e.onrender.com
 
@@ -131,3 +137,38 @@ services:
         # autentica, ma deve essere riconoscibile: è la prima cosa che vede chi
         # riceve l'email di conferma.
         value: Gestione Condomini - Steward Management System
+
+  # ---------------------------------------------------------------- Frontend
+  # I siti statici sono gratuiti e non si addormentano: il frontend è sempre
+  # immediato, anche quando l'API è spenta.
+  # Attenzione: non esiste `type: static`. Un sito statico e' un servizio web
+  # con `runtime: static`. Con `type: static` Render risponde
+  # "unknown type static" e rifiuta l'intero blueprint.
+  - type: web
+    name: stewardmanagementsystem
+    runtime: static
+    # Vite e i plugin sono devDependencies: senza `--include=dev` il frontend
+    # non ha nemmeno il bundler.
+    buildCommand: npm ci --include=dev && npm run build --workspace client
+    staticPublishPath: ./client/dist
+    # `branch` non dichiarato: vale il ramo predefinito del repository.
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Il frontend è una PWA costruita al momento del deploy: VITE_API_URL
+      # finisce dentro il pacchetto. Cambiarlo richiede un nuovo deploy.
+      # Deve corrispondere a URL_API del servizio steward-api (vedi sopra):
+      # se il frontend punta a un hostname inesistente riceve la pagina 404 di
+      # Render, che il browser blocca come richiesta cross-origin, e il login
+      # fallisce con "Impossibile contattare il server".
+      - key: VITE_API_URL
+        value: https://steward-api-ef7e.onrender.com/api
+
+    # Le rotte sono gestite dal frontend (react-router): senza questa regola
+    # un ricaricamento su /c/bilanci o /conferma-email risponderebbe 404.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

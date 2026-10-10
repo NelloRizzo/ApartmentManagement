@@ -107,41 +107,45 @@ senza librerie aggiuntive.
 ## Pubblicazione su Render
 
 La configurazione è in `render.yaml`: Render → **New** → **Blueprint** →
-selezionare il repository. Viene creato **un solo servizio**:
+selezionare il repository. Vengono creati due servizi:
 
-- `steward-api`: il backend Node, in ascolto su `$PORT`, che serve **anche** il
-  frontend compilato (`client/dist`). L'hostname reale è
-  **https://steward-api-ef7e.onrender.com** (Render assegna i nomi su tutto
-  `onrender.com` e `steward-api` era già occupato).
+- `steward-api`: il backend Node, in ascolto su `$PORT`;
+- `stewardmanagementsystem`: il sito statico servito da `client/dist`, che
+  diventa **https://stewardmanagementsystem.onrender.com**.
 
-Il SPA e l'API condividono l'origine: `URL_FRONTEND` (link di conferma email),
-`URL_API` (URL firmati degli allegati) e `CORS_ORIGINS` valgono tutti
-`https://steward-api-ef7e.onrender.com`. Non c'è più una variabile
-`VITE_API_URL`: il client usa il percorso relativo `/api`.
+I due nomi non sono decorativi: da essi dipendono i valori derivati
+`CORS_ORIGINS`, `URL_FRONTEND`, `URL_API` e `VITE_API_URL`. Rinominare un
+servizio richiede di aggiornare quei campi.
 
-### Cookie di sessione: perché un solo servizio
+### Cookie di sessione e dominio (obbligatorio per la PWA)
 
-Il refresh token sta in un cookie `httpOnly`: è ciò che tiene connessa la PWA fra
-un avvio e l'altro. Perché il browser lo invii, frontend e API devono stare sullo
-**stesso host**. Servendoli da due servizi Render distinti non lo sarebbero:
-`onrender.com` è nella [Public Suffix List](https://publicsuffix.org/), quindi
-`stewardmanagementsystem.onrender.com` e `steward-api-ef7e.onrender.com` sono
-host **diversi** e, per il browser, **cross-site**. Un cookie `SameSite=Lax` non
-parte mai nelle chiamate `fetch` a `/auth/refresh`: la sessione non si rinnova e
-si rifà il login a ogni avvio. **Non è un problema di durata del token**, ed è la
-stessa diagnosi del supporto di Render.
+Il refresh token sta in un cookie `httpOnly`: è ciò che tiene connessa la PWA
+fra un avvio e l'altro. Perché il browser lo mandi, frontend e API devono essere
+**same-site**. Non lo sono sui nomi di default: `onrender.com` è nella
+[Public Suffix List](https://publicsuffix.org/), quindi
+`stewardmanagementsystem.onrender.com` e `steward-api-ef7e.onrender.com` hanno
+registrabile diverso e sono **cross-site**. Un cookie `SameSite=Lax` non parte
+mai nelle chiamate `fetch` a `/auth/refresh`: la sessione non si rinnova e si
+rifà il login a ogni avvio. **Non è un problema di durata del token**, ed è la
+stessa cosa che risponde il supporto di Render.
 
-Per questo il frontend è servito dal servizio API (`server/src/app.ts`): stesso
-host, cookie inviato, sessione di 7 giorni. `COOKIE_DOMAIN` resta vuoto e
-`COOKIE_SAME_SITE=lax`. `SameSite=None` va evitato: funziona solo dove i cookie
-di terze parti sono ammessi, e Safari/iOS li bloccano, lasciando rotta la PWA
-mobile.
+La correzione è dare **a entrambi i servizi un dominio custom sotto lo stesso
+dominio registrabile**, ad esempio `app.example.com` (statico) e
+`api.example.com` (API). Diventano same-site e `lax` funziona. Passi:
 
-L'alternativa, se un giorno si volesse separare di nuovo frontend e API, è dare a
-**entrambi** un dominio custom sotto lo stesso dominio registrabile
-(`app.example.com` e `api.example.com`): diventano same-site e `lax` funziona.
-Costa un dominio (~10 €/anno) e mantiene il frontend statico sempre pronto, senza
-il risveglio dell'istanza free. Con i nomi `.onrender.com` non è possibile.
+1. Render → servizio → **Settings** → **Custom Domains** → aggiungi
+   `app.example.com` al site e `api.example.com` all'API, e crea i CNAME che
+   Render indica.
+2. Aggiorna in `render.yaml` (o nel pannello) i valori che dipendono dagli URL:
+   - `steward-api` → `CORS_ORIGINS=https://app.example.com`,
+     `URL_FRONTEND=https://app.example.com`,
+     `URL_API=https://api.example.com`;
+   - `stewardmanagementsystem` → `VITE_API_URL=https://api.example.com/api`.
+   `VITE_API_URL` finisce nel pacchetto: cambiarlo richiede un nuovo deploy.
+3. `COOKIE_DOMAIN` resta vuoto e `COOKIE_SAME_SITE=lax`: con i custom domain il
+   cookie è host-only e viene inviato correttamente, senza `SameSite=None`.
+   `SameSite=None` va evitato: Safari e iOS bloccano i cookie di terze parti,
+   quindi la PWA mobile resterebbe rotta.
 
 ### MongoDB Atlas
 
@@ -186,11 +190,11 @@ npm run seed -- --reset   # in locale, con MONGODB_URI che punta a Atlas
 L'istanza free di Render è adatta a una prova o a un uso saltuario, non a un
 servizio che deve rispondere in orario. Le limitazioni che si vedono:
 
-**Si addormenta dopo 15 minuti** e ci mette circa un minuto a risvegliarsi.
-Servendo il frontend dallo stesso servizio, si addormenta anche lui: la prima
-apertura dopo un periodo di inattività attende il risveglio. Per questo il server
-ha timeout di connessione a MongoDB di 60 secondi in produzione: con i 10 secondi
-iniziali l'avvio finiva in crash loop finché Atlas non si svegliava.
+**Si addormenta dopo 15 minuti** e ci mette circa un minuto a risvegliarsi. Il
+frontend è un sito statico, quindi si apre subito; la prima chiamata all'API può
+però mettere fino a un minuto. Per questo il server ha timeout di connessione a
+MongoDB di 60 secondi in produzione: con i 10 secondi iniziali l'avvio finiva
+in crash loop finché Atlas non si svegliava.
 
 **750 ore di istanza al mese per workspace**, e un mese ne ha 744. Per questo il
 blueprint **non dichiara un health check**: una richiesta periodica è traffico in
@@ -244,14 +248,11 @@ mancante o incoerente fa fallire l'avvio con un messaggio esplicito.
 | `JWT_ACCESS_TTL`       | 15m                                    | durata del token di accesso                |
 | `JWT_REFRESH_TTL`      | 7d                                     | durata del refresh token                   |
 | `COOKIE_SECURE`        | false                                  | `true` dietro HTTPS                         |
-| `COOKIE_SAME_SITE`     | lax                                    | `lax` basta quando il SPA è same-origin     |
-| `COOKIE_DOMAIN`        | vuota                                  | host-only: vuota è il valore giusto         |
 | `CORS_ORIGINS`         | `http://localhost:5173`                | origini ammesse, separate da virgola        |
 | `URL_FRONTEND`         | `http://localhost:5173`                | base per il link di conferma nell'email     |
-| `URL_API`              | vuota                                  | base degli URL firmati degli allegati (vuota in dev) |
 | `BREVO_API_KEY`        | vuota                                  | senza, le email non partono                  |
 | `BREVO_MITTENTE_EMAIL` | mittente predefinito                   | deve essere verificato su Brevo              |
-| `VITE_API_URL`         | `/api`                                 | solo se il client non è same-origin: con il default `/api` non serve |
+| `VITE_API_URL`         | `/api`                                 | lato client                                 |
 | `SEED_SUPERADMIN_EMAIL`| `superadmin@condomini.local`           | account di piattaforma creato dal seed      |
 | `SEED_ASSISTENTE_EMAIL`| `assistente@example.com`               | assistente con permessi delegati            |
 | `SUPERADMIN_PASSWORD`   | vuota                                  | password per `reset:produzione`, solo `.env` locale |
