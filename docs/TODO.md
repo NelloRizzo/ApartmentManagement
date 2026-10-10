@@ -10,6 +10,7 @@ _(voci rimandate e idee messe da parte, da riprendere quando si ha tempo: in
 questa sezione le voci non si numerano, per parlarne basta il titolo.
 **L'ordine in cui sono elencate è l'ordine di esecuzione**: la prima che si
 affronta è la prima della lista.)_
+
 - Le notifiche non dovrebbero coprire la pagina
   - oggi sono un riquadro `position: fixed` sotto l'intestazione, che passa sopra
     il contenuto mentre leggi
